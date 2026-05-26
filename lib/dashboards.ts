@@ -34,14 +34,18 @@ export const DASHBOARDS: Dashboard[] = [
   },
 ]
 
-// Permissões: mapeie o email do usuário para IDs de dashboards
-// Use '*' para acesso total
 export const USER_PERMISSIONS: Record<string, string[] | '*'> = {
-  // Exemplos — edite conforme necessário:
-  // 'admin@quintal.com': '*',
-  // 'gerente@quintal.com': ['faturamento', 'custos', 'cmv'],
-  // 'operador@quintal.com': ['cmv'],
+  'amanda.pamplona@quintaldoespeto.com.br': '*',
+  'cintia.araujo@quintaldoespeto.com.br': '*',
+  'fabio.duarte@quintaldoespeto.com.br': '*',
+  'fernanda.pypcak@quintaldoespeto.com.br': '*',
+  'fernando.crescencio@quintaldoespeto.com.br': '*',
+  'gabriel.dias@quintaldoespeto.com.br': '*',
+  'leandro.calixto@quintaldoespeto.com.br': '*',
+  'pedro.mott@quintaldoespeto.com.br': '*',
+  'rayara.mundario@quintaldoespeto.com.br': '*',
+  'rogerio.palermo@quintaldoespeto.com.br': '*',
+  'secretaria@quintaldoespeto.com.br': '*',
 }
 
-// Permissão padrão para usuários não listados
 export const DEFAULT_PERMISSION: string[] | '*' = []
