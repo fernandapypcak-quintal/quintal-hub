@@ -9,13 +9,9 @@ export async function middleware(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
+        getAll() { return request.cookies.getAll() },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          )
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
@@ -25,16 +21,19 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  // Timeout de 5s para não travar a requisição
+  const userPromise = supabase.auth.getUser()
+  const timeoutPromise = new Promise<null>(resolve => setTimeout(() => resolve(null), 5000))
 
-  // Protege a rota /hub — redireciona para login se não autenticado
+  const result = await Promise.race([userPromise, timeoutPromise])
+  const user = result && 'data' in result ? result.data.user : null
+
   if (!user && request.nextUrl.pathname.startsWith('/hub')) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  // Se já está autenticado e tenta acessar /login, redireciona pro hub
   if (user && request.nextUrl.pathname === '/login') {
     const url = request.nextUrl.clone()
     url.pathname = '/hub'

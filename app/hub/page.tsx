@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
-import { DASHBOARDS, USER_PERMISSIONS, DEFAULT_PERMISSION } from '@/lib/dashboards'
+import { DASHBOARDS, ADMIN_USERS } from '@/lib/dashboards'
 import HubClient from './HubClient'
 
 export default async function HubPage() {
@@ -10,10 +11,32 @@ export default async function HubPage() {
   if (!user) redirect('/login')
 
   const email = user.email ?? ''
-  const permissions = USER_PERMISSIONS[email] ?? DEFAULT_PERMISSION
-  const allowedDashboards = permissions === '*'
-    ? DASHBOARDS
-    : DASHBOARDS.filter(d => (permissions as string[]).includes(d.id))
 
-  return <HubClient user={email} dashboards={allowedDashboards} />
+  // Busca permissões do Supabase (fallback: sem acesso)
+  let permissao: string[] | '*' = []
+  try {
+    const admin = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    )
+    const { data } = await admin
+      .from('user_permissions')
+      .select('dashboards')
+      .eq('email', email)
+      .single()
+
+    if (data?.dashboards?.includes('*')) {
+      permissao = '*'
+    } else if (data?.dashboards?.length) {
+      permissao = data.dashboards
+    }
+  } catch {}
+
+  const allowedDashboards = permissao === '*'
+    ? DASHBOARDS
+    : DASHBOARDS.filter(d => (permissao as string[]).includes(d.id))
+
+  const isAdmin = ADMIN_USERS.includes(email)
+  return <HubClient user={email} dashboards={allowedDashboards} isAdmin={isAdmin} />
 }
