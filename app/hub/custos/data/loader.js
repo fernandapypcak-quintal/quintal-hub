@@ -138,18 +138,26 @@ export async function loadTudo() {
       historicoBURaw: await loadHistoricoBUUnificado(),
     }
   }
-  const raw = await fetchObjeto('tudo')
+  // "contas" fica fora do endpoint "tudo" de propósito — processa a aba
+  // Baixas inteira (bem mais pesada) e é buscado em paralelo, separado,
+  // pra não estourar o tempo de execução do Apps Script (limite de 30s em
+  // conta pessoal do Google) numa execução só.
+  const [raw, contasRows] = await Promise.all([
+    fetchObjeto('tudo'),
+    fetchTipo('contas'),
+  ])
+
   if (!raw) {
     // fallback: endpoint "tudo" ainda não existe no Apps Script publicado —
-    // volta pro modo antigo (5 chamadas) pra não deixar o dashboard vazio
-    const [c, h, hc, hd, hbu] = await Promise.all([
-      loadContas(), loadHistoricoUnificado(), loadHistoricoCatUnificado(),
+    // volta pro modo antigo (chamadas separadas) pra não deixar o dashboard vazio
+    const [h, hc, hd, hbu] = await Promise.all([
+      loadHistoricoUnificado(), loadHistoricoCatUnificado(),
       loadHistoricoDetalheTodos(), loadHistoricoBUUnificado(),
     ])
-    return { contas: c, historicoRaw: h, historicoCatRaw: hc, historicoDetRaw: hd, historicoBURaw: hbu }
+    return { contas: parseContas(contasRows), historicoRaw: h, historicoCatRaw: hc, historicoDetRaw: hd, historicoBURaw: hbu }
   }
   return {
-    contas:          parseContas(raw.contas),
+    contas:          parseContas(contasRows),
     historicoRaw:    parseHistoricoUnificado(raw.historico_unificado),
     historicoCatRaw: parseHistoricoCatUnificado(raw.historico_cat_unificado),
     historicoDetRaw: parseHistoricoDetalheTodos(raw.historico_detalhe_todos),
