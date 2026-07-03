@@ -156,3 +156,44 @@ export async function loadTudo() {
     historicoBURaw:  parseHistoricoBUUnificado(raw.historico_bu_unificado),
   }
 }
+
+// historico_bu_unificado tem o mesmo shape do detalhe — reaproveita o parser
+const parseDetalheLancamentosBU = rows => (!rows||!Array.isArray(rows)) ? [] : rows.map(r => ({
+  mes:          r.mes          || '',
+  loja:         r.loja         || '',
+  fornecedor:   r.fornecedor   || '',
+  descricao:    r.descricao    || '',
+  categoria:    r.categoria    || '',
+  tipo:         r.tipo         || '',
+  centro_custo: r.centro_custo || 'Revisar',
+  valor:        Number(r.valor || 0),
+  vencto:       r.vencto       || '',
+  dt_baixa:     r.dt_baixa     || '',
+}))
+
+// Busca sob demanda (não faz parte do loadTudo) — só quando o usuário
+// seleciona uma BU específica na página "Por BU", pra não pesar o
+// carregamento inicial do dashboard.
+export async function loadDetalheLancamentosPorBU({ centroCusto, mes, loja } = {}) {
+  if (USE_MOCK) return []
+  const params = new URLSearchParams({ tipo: 'detalhe_lancamentos_bu' })
+  if (centroCusto) params.set('centro_custo', centroCusto)
+  if (mes)         params.set('mes', mes)
+  if (loja)        params.set('loja', loja)
+  const url = `${APPS_SCRIPT_URL}?${params.toString()}`
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 25000)
+  try {
+    const res = await fetch(url, { method:'GET', signal:controller.signal, redirect:'follow' })
+    clearTimeout(timer)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    if (data && data.erro) { console.warn('[loader] detalhe_lancamentos_bu:', data.erro); return [] }
+    return parseDetalheLancamentosBU(Array.isArray(data) ? data : [])
+  } catch(e) {
+    clearTimeout(timer)
+    console.error('[loader] loadDetalheLancamentosPorBU falhou:', e.message)
+    return []
+  }
+}

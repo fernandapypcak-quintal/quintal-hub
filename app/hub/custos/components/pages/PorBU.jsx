@@ -1,8 +1,10 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import { useFinanceiro, sortMesLabel } from '../../hooks/useFinanceiro.jsx'
+import { loadDetalheLancamentosPorBU } from '../../data/loader.js'
 import Header from '../layout/Header.jsx'
 import { fmt, fmtPct } from '../../utils.js'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LineChart, Line, Legend } from 'recharts'
+import { X, Loader2 } from 'lucide-react'
 
 const CORES = ['#1a1a1a','#97A624','#D9B504','#3b82f6','#8C1414','#8b5cf6','#ec4899','#14b8a6','#f59e0b','#22c55e']
 const TH = ({ ch, right }) => (
@@ -24,45 +26,59 @@ export default function PorBU() {
   const { historicoBUFiltrado, mesFiltro, lojaFiltro } = useFinanceiro()
   const [topMode, setTopMode] = useState('todos')
   const [modo, setModo] = useState('geral') // geral | porloja
+  const [buSelecionada, setBuSelecionada] = useState(null)   // >>> NOVO — BU escolhida pro detalhe
+  const [buFiltroLocal, setBuFiltroLocal] = useState('Todas') // >>> NOVO — filtro de BU dentro da própria página
+  const [detalhe, setDetalhe] = useState([])                  // >>> NOVO
+  const [carregandoDetalhe, setCarregandoDetalhe] = useState(false) // >>> NOVO
 
   const mesesOrdenados = useMemo(() => (
     sortMesLabel([...new Set(historicoBUFiltrado.map(h => h.mes))])
   ), [historicoBUFiltrado])
+
+  // Lista de BUs pro seletor local da página                              // >>> NOVO
+  const busParaFiltro = useMemo(() => (
+    ['Todas', ...Array.from(new Set(historicoBUFiltrado.map(h => h.centro_custo))).sort()]
+  ), [historicoBUFiltrado])
+
+  // Aplica o filtro de BU local (independente do filtro global do Header) // >>> NOVO
+  const dadosBase = useMemo(() => (
+    buFiltroLocal === 'Todas' ? historicoBUFiltrado : historicoBUFiltrado.filter(h => h.centro_custo === buFiltroLocal)
+  ), [historicoBUFiltrado, buFiltroLocal])
 
   const mesAtual    = mesFiltro && mesesOrdenados.includes(mesFiltro) ? mesFiltro : mesesOrdenados[mesesOrdenados.length - 1]
   const mesAnterior = mesesOrdenados[mesesOrdenados.indexOf(mesAtual) - 1]
 
   // Total do mês atual e anterior
   const { totalMes, totalAnterior, varR, varPct } = useMemo(() => {
-    const t = historicoBUFiltrado.filter(h => h.mes === mesAtual).reduce((s, h) => s + h.realizado, 0)
-    const p = mesAnterior ? historicoBUFiltrado.filter(h => h.mes === mesAnterior).reduce((s, h) => s + h.realizado, 0) : 0
+    const t = dadosBase.filter(h => h.mes === mesAtual).reduce((s, h) => s + h.realizado, 0)
+    const p = mesAnterior ? dadosBase.filter(h => h.mes === mesAnterior).reduce((s, h) => s + h.realizado, 0) : 0
     return { totalMes: t, totalAnterior: p, varR: t - p, varPct: p > 0 ? ((t - p) / p) * 100 : 0 }
-  }, [historicoBUFiltrado, mesAtual, mesAnterior])
+  }, [dadosBase, mesAtual, mesAnterior])
 
   // Quantas BUs ainda estão "Revisar" (sem classificação de fornecedor)
   const pctRevisar = useMemo(() => {
-    const doMes = historicoBUFiltrado.filter(h => h.mes === mesAtual)
+    const doMes = dadosBase.filter(h => h.mes === mesAtual)
     const total = doMes.reduce((s, h) => s + h.realizado, 0)
     const revisar = doMes.filter(h => h.centro_custo === 'Revisar').reduce((s, h) => s + h.realizado, 0)
     return total > 0 ? (revisar / total) * 100 : 0
-  }, [historicoBUFiltrado, mesAtual])
+  }, [dadosBase, mesAtual])
 
   // Por BU — mês atual vs anterior
   const porBU = useMemo(() => {
-    const bus = [...new Set(historicoBUFiltrado.map(h => h.centro_custo))]
+    const bus = [...new Set(dadosBase.map(h => h.centro_custo))]
     return bus.map(bu => {
-      const atual    = historicoBUFiltrado.filter(h => h.mes === mesAtual && h.centro_custo === bu).reduce((s, h) => s + h.realizado, 0)
-      const anterior = historicoBUFiltrado.filter(h => h.mes === mesAnterior && h.centro_custo === bu).reduce((s, h) => s + h.realizado, 0)
+      const atual    = dadosBase.filter(h => h.mes === mesAtual && h.centro_custo === bu).reduce((s, h) => s + h.realizado, 0)
+      const anterior = dadosBase.filter(h => h.mes === mesAnterior && h.centro_custo === bu).reduce((s, h) => s + h.realizado, 0)
       const difR   = atual - anterior
       const difPct = anterior > 0 ? (difR / anterior) * 100 : 0
       return { bu, atual, anterior, difR, difPct }
     }).sort((a, b) => b.atual - a.atual)
-  }, [historicoBUFiltrado, mesAtual, mesAnterior])
+  }, [dadosBase, mesAtual, mesAnterior])
 
   // Por BU + Loja (só quando "Todas as lojas" estiver selecionado, senão não faz sentido)
   const porBULoja = useMemo(() => {
     const map = {}
-    historicoBUFiltrado.forEach(({ mes, loja, centro_custo, realizado }) => {
+    dadosBase.forEach(({ mes, loja, centro_custo, realizado }) => {
       const k = `${centro_custo}||${loja}`
       if (!map[k]) map[k] = { bu: centro_custo, loja, atual: 0, anterior: 0 }
       if (mes === mesAtual)    map[k].atual    += realizado
@@ -71,7 +87,7 @@ export default function PorBU() {
     return Object.values(map).map(r => ({
       ...r, difR: r.atual - r.anterior, difPct: r.anterior > 0 ? ((r.atual - r.anterior) / r.anterior) * 100 : 0,
     }))
-  }, [historicoBUFiltrado, mesAtual, mesAnterior])
+  }, [dadosBase, mesAtual, mesAnterior])
 
   const baseItens = modo === 'geral' ? porBU.map(r => ({ ...r, loja: '— todas —' })) : porBULoja
 
@@ -84,25 +100,49 @@ export default function PorBU() {
   // Evolução mensal por BU (linhas)
   const { dadosGrafico, topBUs } = useMemo(() => {
     const totaisPorBU = {}
-    historicoBUFiltrado.forEach(h => { totaisPorBU[h.centro_custo] = (totaisPorBU[h.centro_custo] || 0) + h.realizado })
+    dadosBase.forEach(h => { totaisPorBU[h.centro_custo] = (totaisPorBU[h.centro_custo] || 0) + h.realizado })
     const top = Object.entries(totaisPorBU).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([bu]) => bu)
 
     const porMes = {}
-    historicoBUFiltrado.forEach(({ mes, centro_custo, realizado }) => {
+    dadosBase.forEach(({ mes, centro_custo, realizado }) => {
       if (!top.includes(centro_custo)) return
       if (!porMes[mes]) porMes[mes] = { mes }
       porMes[mes][centro_custo] = (porMes[mes][centro_custo] || 0) + realizado
     })
     const arr = sortMesLabel(Object.keys(porMes)).map(m => porMes[m])
     return { dadosGrafico: arr, topBUs: top }
-  }, [historicoBUFiltrado])
+  }, [dadosBase])
 
   const totalExibido = dadosExibidos.reduce((s, c) => s + c.atual, 0)
+
+  // Busca o detalhe de lançamentos quando uma BU é selecionada na tabela   // >>> NOVO
+  useEffect(() => {
+    if (!buSelecionada) { setDetalhe([]); return }
+    let cancelado = false
+    setCarregandoDetalhe(true)
+    loadDetalheLancamentosPorBU({
+      centroCusto: buSelecionada,
+      mes: mesAtual,
+      loja: lojaFiltro !== 'Todas' ? lojaFiltro : undefined,
+    }).then(rows => { if (!cancelado) setDetalhe(rows) })
+      .finally(() => { if (!cancelado) setCarregandoDetalhe(false) })
+    return () => { cancelado = true }
+  }, [buSelecionada, mesAtual, lojaFiltro])
 
   return (
     <div style={{ background:'#fff', minHeight:'100vh' }}>
       <Header title="Custos por BU" subtitle="Classificação automática por Fornecedor + Natureza"/>
       <div style={{ padding:'16px', display:'flex', flexDirection:'column', gap:20 }}>
+
+        {/* Filtro de BU da própria página */}
+        <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+          <span style={{ fontSize:12, fontWeight:600, color:'#999', textTransform:'uppercase', letterSpacing:'0.05em' }}>BU:</span>
+          <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+            {busParaFiltro.map(bu => (
+              <TabBtn key={bu} label={bu} ativo={buFiltroLocal===bu} onClick={()=>{ setBuFiltroLocal(bu); setBuSelecionada(null) }}/>
+            ))}
+          </div>
+        </div>
 
         {/* KPIs */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14 }}>
@@ -197,7 +237,10 @@ export default function PorBU() {
               </tr></thead>
               <tbody>
                 {dadosExibidos.map((c,i)=>(
-                  <tr key={i}>
+                  <tr key={i}
+                    onClick={()=>setBuSelecionada(c.bu === buSelecionada ? null : c.bu)}
+                    style={{ cursor:'pointer', background: c.bu===buSelecionada ? '#FAFAF5' : undefined }}
+                  >
                     <TD ch={c.bu} color={c.bu==='Revisar' ? '#D9B504' : undefined}/>
                     {modo==='porloja' && <TD ch={c.loja} muted/>}
                     <TD ch={fmt(c.anterior)} mono muted right/>
@@ -210,6 +253,55 @@ export default function PorBU() {
             </table>
           </div>
         </div>
+
+        {/* Detalhe de lançamentos da BU selecionada */}
+        {buSelecionada && (
+          <div style={{ border:'1px solid #F0F0F0', borderRadius:12, overflow:'hidden' }}>
+            <div style={{ padding:'14px 20px', borderBottom:'1px solid #F7F7F7', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <div>
+                <div style={{ fontSize:13, fontWeight:600 }}>Detalhe — {buSelecionada} · {mesAtual}</div>
+                <div style={{ fontSize:12, color:'#999', marginTop:2 }}>
+                  {carregandoDetalhe ? 'Carregando…' : `${detalhe.length} lançamento${detalhe.length===1?'':'s'} · ${fmt(detalhe.reduce((s,d)=>s+d.valor,0))}`}
+                </div>
+              </div>
+              <button onClick={()=>setBuSelecionada(null)} style={{ border:'none', background:'#F5F5F5', borderRadius:8, padding:6, cursor:'pointer', display:'flex' }}>
+                <X size={16} color="#666"/>
+              </button>
+            </div>
+            <div style={{ overflowX:'auto', overflowY:'auto', maxHeight:'420px' }}>
+              {carregandoDetalhe ? (
+                <div style={{ padding:40, display:'flex', justifyContent:'center', color:'#999' }}>
+                  <Loader2 size={20} className="animate-spin"/>
+                </div>
+              ) : detalhe.length === 0 ? (
+                <div style={{ padding:30, textAlign:'center', color:'#999', fontSize:13 }}>Nenhum lançamento encontrado pra essa BU nesse mês.</div>
+              ) : (
+                <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                  <thead><tr>
+                    <TH ch="Fornecedor"/>
+                    <TH ch="Descrição"/>
+                    <TH ch="Categoria"/>
+                    {lojaFiltro==='Todas' && <TH ch="Loja"/>}
+                    <TH ch="Vencimento"/>
+                    <TH ch="Valor" right/>
+                  </tr></thead>
+                  <tbody>
+                    {detalhe.map((d,i)=>(
+                      <tr key={i}>
+                        <TD ch={d.fornecedor}/>
+                        <TD ch={d.descricao} muted/>
+                        <TD ch={d.categoria} muted/>
+                        {lojaFiltro==='Todas' && <TD ch={d.loja} muted/>}
+                        <TD ch={d.vencto} muted/>
+                        <TD ch={fmt(d.valor)} mono right/>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
 
       </div>
     </div>
