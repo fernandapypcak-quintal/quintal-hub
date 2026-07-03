@@ -4,7 +4,7 @@ import { loadDetalheLancamentosPorBU } from '../../data/loader.js'
 import Header from '../layout/Header.jsx'
 import { fmt, fmtPct } from '../../utils.js'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LineChart, Line, Legend } from 'recharts'
-import { X, Loader2 } from 'lucide-react'
+import { X, Loader2, ChevronRight, ChevronDown } from 'lucide-react'
 
 const CORES = ['#1a1a1a','#97A624','#D9B504','#3b82f6','#8C1414','#8b5cf6','#ec4899','#14b8a6','#f59e0b','#22c55e']
 const TH = ({ ch, right }) => (
@@ -30,6 +30,7 @@ export default function PorBU() {
   const [buFiltroLocal, setBuFiltroLocal] = useState('Todas') // >>> NOVO — filtro de BU dentro da própria página
   const [detalhe, setDetalhe] = useState([])                  // >>> NOVO
   const [carregandoDetalhe, setCarregandoDetalhe] = useState(false) // >>> NOVO
+  const [categoriaExpandida, setCategoriaExpandida] = useState(null) // >>> NOVO — qual categoria está expandida mostrando os lançamentos
 
   const mesesOrdenados = useMemo(() => (
     sortMesLabel([...new Set(historicoBUFiltrado.map(h => h.mes))])
@@ -120,6 +121,7 @@ export default function PorBU() {
     if (!buSelecionada) { setDetalhe([]); return }
     let cancelado = false
     setCarregandoDetalhe(true)
+    setCategoriaExpandida(null)
     loadDetalheLancamentosPorBU({
       centroCusto: buSelecionada,
       mes: mesAtual,
@@ -128,6 +130,19 @@ export default function PorBU() {
       .finally(() => { if (!cancelado) setCarregandoDetalhe(false) })
     return () => { cancelado = true }
   }, [buSelecionada, mesAtual, lojaFiltro])
+
+  // Agrupa o detalhe por Categoria — é a camada intermediária antes de
+  // chegar nos lançamentos individuais.                                   // >>> NOVO
+  const detalhePorCategoria = useMemo(() => {
+    const map = {}
+    detalhe.forEach(d => {
+      const cat = d.categoria || 'Sem categoria'
+      if (!map[cat]) map[cat] = { categoria: cat, valor: 0, itens: [] }
+      map[cat].valor += d.valor
+      map[cat].itens.push(d)
+    })
+    return Object.values(map).sort((a, b) => b.valor - a.valor)
+  }, [detalhe])
 
   return (
     <div style={{ background:'#fff', minHeight:'100vh' }}>
@@ -254,52 +269,74 @@ export default function PorBU() {
           </div>
         </div>
 
-        {/* Detalhe de lançamentos da BU selecionada */}
+        {/* Detalhe de lançamentos da BU selecionada — agrupado por Categoria */}
         {buSelecionada && (
           <div style={{ border:'1px solid #F0F0F0', borderRadius:12, overflow:'hidden' }}>
             <div style={{ padding:'14px 20px', borderBottom:'1px solid #F7F7F7', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
               <div>
                 <div style={{ fontSize:13, fontWeight:600 }}>Detalhe — {buSelecionada} · {mesAtual}</div>
                 <div style={{ fontSize:12, color:'#999', marginTop:2 }}>
-                  {carregandoDetalhe ? 'Carregando…' : `${detalhe.length} lançamento${detalhe.length===1?'':'s'} · ${fmt(detalhe.reduce((s,d)=>s+d.valor,0))}`}
+                  {carregandoDetalhe ? 'Carregando…' : `${detalhePorCategoria.length} categoria${detalhePorCategoria.length===1?'':'s'} · ${detalhe.length} lançamento${detalhe.length===1?'':'s'} · ${fmt(detalhe.reduce((s,d)=>s+d.valor,0))}`}
                 </div>
               </div>
               <button onClick={()=>setBuSelecionada(null)} style={{ border:'none', background:'#F5F5F5', borderRadius:8, padding:6, cursor:'pointer', display:'flex' }}>
                 <X size={16} color="#666"/>
               </button>
             </div>
-            <div style={{ overflowX:'auto', overflowY:'auto', maxHeight:'420px' }}>
-              {carregandoDetalhe ? (
-                <div style={{ padding:40, display:'flex', justifyContent:'center', color:'#999' }}>
-                  <Loader2 size={20} className="animate-spin"/>
-                </div>
-              ) : detalhe.length === 0 ? (
-                <div style={{ padding:30, textAlign:'center', color:'#999', fontSize:13 }}>Nenhum lançamento encontrado pra essa BU nesse mês.</div>
-              ) : (
-                <table style={{ width:'100%', borderCollapse:'collapse' }}>
-                  <thead><tr>
-                    <TH ch="Fornecedor"/>
-                    <TH ch="Descrição"/>
-                    <TH ch="Categoria"/>
-                    {lojaFiltro==='Todas' && <TH ch="Loja"/>}
-                    <TH ch="Vencimento"/>
-                    <TH ch="Valor" right/>
-                  </tr></thead>
-                  <tbody>
-                    {detalhe.map((d,i)=>(
-                      <tr key={i}>
-                        <TD ch={d.fornecedor}/>
-                        <TD ch={d.descricao} muted/>
-                        <TD ch={d.categoria} muted/>
-                        {lojaFiltro==='Todas' && <TD ch={d.loja} muted/>}
-                        <TD ch={d.vencto} muted/>
-                        <TD ch={fmt(d.valor)} mono right/>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
+
+            {carregandoDetalhe ? (
+              <div style={{ padding:40, display:'flex', justifyContent:'center', color:'#999' }}>
+                <Loader2 size={20} className="animate-spin"/>
+              </div>
+            ) : detalhePorCategoria.length === 0 ? (
+              <div style={{ padding:30, textAlign:'center', color:'#999', fontSize:13 }}>Nenhum lançamento encontrado pra essa BU nesse mês.</div>
+            ) : (
+              <div style={{ maxHeight:'520px', overflowY:'auto' }}>
+                {detalhePorCategoria.map(cat => {
+                  const expandida = categoriaExpandida === cat.categoria
+                  return (
+                    <div key={cat.categoria} style={{ borderBottom:'1px solid #F7F7F7' }}>
+                      {/* Linha da categoria — clicável pra expandir */}
+                      <div
+                        onClick={() => setCategoriaExpandida(expandida ? null : cat.categoria)}
+                        style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 20px', cursor:'pointer', background: expandida ? '#FAFAF5' : '#fff' }}
+                      >
+                        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                          {expandida ? <ChevronDown size={14} color="#999"/> : <ChevronRight size={14} color="#999"/>}
+                          <span style={{ fontSize:13, fontWeight:600 }}>{cat.categoria}</span>
+                          <span style={{ fontSize:12, color:'#999' }}>({cat.itens.length})</span>
+                        </div>
+                        <span style={{ fontSize:13, fontWeight:600, fontVariantNumeric:'tabular-nums' }}>{fmt(cat.valor)}</span>
+                      </div>
+
+                      {/* Lançamentos da categoria — só aparece expandido */}
+                      {expandida && (
+                        <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                          <thead><tr>
+                            <TH ch="Fornecedor"/>
+                            <TH ch="Descrição"/>
+                            {lojaFiltro==='Todas' && <TH ch="Loja"/>}
+                            <TH ch="Vencimento"/>
+                            <TH ch="Valor" right/>
+                          </tr></thead>
+                          <tbody>
+                            {cat.itens.map((d,i)=>(
+                              <tr key={i} style={{ background:'#FCFCFA' }}>
+                                <TD ch={d.fornecedor}/>
+                                <TD ch={d.descricao} muted/>
+                                {lojaFiltro==='Todas' && <TD ch={d.loja} muted/>}
+                                <TD ch={d.vencto} muted/>
+                                <TD ch={fmt(d.valor)} mono right/>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         )}
 
