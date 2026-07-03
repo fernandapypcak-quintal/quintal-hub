@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useMemo } from 'react'
-import { loadContas, loadHistoricoUnificado, loadHistoricoCatUnificado, loadHistoricoDetalheTodos, loadHistoricoBUUnificado } from '../data/loader.js'
+import { loadTudo } from '../data/loader.js'
 
 const FinanceiroCtx = createContext(null)
 
@@ -70,13 +70,7 @@ export function FinanceiroProvider({ children }) {
 
   // ── Carregamento inicial ──────────────────────────────────
   useEffect(() => {
-    Promise.all([
-      loadContas(),
-      loadHistoricoUnificado(),
-      loadHistoricoCatUnificado(),
-      loadHistoricoDetalheTodos(),
-      loadHistoricoBUUnificado(),
-    ]).then(([c, h, hc, hd, hbu]) => {
+    loadTudo().then(({ contas: c, historicoRaw: h, historicoCatRaw: hc, historicoDetRaw: hd, historicoBURaw: hbu }) => {
       const safe  = x => Array.isArray(x) ? x : []
       const normH = arr => safe(arr).map(x => ({ ...x, mes: normalizarMes(x.mes) }))
 

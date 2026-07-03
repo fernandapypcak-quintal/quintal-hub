@@ -20,6 +20,26 @@ async function fetchTipo(tipo) {
   }
 }
 
+// Igual ao fetchTipo, mas devolve o objeto como veio (não força array) —
+// usado pelo endpoint "tudo", que devolve { contas, historico_unificado, ... }
+async function fetchObjeto(tipo) {
+  const url = `${APPS_SCRIPT_URL}?tipo=${tipo}`
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 40000) // maior — essa chamada faz tudo de uma vez
+  try {
+    const res = await fetch(url, { method:'GET', signal:controller.signal, redirect:'follow' })
+    clearTimeout(timer)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    if (data && data.erro) { console.warn(`[loader] ${tipo}:`, data.erro); return null }
+    return data
+  } catch(e) {
+    clearTimeout(timer)
+    console.error(`[loader] fetchObjeto(${tipo}) falhou:`, e.message)
+    return null
+  }
+}
+
 // Parsers
 const parseContas = rows => rows.map((r,i) => ({
   id: i+1, nome: r.nome||r.descricao||'', fornecedor: r.fornecedor||'',
@@ -103,4 +123,36 @@ export async function loadHistoricoDetalheTodos() {
 export async function loadHistoricoBUUnificado() {
   if (USE_MOCK) return []
   return parseHistoricoBUUnificado(await fetchTipo('historico_bu_unificado'))
+}
+
+// Carrega tudo numa chamada só (evita disparar 5 fetches paralelos pro
+// mesmo Apps Script — o Web App enfileira/serializa execuções simultâneas
+// que mexem na mesma planilha, e algumas estouravam o timeout do front).
+export async function loadTudo() {
+  if (USE_MOCK) {
+    return {
+      contas: await loadContas(),
+      historicoRaw: await loadHistoricoUnificado(),
+      historicoCatRaw: await loadHistoricoCatUnificado(),
+      historicoDetRaw: await loadHistoricoDetalheTodos(),
+      historicoBURaw: await loadHistoricoBUUnificado(),
+    }
+  }
+  const raw = await fetchObjeto('tudo')
+  if (!raw) {
+    // fallback: endpoint "tudo" ainda não existe no Apps Script publicado —
+    // volta pro modo antigo (5 chamadas) pra não deixar o dashboard vazio
+    const [c, h, hc, hd, hbu] = await Promise.all([
+      loadContas(), loadHistoricoUnificado(), loadHistoricoCatUnificado(),
+      loadHistoricoDetalheTodos(), loadHistoricoBUUnificado(),
+    ])
+    return { contas: c, historicoRaw: h, historicoCatRaw: hc, historicoDetRaw: hd, historicoBURaw: hbu }
+  }
+  return {
+    contas:          parseContas(raw.contas),
+    historicoRaw:    parseHistoricoUnificado(raw.historico_unificado),
+    historicoCatRaw: parseHistoricoCatUnificado(raw.historico_cat_unificado),
+    historicoDetRaw: parseHistoricoDetalheTodos(raw.historico_detalhe_todos),
+    historicoBURaw:  parseHistoricoBUUnificado(raw.historico_bu_unificado),
+  }
 }
