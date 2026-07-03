@@ -21,6 +21,7 @@ const GRUPO_OPCOES = [
 export default function Header({ title, subtitle }) {
   const {
     lojaFiltro, setLojaFiltro,
+    buFiltro, setBuFiltro, busDisponiveis,
     mesFiltro, setMesFiltro,
     tipoFiltro, setTipoFiltro,
     mesInicio, setMesInicio,
@@ -79,6 +80,16 @@ export default function Header({ title, subtitle }) {
             </select>
             <ChevronDown size={12} color="#999" style={{ position:'absolute', right:9, top:'50%', transform:'translateY(-50%)', pointerEvents:'none' }}/>
           </div>
+
+          {/* BU (Centro de Custo) */}
+          {busDisponiveis && busDisponiveis.length > 1 && (
+            <div style={{ position:'relative' }}>
+              <select value={buFiltro} onChange={e => setBuFiltro(e.target.value)} style={sel(buFiltro!=='Todas')}>
+                {busDisponiveis.map(b => <option key={b} value={b}>{b==='Todas'?'Todas as BUs':b}</option>)}
+              </select>
+              <ChevronDown size={12} color="#999" style={{ position:'absolute', right:9, top:'50%', transform:'translateY(-50%)', pointerEvents:'none' }}/>
+            </div>
+          )}
         </div>
       </div>
 

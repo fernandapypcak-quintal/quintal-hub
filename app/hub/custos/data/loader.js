@@ -55,6 +55,15 @@ const parseHistoricoDetalheTodos = rows => (!rows||!Array.isArray(rows)) ? [] : 
   realizado:    Number(r.realizado || 0),
 }))
 
+// historico_bu_unificado: { mes, loja, centro_custo, tipo, realizado }
+const parseHistoricoBUUnificado = rows => (!rows||!Array.isArray(rows)) ? [] : rows.map(r => ({
+  mes:          r.mes          || r.mes_label || '',
+  loja:         r.loja         || r.unidade   || '',
+  centro_custo: r.centro_custo || r.bu        || 'Revisar',
+  tipo:         r.tipo         || '',
+  realizado:    Number(r.realizado || 0),
+}))
+
 // Mock fallback
 async function getMock(tipo) {
   try {
@@ -89,4 +98,9 @@ export async function loadHistoricoCatUnificado() {
 export async function loadHistoricoDetalheTodos() {
   if (USE_MOCK) return []
   return parseHistoricoDetalheTodos(await fetchTipo('historico_detalhe_todos'))
+}
+
+export async function loadHistoricoBUUnificado() {
+  if (USE_MOCK) return []
+  return parseHistoricoBUUnificado(await fetchTipo('historico_bu_unificado'))
 }

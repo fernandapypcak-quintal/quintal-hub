@@ -1,9 +1,10 @@
-import { LayoutDashboard, TrendingUp, TrendingDown, BarChart3, CreditCard } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, TrendingDown, PieChart, BarChart3, CreditCard } from 'lucide-react';
 
 const NAV = [
   { id: 'home',     label: 'Geral',    icon: LayoutDashboard },
   { id: 'custos',   label: 'C. Fixo',  icon: TrendingUp },
   { id: 'variavel', label: 'C. Var.',  icon: TrendingDown },
+  { id: 'porbu',    label: 'Por BU',   icon: PieChart },
   { id: 'evolucao', label: 'Evolução', icon: BarChart3 },
   { id: 'contas',   label: 'Contas',   icon: CreditCard },
 ];

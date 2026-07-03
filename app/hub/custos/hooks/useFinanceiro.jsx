@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useMemo } from 'react'
-import { loadContas, loadHistoricoUnificado, loadHistoricoCatUnificado, loadHistoricoDetalheTodos } from '../data/loader.js'
+import { loadContas, loadHistoricoUnificado, loadHistoricoCatUnificado, loadHistoricoDetalheTodos, loadHistoricoBUUnificado } from '../data/loader.js'
 
 const FinanceiroCtx = createContext(null)
 
@@ -55,11 +55,13 @@ export function FinanceiroProvider({ children }) {
   const [historicoRaw,    setHistoricoRaw]    = useState([])
   const [historicoCatRaw, setHistoricoCatRaw] = useState([])
   const [historicoDetRaw, setHistoricoDetRaw] = useState([])
+  const [historicoBURaw,  setHistoricoBURaw]  = useState([])
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
 
   // ── Filtros ───────────────────────────────────────────────
   const [lojaFiltro,     setLojaFiltro]     = useState('Todas')
+  const [buFiltro,       setBuFiltro]       = useState('Todas')
   const [mesFiltro,      setMesFiltro]      = useState('')
   const [tipoFiltro,     setTipoFiltro]     = useState('operacional')
   const [mesInicio,      setMesInicio]      = useState('')
@@ -73,13 +75,15 @@ export function FinanceiroProvider({ children }) {
       loadHistoricoUnificado(),
       loadHistoricoCatUnificado(),
       loadHistoricoDetalheTodos(),
-    ]).then(([c, h, hc, hd]) => {
+      loadHistoricoBUUnificado(),
+    ]).then(([c, h, hc, hd, hbu]) => {
       const safe  = x => Array.isArray(x) ? x : []
       const normH = arr => safe(arr).map(x => ({ ...x, mes: normalizarMes(x.mes) }))
 
-      const hN  = normH(h)
-      const hcN = normH(hc)
-      const hdN = normH(hd)
+      const hN   = normH(h)
+      const hcN  = normH(hc)
+      const hdN  = normH(hd)
+      const hbuN = normH(hbu)
 
       const todosMeses = sortMesLabel([...new Set(hN.map(x => x.mes).filter(Boolean))])
       const mesPadrao  = todosMeses[todosMeses.length - 1] || ''
@@ -88,6 +92,7 @@ export function FinanceiroProvider({ children }) {
       setHistoricoRaw(hN)
       setHistoricoCatRaw(hcN)
       setHistoricoDetRaw(hdN)
+      setHistoricoBURaw(hbuN)
       setMesFiltro(mesPadrao)
       setMesFim(mesPadrao)
       setMesInicio(todosMeses.length > 1 ? todosMeses[0] : mesPadrao)
@@ -174,6 +179,22 @@ export function FinanceiroProvider({ children }) {
     return porPeriodo(porLoja(historicoDetRaw.filter(h => tiposVar.includes(h.tipo))))
   }, [historicoDetRaw, lojaFiltro, tiposAtivos, mesInicio, mesFim])
 
+  // ── historicoBU filtrado (loja + período; BU fica livre pra ranquear) ──
+  const historicoBUFiltrado = useMemo(() => (
+    porPeriodo(porLoja(historicoBURaw.filter(h => tiposAtivos.includes(h.tipo))))
+  ), [historicoBURaw, lojaFiltro, tiposAtivos, mesInicio, mesFim])
+
+  // Igual, mas também aplica o filtro de BU (pra outras páginas cruzarem)
+  const historicoBUFiltradoComBU = useMemo(() => (
+    buFiltro === 'Todas' ? historicoBUFiltrado : historicoBUFiltrado.filter(h => h.centro_custo === buFiltro)
+  ), [historicoBUFiltrado, buFiltro])
+
+  // Lista de BUs disponíveis (pra popular o filtro no Header)
+  const busDisponiveis = useMemo(() => {
+    const set = new Set(historicoBURaw.map(h => h.centro_custo).filter(Boolean))
+    return ['Todas', ...Array.from(set).sort()]
+  }, [historicoBURaw])
+
   // ── Contas ────────────────────────────────────────────────
   const contasFiltradas = useMemo(() => {
     let r = contas
@@ -204,6 +225,7 @@ export function FinanceiroProvider({ children }) {
       loading, error,
       contas, contasFiltradas,
       historicoRaw, historicoCatRaw,
+      historicoBURaw, historicoBUFiltrado, historicoBUFiltradoComBU, busDisponiveis,
       historicoFiltrado,
       historicoVariavelFiltrado,
       historicoCatFixoFiltrado,
@@ -211,6 +233,7 @@ export function FinanceiroProvider({ children }) {
       historicoDetalheFixoFiltrado,
       historicoDetalheVariavelFiltrado,
       lojaFiltro,     setLojaFiltro,
+      buFiltro,       setBuFiltro,
       mesFiltro,      setMesFiltro,
       tipoFiltro,     setTipoFiltro,
       mesInicio,      setMesInicio,

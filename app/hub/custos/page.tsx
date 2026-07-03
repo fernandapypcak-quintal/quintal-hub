@@ -8,6 +8,7 @@ import Home from './components/pages/Home'
 import ContasPagar from './components/pages/ContasPagar'
 import CustoFixo from './components/pages/CustoFixo'
 import CustoVariavel from './components/pages/CustoVariavel'
+import PorBU from './components/pages/PorBU'
 import Evolucao from './components/pages/Evolucao'
 import Link from 'next/link'
 
@@ -16,6 +17,7 @@ const PAGES: Record<string, React.ComponentType<any>> = {
   contas: ContasPagar,
   custos: CustoFixo,
   variavel: CustoVariavel,
+  porbu: PorBU,
   evolucao: Evolucao,
 }
 
