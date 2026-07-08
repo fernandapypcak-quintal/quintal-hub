@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+/* ── Quintal HUB variables ──────────────────────── */
+:root {
+  --verde: #97A624;
+  --vermelho: #8C1414;
+  --ambar: #D9B504;
+  --preto: #0D0D0D;
+  --offwhite: #FAFAF8;
+  --branco: #FFFFFF;
+  --font-dm-sans: 'DM Sans', system-ui, sans-serif;
+  --font-dm-mono: 'DM Mono', monospace;
+}
+
+body {
+  background: var(--offwhite);
+  color: var(--preto);
+  font-family: var(--font-dm-sans);
+}
+
+/* ── Dashboard Faturamento: Tailwind v3 compat ──── */
+/* brand colors */
+.bg-brand-black    { background-color: #0D0D0D; }
+.bg-brand-olive    { background-color: #97A624; }
+.bg-brand-yellow   { background-color: #D9CB04; }
+.bg-brand-amber    { background-color: #D9B504; }
+.bg-brand-crimson  { background-color: #8C1414; }
+.text-brand-black  { color: #0D0D0D; }
+.text-brand-olive  { color: #97A624; }
+.text-brand-yellow { color: #D9CB04; }
+.text-brand-amber  { color: #D9B504; }
+.text-brand-crimson{ color: #8C1414; }
+.border-brand-black  { border-color: #0D0D0D; }
+.border-brand-olive  { border-color: #97A624; }
+
+/* surface colors */
+.bg-surface-base   { background-color: #FAFAF8; }
+.bg-surface-card   { background-color: #FFFFFF; }
+.bg-surface-muted  { background-color: #F4F4F0; }
+.border-surface-border { border-color: #E8E8E2; }
+
+/* fonts */
+.font-display { font-family: 'Sora', sans-serif; }
+.font-body    { font-family: 'DM Sans', sans-serif; }
+.font-mono    { font-family: 'DM Mono', monospace; }
+
+/* shadows */
+.shadow-card       { box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04); }
+.shadow-card-hover { box-shadow: 0 4px 16px 0 rgb(0 0 0 / 0.08), 0 2px 4px -1px rgb(0 0 0 / 0.06); }
+.shadow-sidebar    { box-shadow: 1px 0 0 0 #E8E8E2; }
+
+/* animations */
+@keyframes fadeIn  { from { opacity: 0 } to { opacity: 1 } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: translateY(0) } }
+.animate-fade-in  { animation: fadeIn 0.4s ease-out; }
+.animate-slide-up { animation: slideUp 0.4s ease-out; }
