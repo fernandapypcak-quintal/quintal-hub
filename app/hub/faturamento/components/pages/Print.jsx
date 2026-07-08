@@ -1,4 +1,4 @@
- // src/components/pages/Print.jsx
+// src/components/pages/Print.jsx
 import { useMemo } from 'react';
 import { useFilters } from '../../hooks/useFilters';
 import { useMetas } from '../../hooks/useMetas';
@@ -82,7 +82,7 @@ export default function PrintReport({ onClose }) {
       pctCasa: total>0?casa/total*100:0,
       pctDel:  total>0?delivery/total*100:0,
       porLoja,
-      ontem: { dow: DOW_NAMES[ontem.getDay()], dia:diaO, mes:mesO, ano:anoO,
+      ontem: { dow: DOW_NAMES[ontemDate.getDay()], dia:diaO, mes:mesO, ano:anoO,
                total:totalO, totalAA:sum(recsOAA), yoy:yoyO,
                casa:casaO, delivery:delO, porLoja:porLojaO } };
   }, [rawData, getMeta]);
