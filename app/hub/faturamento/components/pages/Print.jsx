@@ -1,4 +1,4 @@
-// src/components/pages/Print.jsx
+ // src/components/pages/Print.jsx
 import { useMemo } from 'react';
 import { useFilters } from '../../hooks/useFilters';
 import { useMetas } from '../../hooks/useMetas';
@@ -23,14 +23,7 @@ export default function PrintReport({ onClose }) {
     if (!rawData.length) return null;
 
     const keys = [...new Set(rawData.map(r => r.Ano_Mes))].sort();
-    // Se o mês mais recente tem poucos dados (< 5 dias), usa o anterior
-    // Evita mostrar mês novo incompleto quando os dados acabam de chegar
-    let key = keys[keys.length - 1];
-    const recsUltimo = rawData.filter(r => r.Ano_Mes === key);
-    const diasUltimo = new Set(recsUltimo.map(r => r.Dia)).size;
-    if (diasUltimo <= 2 && keys.length > 1) {
-      key = keys[keys.length - 2]; // usa mês anterior se mês atual tem <= 2 dias
-    }
+    const key  = keys[keys.length - 1];
     const [anoS, mesS] = key.split('-');
     const ano = Number(anoS), mes = Number(mesS);
     const recs      = rawData.filter(r => r.Ano_Mes === key);
@@ -64,20 +57,14 @@ export default function PrintReport({ onClose }) {
       };
     }).sort((a,b) => (b.ating??-1) - (a.ating??-1));
 
-    // Dia anterior — usa Ano/Mes/Dia para encontrar o último dia disponível (evita problemas de formato de Data)
-    const ultimoDia = rawData.reduce((max, r) => {
-      if (!r.Ano || !r.Mes || !r.Dia) return max;
-      const ts = r.Ano * 10000 + r.Mes * 100 + r.Dia;
-      return ts > max.ts ? { ts, ano: r.Ano, mes: r.Mes, dia: r.Dia } : max;
-    }, { ts: 0, ano: 0, mes: 0, dia: 0 });
-    const ontemDate = ultimoDia.ts > 0
-      ? new Date(ultimoDia.ano, ultimoDia.mes - 1, ultimoDia.dia, 12, 0, 0)
-      : (() => { const d = new Date(); d.setDate(d.getDate()-1); return d; })();
-    const diaO    = ultimoDia.ts > 0 ? ultimoDia.dia : ontemDate.getDate();
-    const mesO    = ultimoDia.ts > 0 ? ultimoDia.mes : ontemDate.getMonth() + 1;
-    const anoO    = ultimoDia.ts > 0 ? ultimoDia.ano : ontemDate.getFullYear();
+    // Dia anterior — usa o último dia disponível nos dados (respeita D-1 e filtros)
+    const datasDisponiveis = rawData.map(r => r.Data).filter(Boolean).sort();
+    const ultimaData = datasDisponiveis[datasDisponiveis.length - 1]; // ex: "2026-06-30"
+    const ontemDate = ultimaData ? new Date(ultimaData + 'T12:00:00') : (() => { const d = new Date(); d.setDate(d.getDate()-1); return d; })();
+    const diaO    = ontemDate.getDate();
+    const mesO    = ontemDate.getMonth() + 1;
+    const anoO    = ontemDate.getFullYear();
     const recsO   = rawData.filter(r => r.Ano === anoO   && r.Mes === mesO && r.Dia === diaO);
-
     const recsOAA = rawData.filter(r => r.Ano === anoO-1 && r.Mes === mesO && r.Dia === diaO);
     const totalO  = sum(recsO);
     const casaO   = sum(recsO.filter(r => r.Canal === 'CASA'));
@@ -95,7 +82,7 @@ export default function PrintReport({ onClose }) {
       pctCasa: total>0?casa/total*100:0,
       pctDel:  total>0?delivery/total*100:0,
       porLoja,
-      ontem: { dow: DOW_NAMES[ontemDate.getDay()], dia:diaO, mes:mesO, ano:anoO,
+      ontem: { dow: DOW_NAMES[ontem.getDay()], dia:diaO, mes:mesO, ano:anoO,
                total:totalO, totalAA:sum(recsOAA), yoy:yoyO,
                casa:casaO, delivery:delO, porLoja:porLojaO } };
   }, [rawData, getMeta]);
@@ -111,35 +98,35 @@ export default function PrintReport({ onClose }) {
 <title>Relatório ${data.label} — Quintal do Espeto</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: Arial, sans-serif; font-size: 10px; color: #1a1a1a;
+  body { font-family: Arial, sans-serif; font-size: 13px; color: #1a1a1a;
          background: white; padding: 16px; }
 
   .header { display:flex; justify-content:space-between; align-items:center;
     border-bottom: 3px solid #1F3D2E; padding-bottom: 10px; margin-bottom: 14px; }
-  .header h1 { font-size: 17px; font-weight: 800; color: #1F3D2E; }
-  .header .sub { font-size: 9px; color: #666; margin-top: 2px; }
-  .header .badge { background:#1F3D2E; color:white; padding:4px 10px;
-    border-radius:6px; font-size:10px; font-weight:700; }
+  .header h1 { font-size: 22px; font-weight: 800; color: #1F3D2E; }
+  .header .sub { font-size: 12px; color: #666; margin-top: 2px; }
+  .header .badge { background:#1F3D2E; color:white; padding:5px 12px;
+    border-radius:6px; font-size:13px; font-weight:700; }
 
   .info-bar { background:#fffbeb; border:1px solid #fde68a; border-radius:6px;
-    padding:5px 10px; font-size:9px; color:#92400e; margin-bottom:12px; }
+    padding:6px 12px; font-size:12px; color:#92400e; margin-bottom:12px; }
 
-  .section-title { font-size:12px; font-weight:700; color:#1F3D2E;
-    border-left:4px solid #97A624; padding-left:8px; margin:14px 0 8px; }
+  .section-title { font-size:15px; font-weight:700; color:#1F3D2E;
+    border-left:4px solid #97A624; padding-left:8px; margin:16px 0 8px; }
 
   .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:12px; }
-  .kpi { border:1px solid #e5e5e5; border-radius:8px; padding:9px 11px; }
-  .kpi-label { font-size:8px; font-weight:700; color:#888; text-transform:uppercase;
-    letter-spacing:0.5px; margin-bottom:3px; }
-  .kpi-value { font-size:17px; font-weight:800; }
-  .kpi-sub { font-size:8px; color:#888; margin-top:2px; }
-  .kpi-var { font-size:9px; font-weight:700; margin-top:3px; }
+  .kpi { border:1px solid #e5e5e5; border-radius:8px; padding:11px 13px; }
+  .kpi-label { font-size:10px; font-weight:700; color:#888; text-transform:uppercase;
+    letter-spacing:0.5px; margin-bottom:4px; }
+  .kpi-value { font-size:22px; font-weight:800; }
+  .kpi-sub { font-size:10px; color:#888; margin-top:2px; }
+  .kpi-var { font-size:12px; font-weight:700; margin-top:3px; }
 
-  table { width:100%; border-collapse:collapse; font-size:10px; margin-bottom:14px; }
-  th { background:#1F3D2E; color:white; font-weight:700; padding:5px 8px;
-    text-align:right; font-size:8px; text-transform:uppercase; }
+  table { width:100%; border-collapse:collapse; font-size:13px; margin-bottom:14px; }
+  th { background:#1F3D2E; color:white; font-weight:700; padding:6px 9px;
+    text-align:right; font-size:10px; text-transform:uppercase; }
   th:first-child { text-align:left; }
-  td { padding:4px 8px; text-align:right; border-bottom:1px solid #f0f0f0; }
+  td { padding:5px 9px; text-align:right; border-bottom:1px solid #f0f0f0; }
   td:first-child { text-align:left; font-weight:600; }
   tr:nth-child(even) td { background:#fafafa; }
   .tfoot td { background:#f0f4ec !important; font-weight:700;
@@ -148,7 +135,7 @@ export default function PrintReport({ onClose }) {
   .pos { color:#16a34a; } .neg { color:#dc2626; }
 
   .footer { margin-top:14px; padding-top:8px; border-top:1px solid #e5e5e5;
-    font-size:8px; color:#999; display:flex; justify-content:space-between; }
+    font-size:10px; color:#999; display:flex; justify-content:space-between; }
 
   @media print {
     body { padding:8mm; }
@@ -230,7 +217,7 @@ export default function PrintReport({ onClose }) {
   </div>
   <div class="kpi" style="border-left:3px solid #1F3D2E">
     <div class="kpi-label">Mesmo dia ${data.ontem.ano-1}</div>
-    <div class="kpi-value" style="color:#999;font-size:15px">${fmt(data.ontem.totalAA)}</div>
+    <div class="kpi-value" style="color:#999;font-size:19px">${fmt(data.ontem.totalAA)}</div>
     ${data.ontem.yoy !== null ? `<div class="kpi-var ${data.ontem.yoy>=0?'pos':'neg'}">${pct(data.ontem.yoy)}</div>` : '<div class="kpi-sub">sem dado anterior</div>'}
   </div>
 </div>
