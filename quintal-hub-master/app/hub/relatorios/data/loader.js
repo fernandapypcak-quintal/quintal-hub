@@ -1,0 +1,116 @@
+import { APPS_SCRIPT_URL } from './config.js'
+
+async function fetchTipo(tipo) {
+  const url = `${APPS_SCRIPT_URL}?tipo=${tipo}`
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 25000)
+  try {
+    const res = await fetch(url, { method: 'GET', signal: controller.signal, redirect: 'follow' })
+    clearTimeout(timer)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    if (data && data.erro) { console.warn(`[loader] ${tipo}:`, data.erro); return [] }
+    return Array.isArray(data) ? data : []
+  } catch (e) {
+    clearTimeout(timer)
+    console.error(`[loader] fetchTipo(${tipo}) falhou:`, e.message)
+    return []
+  }
+}
+
+const num = (v) => Number(v || 0)
+
+// ── Parsers — convertem as chaves snake_case que vêm do Apps Script
+// pra camelCase, e garantem tipos numéricos ──────────────────────
+
+const parseDescontos = rows => rows.map(r => ({
+  data: r.data || '',
+  loja: r.loja || '',
+  unidade: r.unidade || '',
+  canal: r.canal || '',
+  funcionario: r.funcionario || '',
+  cliente: r.cliente_s || '',
+  justificativa: r.justificativa || '',
+  categoria: r.categoria || '',
+  produtos: r.produtos || '',
+  percentual: num(r.percentual),
+  valor: num(r.valor_r),
+}))
+
+const parseEstornos = rows => rows.map(r => ({
+  data: r.data || '',
+  loja: r.loja || '',
+  unidade: r.unidade || '',
+  canal: r.canal || '',
+  produto: r.produto || '',
+  categoria: r.categoria || '',
+  tipo: r.tipo || '',
+  estornadoPor: r.estornado_por || '',
+  vendidoPor: r.vendido_por || '',
+  motivo: r.motivo || '',
+  clientes: r.clientes || '',
+  operacao: r.operacao || '',
+  quantidade: num(r.quantidade) || 1,
+  valorUnitario: num(r.valor_r),
+}))
+
+const parseContasAberto = rows => rows.map(r => ({
+  loja: r.loja || '',
+  unidade: r.unidade || '',
+  canal: r.canal || '',
+  nome: r.nome || '',
+  cpf: r.cpf || '',
+  telefone: r.telefone || '',
+  abertoEmConta: num(r.aberto_em_conta),
+  abertoEmServico: num(r.aberto_em_servico),
+  totalEmAberto: num(r.total_em_aberto),
+  pagoAposEvento: num(r.pago_apos_evento),
+  aindaEmAberto: num(r.ainda_em_aberto),
+}))
+
+const parseBonusConcedido = rows => rows.map(r => ({
+  loja: r.loja || '',
+  unidade: r.unidade || '',
+  canal: r.canal || '',
+  cliente: r.cliente || '',
+  dataConcessao: r.data_concessao || '',
+  concedidoPor: r.concedido_por || '',
+  motivo: r.motivo || '',
+  categoria: r.categoria || '',
+  valorRecebido: num(r.valor_recebido_r),
+  valorGastoNoPeriodo: num(r.valor_gasto_no_periodo_r),
+  valorGastoEmOutroPeriodo: num(r.valor_gasto_em_outro_periodo_r),
+}))
+
+const parseBonusUtilizado = rows => rows.map(r => ({
+  loja: r.loja || '',
+  unidade: r.unidade || '',
+  canal: r.canal || '',
+  cliente: r.cliente || '',
+  concedidoEm: r.concedido_em || '',
+  utilizadoEm: r.utilizado_em || '',
+  concedidoPor: r.concedido_por || '',
+  motivo: r.motivo || '',
+  valorUtilizado: num(r.valor_utilizado_r),
+}))
+
+// Carrega os 5 relatórios em paralelo (cada um é uma leitura de aba
+// separada no Apps Script, então não tem o problema de concorrência que
+// o loader do Custos tem com a planilha de Baixas).
+export async function loadTudo() {
+  const [descontosRaw, estornosRaw, contasRaw, bonusConcRaw, bonusUtilRaw] = await Promise.all([
+    fetchTipo('descontos'),
+    fetchTipo('estornos'),
+    fetchTipo('contas_aberto'),
+    fetchTipo('bonus_concedido'),
+    fetchTipo('bonus_utilizado'),
+  ])
+
+  return {
+    descontos: parseDescontos(descontosRaw),
+    estornos: parseEstornos(estornosRaw),
+    contasAberto: parseContasAberto(contasRaw),
+    bonusConcedido: parseBonusConcedido(bonusConcRaw),
+    bonusUtilizado: parseBonusUtilizado(bonusUtilRaw),
+  }
+}

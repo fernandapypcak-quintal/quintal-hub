@@ -14,6 +14,7 @@ export const DASHBOARDS: Dashboard[] = [
   { id: 'cmv', name: 'CMV', description: 'Custo da mercadoria vendida', url: 'https://cmv-quintal.vercel.app', internalPath: '/hub/cmv', color: '#8C1414', icon: '🏪' },
   { id: 'turnover', name: 'Turnover & Headcount', description: 'Gestão de pessoas, turnover e custos com RH', url: 'https://turnovereheadcount.vercel.app', internalPath: '/hub/turnover', color: '#6366f1', icon: '👥' },
   { id: 'comercial', name: 'Comercial & Eventos', description: 'Funil de eventos B2B, calendário e deals', url: '', internalPath: '/hub/comercial', color: '#0ea5e9', icon: '🤝' },
+  { id: 'relatorios', name: 'Relatórios ZIG', description: 'Descontos, estornos, contas em aberto e bônus', url: '', internalPath: '/hub/relatorios', color: '#EA580C', icon: '🧾' },
 ]
 
 export const USER_PERMISSIONS: Record<string, string[] | '*'> = {
