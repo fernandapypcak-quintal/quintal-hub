@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { loadCMVData } from '../data/loader';
 import { META_CMV, LOJAS_GRANDES, LOJAS_MENORES } from '../data/config';
+import { filterRowsByUnit } from '@/lib/units';
 
 const Ctx = createContext(null);
 
@@ -9,7 +10,7 @@ const MESES_ORDER = ['janeiro','fevereiro','março','abril','maio','junho',
 
 function avg(arr) { return arr.length ? arr.reduce((s,v) => s+v, 0) / arr.length : 0; }
 
-export function CMVProvider({ children }) {
+export function CMVProvider({ children, allowedLojas = '*' }) {
   const [fichas,      setFichas]      = useState([]);
   const [desperdicio, setDesperdicio] = useState([]);
   const [vendas,      setVendas]      = useState([]);
@@ -32,15 +33,31 @@ export function CMVProvider({ children }) {
   useEffect(() => {
     loadCMVData()
       .then(({ fichas, desperdicio, vendas, parametros, history, historico, historicoIngredientes, bonificacoes }) => {
+        // "fichas" (fichas técnicas) e "historico"/"historicoIngredientes"
+        // são dados de produto, compartilhados pela rede toda — não têm
+        // recorte por loja. "vendas" e "desperdicio" são por unidade, e é
+        // aí que a permissão precisa ser aplicada antes de guardar no estado.
+        const desperdicioF = filterRowsByUnit(desperdicio || [], 'unidade', allowedLojas);
+        const vendasF      = filterRowsByUnit(vendas || [], 'loja', allowedLojas);
+
         setFichas(fichas || []);
-        setDesperdicio(desperdicio || []);
-        setVendas(vendas || []);
+        setDesperdicio(desperdicioF);
+        setVendas(vendasF);
         setParametros(parametros || { taxa_ifood: 24.8, embalagem_padrao: 3.0 });
         setHistory(history || []);
         setHistorico(historico || []);
         setHistIng(historicoIngredientes || []);
         setBonificacoes(bonificacoes || []);
         setLoading(false);
+
+        // Se o usuário só tem acesso a 1 unidade, já abre filtrado nela
+        const unicas = new Set([
+          ...desperdicioF.map(r => r.unidade).filter(Boolean),
+          ...vendasF.map(r => r.loja).filter(Boolean),
+        ]);
+        if (allowedLojas !== '*' && unicas.size === 1) {
+          setFiltroLoja([...unicas][0]);
+        }
       })
       .catch(e => { setError(e.message); setLoading(false); });
   }, []);

@@ -1,6 +1,7 @@
 // src/hooks/useFilters.jsx
 import { createContext, useContext, useState, useMemo, useEffect } from 'react';
 import { loadData } from '../data/loader';
+import { filterRowsByUnit } from '@/lib/units';
 
 const Ctx = createContext(null);
 
@@ -20,7 +21,7 @@ function defaultFilters() {
   };
 }
 
-export function FilterProvider({ children }) {
+export function FilterProvider({ children, allowedLojas = '*' }) {
   const [modoAoVivo, setModoAoVivo] = useState(false);
   const [reloadKey, setReloadKey]   = useState(0);
 
@@ -28,16 +29,23 @@ export function FilterProvider({ children }) {
     setModoAoVivo(v => !v);
     setReloadKey(k => k + 1); // força reload dos dados
   }
-  const [rawData, setRawData] = useState([]);
+  const [rawDataFull, setRawDataFull] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(null);
   const [filters, setFilters] = useState(defaultFilters());
 
   useEffect(() => {
     loadData(modoAoVivo)
-      .then(d => { setRawData(d); setLoading(false); })
+      .then(d => { setRawDataFull(d); setLoading(false); })
       .catch(e => { setError(e);  setLoading(false); });
   }, [reloadKey, modoAoVivo]);
+
+  // Restringe à(s) unidade(s) permitida(s) do usuário logado — feito uma
+  // vez aqui, então toda página que consome rawData/meta já está segura.
+  const rawData = useMemo(
+    () => filterRowsByUnit(rawDataFull, 'Loja', allowedLojas),
+    [rawDataFull, allowedLojas]
+  );
 
   const meta = useMemo(() => ({
     lojas: [...new Set(rawData.map(r => r.Loja))].sort(),
@@ -66,6 +74,7 @@ export function FilterProvider({ children }) {
     <Ctx.Provider value={{ rawData, filteredData, filters, meta,
       updateFilter, resetFilters, hasActiveFilters,
       loading, error,
+      allowedLojas,
       modoAoVivo, toggleModoAoVivo }}>
       {children}
     </Ctx.Provider>

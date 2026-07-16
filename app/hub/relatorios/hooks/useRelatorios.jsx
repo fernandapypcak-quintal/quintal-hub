@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { loadTudo } from '../data/loader.js'
+import { filterRowsByUnit } from '@/lib/units'
 
 const RelatoriosCtx = createContext(null)
 
@@ -45,7 +46,7 @@ export function somar(linhas, extrair) {
 }
 
 // ── Provider ──────────────────────────────────────────────────────
-export function RelatoriosProvider({ children }) {
+export function RelatoriosProvider({ children, allowedLojas = '*' }) {
   const [descontos, setDescontos] = useState([])
   const [estornos, setEstornos] = useState([])
   const [contasAberto, setContasAberto] = useState([])
@@ -61,17 +62,38 @@ export function RelatoriosProvider({ children }) {
   useEffect(() => {
     loadTudo()
       .then(d => {
-        setDescontos(d.descontos)
-        setEstornos(d.estornos)
-        setContasAberto(d.contasAberto)
-        setBonusConcedido(d.bonusConcedido)
-        setBonusUtilizado(d.bonusUtilizado)
+        // Restringe à(s) unidade(s) permitida(s) antes de guardar no
+        // estado — nenhuma tela do dashboard chega a ver dado de fora.
+        const porUnidade = arr => filterRowsByUnit(arr || [], 'unidade', allowedLojas)
+
+        const descontosF      = porUnidade(d.descontos)
+        const estornosF       = porUnidade(d.estornos)
+        const contasAbertoF   = porUnidade(d.contasAberto)
+        const bonusConcedidoF = porUnidade(d.bonusConcedido)
+        const bonusUtilizadoF = porUnidade(d.bonusUtilizado)
+
+        setDescontos(descontosF)
+        setEstornos(estornosF)
+        setContasAberto(contasAbertoF)
+        setBonusConcedido(bonusConcedidoF)
+        setBonusUtilizado(bonusUtilizadoF)
+
+        // Se, depois de filtrar, só sobrou uma unidade nos dados, já
+        // abre o dashboard filtrado nela.
+        const unicas = new Set(
+          [...descontosF, ...estornosF, ...contasAbertoF, ...bonusConcedidoF, ...bonusUtilizadoF]
+            .map(l => l.unidade).filter(Boolean)
+        )
+        if (allowedLojas !== '*' && unicas.size === 1) {
+          setUnidadeFiltro([...unicas][0])
+        }
+
         console.log('[Relatorios] OK —', {
-          descontos: d.descontos.length,
-          estornos: d.estornos.length,
-          contasAberto: d.contasAberto.length,
-          bonusConcedido: d.bonusConcedido.length,
-          bonusUtilizado: d.bonusUtilizado.length,
+          descontos: descontosF.length,
+          estornos: estornosF.length,
+          contasAberto: contasAbertoF.length,
+          bonusConcedido: bonusConcedidoF.length,
+          bonusUtilizado: bonusUtilizadoF.length,
         })
       })
       .catch(e => { console.error('[Relatorios] Erro:', e); setError(e.message) })

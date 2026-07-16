@@ -2,6 +2,7 @@
 // Proxy server-side para o Apps Script do Custos — evita CORS
 
 import { NextRequest, NextResponse } from 'next/server'
+import { getUserAccess, hasDashboardAccess } from '@/lib/permissions'
 
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbxVXc8MXLItuTmgRP8v2dlQj4UNyQSEHfX-snfAPfL5JBgrjhNIOsb4DikFrDm7H8OX/exec'
 
@@ -9,6 +10,10 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbxVXc8MXLItuTmgRP8v2dlQ
 export const maxDuration = 60
 
 export async function GET(req: NextRequest) {
+  const access = await getUserAccess()
+  if (!access) return NextResponse.json({ erro: 'Não autenticado' }, { status: 401 })
+  if (!hasDashboardAccess(access, 'custos')) return NextResponse.json({ erro: 'Acesso negado' }, { status: 403 })
+
   try {
     const { searchParams } = new URL(req.url)
     const params = searchParams.toString()

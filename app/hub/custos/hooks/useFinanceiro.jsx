@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useMemo } from 'react'
 import { loadTudo } from '../data/loader.js'
+import { filterRowsByUnit, allowedNativeLabels } from '@/lib/units'
 
 const FinanceiroCtx = createContext(null)
 
@@ -49,7 +50,7 @@ export const GRUPOS_CATEGORIA = {
   comercial:   ['Marketing', 'Administrativo', 'Tecnologia', 'Jurídico'],
 }
 
-export function FinanceiroProvider({ children }) {
+export function FinanceiroProvider({ children, allowedLojas = '*' }) {
   // ── Dados brutos ──────────────────────────────────────────
   const [contas,          setContas]          = useState([])
   const [historicoRaw,    setHistoricoRaw]    = useState([])
@@ -58,6 +59,11 @@ export function FinanceiroProvider({ children }) {
   const [historicoBURaw,  setHistoricoBURaw]  = useState([])
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
+
+  // ── Permissão por unidade ──────────────────────────────────
+  // allowedLojas vem do Supabase (via app/hub/custos/page.tsx), como ids
+  // canônicos (ex: 'carinas', 'santo_andre') ou '*' para acesso total.
+  const lojasPermitidas = useMemo(() => allowedNativeLabels(allowedLojas, 'custosLabel'), [allowedLojas])
 
   // ── Filtros ───────────────────────────────────────────────
   const [lojaFiltro,     setLojaFiltro]     = useState('Todas')
@@ -74,15 +80,21 @@ export function FinanceiroProvider({ children }) {
       const safe  = x => Array.isArray(x) ? x : []
       const normH = arr => safe(arr).map(x => ({ ...x, mes: normalizarMes(x.mes) }))
 
-      const hN   = normH(h)
-      const hcN  = normH(hc)
-      const hdN  = normH(hd)
-      const hbuN = normH(hbu)
+      // Restringe tudo à(s) unidade(s) que o usuário tem permissão de ver
+      // antes de guardar no estado — nenhuma tela do dashboard chega a
+      // enxergar dado de unidade não permitida.
+      const porUnidade = arr => filterRowsByUnit(arr, 'loja', allowedLojas)
+
+      const hN   = porUnidade(normH(h))
+      const hcN  = porUnidade(normH(hc))
+      const hdN  = porUnidade(normH(hd))
+      const hbuN = porUnidade(normH(hbu))
+      const cN   = filterRowsByUnit(safe(c), 'centro', allowedLojas)
 
       const todosMeses = sortMesLabel([...new Set(hN.map(x => x.mes).filter(Boolean))])
       const mesPadrao  = todosMeses[todosMeses.length - 1] || ''
 
-      setContas(safe(c))
+      setContas(cN)
       setHistoricoRaw(hN)
       setHistoricoCatRaw(hcN)
       setHistoricoDetRaw(hdN)
@@ -90,6 +102,11 @@ export function FinanceiroProvider({ children }) {
       setMesFiltro(mesPadrao)
       setMesFim(mesPadrao)
       setMesInicio(todosMeses.length > 1 ? todosMeses[0] : mesPadrao)
+
+      // Se o usuário só tem acesso a 1 unidade, já abre filtrado nela
+      if (Array.isArray(lojasPermitidas) && lojasPermitidas.length === 1) {
+        setLojaFiltro(lojasPermitidas[0])
+      }
 
       console.log('[Financeiro] OK — meses:', todosMeses)
     })
@@ -237,6 +254,7 @@ export function FinanceiroProvider({ children }) {
       categoriasAtivas,
       mesesDisponiveis,
       kpis,
+      lojasPermitidas,
       // aliases de compatibilidade
       custosFiltrados:          [],
       custosVariaveisFiltrados: [],

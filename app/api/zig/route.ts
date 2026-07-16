@@ -3,6 +3,7 @@
 // Evita CORS e erros 500 ao chamar direto do browser
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getUserAccess, hasDashboardAccess } from '@/lib/permissions';
 
 const ZIG_TOKEN = '2ecab4ee4268947c2b964fbbd999bf87960cf3c9dd77dabc25db479af38223d6';
 const ZIG_BASE  = 'https://api.zigcore.com.br/integration';
@@ -80,6 +81,10 @@ function gerarChunks(inicio: Date, fim: Date) {
 }
 
 export async function GET(req: NextRequest) {
+  const access = await getUserAccess();
+  if (!access) return NextResponse.json({ erro: 'Não autenticado' }, { status: 401 });
+  if (!hasDashboardAccess(access, 'faturamento')) return NextResponse.json({ erro: 'Acesso negado' }, { status: 403 });
+
   try {
     const hoje  = new Date();
     const ontem = new Date(hoje); ontem.setDate(hoje.getDate() - 1);

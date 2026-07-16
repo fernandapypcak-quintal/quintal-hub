@@ -28,7 +28,12 @@ export default function Header({ title, subtitle }) {
     mesFim, setMesFim,
     grupoCategoria, setGrupoCategoria,
     mesesDisponiveis,
+    lojasPermitidas,
   } = useFinanceiro()
+
+  // Se o usuário tem acesso restrito a algumas unidades, o dropdown só
+  // mostra "Todas" (dentre as permitidas) + as unidades permitidas.
+  const opcoesLoja = lojasPermitidas === '*' ? LOJAS : ['Todas', ...lojasPermitidas]
 
   const sel = (ativo) => ({
     appearance:'none', WebkitAppearance:'none',
@@ -76,7 +81,7 @@ export default function Header({ title, subtitle }) {
           {/* Loja */}
           <div style={{ position:'relative' }}>
             <select value={lojaFiltro} onChange={e => setLojaFiltro(e.target.value)} style={sel(lojaFiltro!=='Todas')}>
-              {LOJAS.map(l => <option key={l} value={l}>{l==='Todas'?'Todas as lojas':l}</option>)}
+              {opcoesLoja.map(l => <option key={l} value={l}>{l==='Todas'?'Todas as lojas':l}</option>)}
             </select>
             <ChevronDown size={12} color="#999" style={{ position:'absolute', right:9, top:'50%', transform:'translateY(-50%)', pointerEvents:'none' }}/>
           </div>

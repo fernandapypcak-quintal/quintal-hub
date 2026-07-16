@@ -6,6 +6,7 @@ import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { DASHBOARDS, ADMIN_USERS } from '@/lib/dashboards'
+import { UNITS } from '@/lib/units'
 
 async function getSessionUser() {
   const cookieStore = await cookies()
@@ -35,19 +36,23 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await getAdminClient()
     .from('user_permissions')
-    .select('email, dashboards, is_admin')
+    .select('email, dashboards, lojas, is_admin')
 
   if (error) return NextResponse.json({ erro: error.message }, { status: 500 })
 
   // Converte para o formato USER_PERMISSIONS
   const permissions: Record<string, string[] | '*'> = {}
+  const lojasPermissions: Record<string, string[] | '*'> = {}
   for (const row of data || []) {
     permissions[row.email] = row.dashboards?.includes('*') ? '*' : (row.dashboards || [])
+    lojasPermissions[row.email] = !row.lojas || row.lojas.includes('*') ? '*' : row.lojas
   }
 
   return NextResponse.json({
     permissions,
+    lojasPermissions,
     dashboards: DASHBOARDS.map(d => ({ id: d.id, name: d.name, color: d.color })),
+    units: UNITS.map(u => ({ id: u.id, label: u.label })),
   })
 }
 
@@ -59,17 +64,19 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { email, permissao, isAdmin } = body
+  const { email, permissao, isAdmin, lojas } = body
 
   if (!email) return NextResponse.json({ erro: 'Email obrigatório' }, { status: 400 })
 
   const dashboards = permissao === '*' ? ['*'] : (permissao || [])
+  const lojasSalvar = lojas === '*' || lojas === undefined ? ['*'] : (lojas || [])
 
   const { error } = await getAdminClient()
     .from('user_permissions')
     .upsert({
       email,
       dashboards,
+      lojas: lojasSalvar,
       is_admin: isAdmin ?? false,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'email' })

@@ -2,6 +2,7 @@
 // Proxy server-side para o Apps Script de Relatórios ZIG — evita CORS
 
 import { NextRequest, NextResponse } from 'next/server'
+import { getUserAccess, hasDashboardAccess } from '@/lib/permissions'
 
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbw8w6Uwzg6WhkMJdn5SGSbW9iUyJgfRdFNKGfiGBSr-84vDNjS2vka245wPqohjsPvOjg/exec'
 
@@ -9,6 +10,10 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbw8w6Uwzg6WhkMJdn5SGSbW
 export const maxDuration = 60
 
 export async function GET(req: NextRequest) {
+  const access = await getUserAccess()
+  if (!access) return NextResponse.json({ erro: 'Não autenticado' }, { status: 401 })
+  if (!hasDashboardAccess(access, 'relatorios')) return NextResponse.json({ erro: 'Acesso negado' }, { status: 403 })
+
   try {
     const { searchParams } = new URL(req.url)
     const params = searchParams.toString()

@@ -2,6 +2,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, Clock } from 'lucide-react';
 import { formatBRL } from '../../utils/formatters';
+import { useFilters } from '../../hooks/useFilters';
+import { isUnitAllowed } from '@/lib/units';
 
 const ZIG_TOKEN = '2ecab4ee4268947c2b964fbbd999bf87960cf3c9dd77dabc25db479af38223d6';
 const ZIG_BASE  = 'https://api.zigcore.com.br/integration';
@@ -57,6 +59,7 @@ function emptyLoja() {
 }
 
 export default function Hoje() {
+  const { allowedLojas } = useFilters();
   const [dados,     setDados]     = useState(null);
   const [loading,   setLoading]   = useState(true);
   const [ultimaAtu, setUltimaAtu] = useState(null);
@@ -73,7 +76,9 @@ export default function Hoje() {
 
       const lojas = await zigGet(`/erp/lojas?rede=${ZIG_REDE}`);
       if (!lojas) throw new Error('Erro ao buscar lojas');
-      const lojasMapeadas = lojas.filter(l => MAPA_LOJAS[l.name]);
+      const lojasMapeadas = lojas
+        .filter(l => MAPA_LOJAS[l.name])
+        .filter(l => isUnitAllowed(MAPA_LOJAS[l.name].loja, allowedLojas));
 
       const promises = lojasMapeadas.flatMap(loja => {
         const mapa = MAPA_LOJAS[loja.name];
@@ -141,7 +146,7 @@ export default function Hoje() {
       setUltimaAtu(fmtHora());
     } catch(e) { setErro(e.message); }
     finally { setLoading(false); }
-  }, []);
+  }, [allowedLojas]);
 
   useEffect(() => {
     carregar();
