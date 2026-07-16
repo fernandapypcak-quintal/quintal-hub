@@ -112,8 +112,10 @@ export default function Overview() {
     const tendVsAACasa = variation(tendFatCasa, totalAAFull_casa);
     const tendVsAADel  = variation(tendFatDel,  totalAAFull_del);
 
-    // Almoço
-    const recsAlmoco = getAlmoco(ano, mes);
+    // Almoço — respeita o filtro de loja selecionado (igual ao baseData),
+    // senão o total de almoço aparece "colado" em qualquer loja filtrada
+    // mesmo sendo a soma de outras lojas.
+    const recsAlmoco = getAlmoco(ano, mes).filter(r => filters.lojas.size === 0 || filters.lojas.has(r.Loja));
     const totalAlmoco = recsAlmoco.reduce((s,r) => s + r.Valor, 0);
     const pesoAlmoco  = casa > 0 ? totalAlmoco / casa * 100 : 0;
     const jantarCasa  = casa - totalAlmoco;
@@ -123,7 +125,7 @@ export default function Overview() {
       tendFatCasa, tendFatDel, tendVsAACasa, tendVsAADel,
       pctCasa: total>0 ? casa/total*100 : 0,
       pctDel:  total>0 ? del/total*100  : 0 };
-  }, [baseData, periodo]);
+  }, [baseData, periodo, filters, getAlmoco]);
 
   // ── Contexto do mês ──────────────────────────────────────────────
   const contexto = useMemo(() => {
@@ -166,11 +168,13 @@ export default function Overview() {
           ? sum(prev.filter(r => r.Dia <= periodo.lastDay))
           : sum(prev))
         : null;
-      const almocoMes    = getAlmoco(m.ano, m.mes).reduce((s,r) => s+r.Valor, 0);
+      const almocoMes    = getAlmoco(m.ano, m.mes)
+        .filter(r => filters.lojas.size === 0 || filters.lojas.has(r.Loja))
+        .reduce((s,r) => s+r.Valor, 0);
       const jantarCasaMes = Math.max(0, (m.casa||0) - almocoMes);
       return { ...m, prevYear: prevVal, almoco: almocoMes, jantarCasa: jantarCasaMes };
     });
-  }, [baseData, periodo, getAlmoco]);
+  }, [baseData, periodo, filters, getAlmoco]);
 
   // ── DOW e meta ───────────────────────────────────────────────────
   const dowData = useMemo(() => {
