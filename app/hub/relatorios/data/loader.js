@@ -18,6 +18,28 @@ async function fetchTipo(tipo) {
   }
 }
 
+// Busca as 5 abas numa unica chamada (tipo=tudo) -- evita 5 requests
+// concorrentes disputando lock na mesma planilha, que e o que causava
+// descontos/bonus_concedido sumirem aleatoriamente (a mesma race condition
+// que ja resolvemos no dashboard de Custos).
+async function fetchObjeto(tipo) {
+  const url = `${APPS_SCRIPT_URL}?tipo=${tipo}`
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 50000) // maior -- essa chamada faz tudo de uma vez
+  try {
+    const res = await fetch(url, { method: 'GET', signal: controller.signal, redirect: 'follow' })
+    clearTimeout(timer)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    if (data && data.erro) { console.warn(`[loader] ${tipo}:`, data.erro); return null }
+    return data
+  } catch (e) {
+    clearTimeout(timer)
+    console.error(`[loader] fetchObjeto(${tipo}) falhou:`, e.message)
+    return null
+  }
+}
+
 const num = (v) => Number(v || 0)
 
 // ── Parsers — convertem as chaves snake_case que vêm do Apps Script
@@ -94,23 +116,34 @@ const parseBonusUtilizado = rows => rows.map(r => ({
   valorUtilizado: num(r.valor_utilizado_r),
 }))
 
-// Carrega os 5 relatórios em paralelo (cada um é uma leitura de aba
-// separada no Apps Script, então não tem o problema de concorrência que
-// o loader do Custos tem com a planilha de Baixas).
+// Carrega os 5 relatórios numa chamada só (tipo=tudo). Se o Apps Script
+// publicado ainda for uma versão anterior sem esse tipo, cai pro modo
+// antigo (5 chamadas em paralelo) pra não deixar o dashboard vazio.
 export async function loadTudo() {
-  const [descontosRaw, estornosRaw, contasRaw, bonusConcRaw, bonusUtilRaw] = await Promise.all([
-    fetchTipo('descontos'),
-    fetchTipo('estornos'),
-    fetchTipo('contas_aberto'),
-    fetchTipo('bonus_concedido'),
-    fetchTipo('bonus_utilizado'),
-  ])
+  const raw = await fetchObjeto('tudo')
+
+  if (!raw) {
+    const [descontosRaw, estornosRaw, contasRaw, bonusConcRaw, bonusUtilRaw] = await Promise.all([
+      fetchTipo('descontos'),
+      fetchTipo('estornos'),
+      fetchTipo('contas_aberto'),
+      fetchTipo('bonus_concedido'),
+      fetchTipo('bonus_utilizado'),
+    ])
+    return {
+      descontos: parseDescontos(descontosRaw),
+      estornos: parseEstornos(estornosRaw),
+      contasAberto: parseContasAberto(contasRaw),
+      bonusConcedido: parseBonusConcedido(bonusConcRaw),
+      bonusUtilizado: parseBonusUtilizado(bonusUtilRaw),
+    }
+  }
 
   return {
-    descontos: parseDescontos(descontosRaw),
-    estornos: parseEstornos(estornosRaw),
-    contasAberto: parseContasAberto(contasRaw),
-    bonusConcedido: parseBonusConcedido(bonusConcRaw),
-    bonusUtilizado: parseBonusUtilizado(bonusUtilRaw),
+    descontos: parseDescontos(raw.descontos || []),
+    estornos: parseEstornos(raw.estornos || []),
+    contasAberto: parseContasAberto(raw.contas_aberto || []),
+    bonusConcedido: parseBonusConcedido(raw.bonus_concedido || []),
+    bonusUtilizado: parseBonusUtilizado(raw.bonus_utilizado || []),
   }
 }

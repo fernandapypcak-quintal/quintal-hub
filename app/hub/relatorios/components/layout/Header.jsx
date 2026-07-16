@@ -2,7 +2,10 @@ import React from 'react'
 import { useRelatorios } from '../../hooks/useRelatorios.jsx'
 
 export default function Header({ title, subtitle }) {
-  const { unidadeFiltro, setUnidadeFiltro, unidadesDisponiveis } = useRelatorios()
+  const {
+    unidadeFiltro, setUnidadeFiltro, unidadesDisponiveis,
+    dataInicio, setDataInicio, dataFim, setDataFim,
+  } = useRelatorios()
 
   const sel = (ativo) => ({
     appearance: 'none', WebkitAppearance: 'none',
@@ -11,6 +14,15 @@ export default function Header({ title, subtitle }) {
     borderRadius: 99, fontSize: 12.5,
     color: ativo ? '#1a1a1a' : '#666',
     background: '#fff', cursor: 'pointer', outline: 'none',
+    fontFamily: 'inherit', fontWeight: ativo ? 600 : 400,
+  })
+
+  const dateInput = (ativo) => ({
+    padding: '0 10px', height: 32,
+    border: ativo ? '1px solid #1a1a1a' : '1px solid #E8E8E8',
+    borderRadius: 99, fontSize: 12.5,
+    color: ativo ? '#1a1a1a' : '#666',
+    background: '#fff', outline: 'none',
     fontFamily: 'inherit', fontWeight: ativo ? 600 : 400,
   })
 
@@ -27,16 +39,42 @@ export default function Header({ title, subtitle }) {
         {subtitle && <div style={{ fontSize: 12, color: '#999', marginTop: 2 }}>{subtitle}</div>}
       </div>
 
-      <div style={{ position: 'relative' }}>
-        <select
-          value={unidadeFiltro}
-          onChange={e => setUnidadeFiltro(e.target.value)}
-          style={sel(unidadeFiltro !== 'Todas')}
-        >
-          {unidadesDisponiveis.map(u => (
-            <option key={u} value={u}>{u === 'Todas' ? 'Todas as unidades' : u}</option>
-          ))}
-        </select>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <input
+          type="date"
+          value={dataInicio}
+          onChange={e => setDataInicio(e.target.value)}
+          style={dateInput(!!dataInicio)}
+          title="Data início"
+        />
+        <span style={{ fontSize: 12, color: '#BBB' }}>até</span>
+        <input
+          type="date"
+          value={dataFim}
+          onChange={e => setDataFim(e.target.value)}
+          style={dateInput(!!dataFim)}
+          title="Data fim"
+        />
+        {(dataInicio || dataFim) && (
+          <button
+            onClick={() => { setDataInicio(''); setDataFim('') }}
+            style={{ border: 'none', background: 'none', color: '#999', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}
+          >
+            limpar
+          </button>
+        )}
+
+        <div style={{ position: 'relative' }}>
+          <select
+            value={unidadeFiltro}
+            onChange={e => setUnidadeFiltro(e.target.value)}
+            style={sel(unidadeFiltro !== 'Todas')}
+          >
+            {unidadesDisponiveis.map(u => (
+              <option key={u} value={u}>{u === 'Todas' ? 'Todas as unidades' : u}</option>
+            ))}
+          </select>
+        </div>
       </div>
     </header>
   )

@@ -12,6 +12,14 @@ export function Card({ titulo, children, style }) {
 }
 
 export default function GraficoBarraUnidade({ dados, cor = '#EA580C', altura = 280 }) {
+  if (!dados || dados.length === 0) {
+    return (
+      <div style={{ height: altura, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#BBB', fontSize: 13 }}>
+        Sem dados no período.
+      </div>
+    )
+  }
+
   return (
     <div style={{ height: altura }}>
       <ResponsiveContainer width="100%" height="100%">

@@ -55,6 +55,8 @@ export function RelatoriosProvider({ children }) {
   const [error, setError] = useState(null)
 
   const [unidadeFiltro, setUnidadeFiltro] = useState('Todas')
+  const [dataInicio, setDataInicio] = useState('')
+  const [dataFim, setDataFim] = useState('')
 
   useEffect(() => {
     loadTudo()
@@ -85,18 +87,50 @@ export function RelatoriosProvider({ children }) {
     return ['Todas', ...Array.from(set).sort()]
   }, [descontos, estornos, contasAberto, bonusConcedido, bonusUtilizado])
 
-  const filtra = arr => (unidadeFiltro === 'Todas' ? arr : arr.filter(l => l.unidade === unidadeFiltro))
+  // Filtra por unidade + (opcionalmente) por um campo de data específico
+  // do relatório -- Contas em Aberto não tem campo de data (é um retrato
+  // do saldo atual, não um evento datado), então não passa campoData.
+  const filtra = (arr, campoData) => {
+    let r = arr
+    if (unidadeFiltro !== 'Todas') r = r.filter(l => l.unidade === unidadeFiltro)
+    if (campoData && (dataInicio || dataFim)) {
+      r = r.filter(l => {
+        const d = l[campoData]
+        if (!d) return true
+        if (dataInicio && d < dataInicio) return false
+        if (dataFim && d > dataFim) return false
+        return true
+      })
+    }
+    return r
+  }
 
-  const descontosFiltrados = useMemo(() => filtra(descontos), [descontos, unidadeFiltro])
-  const estornosFiltrados = useMemo(() => filtra(estornos), [estornos, unidadeFiltro])
-  const contasAbertoFiltradas = useMemo(() => filtra(contasAberto), [contasAberto, unidadeFiltro])
-  const bonusConcedidoFiltrado = useMemo(() => filtra(bonusConcedido), [bonusConcedido, unidadeFiltro])
-  const bonusUtilizadoFiltrado = useMemo(() => filtra(bonusUtilizado), [bonusUtilizado, unidadeFiltro])
+  const descontosFiltrados = useMemo(
+    () => filtra(descontos, 'data'),
+    [descontos, unidadeFiltro, dataInicio, dataFim]
+  )
+  const estornosFiltrados = useMemo(
+    () => filtra(estornos, 'data'),
+    [estornos, unidadeFiltro, dataInicio, dataFim]
+  )
+  const contasAbertoFiltradas = useMemo(
+    () => filtra(contasAberto, null),
+    [contasAberto, unidadeFiltro]
+  )
+  const bonusConcedidoFiltrado = useMemo(
+    () => filtra(bonusConcedido, 'dataConcessao'),
+    [bonusConcedido, unidadeFiltro, dataInicio, dataFim]
+  )
+  const bonusUtilizadoFiltrado = useMemo(
+    () => filtra(bonusUtilizado, 'utilizadoEm'),
+    [bonusUtilizado, unidadeFiltro, dataInicio, dataFim]
+  )
 
   return (
     <RelatoriosCtx.Provider value={{
       loading, error,
       unidadeFiltro, setUnidadeFiltro, unidadesDisponiveis,
+      dataInicio, setDataInicio, dataFim, setDataFim,
       descontos: descontosFiltrados,
       estornos: estornosFiltrados,
       contasAberto: contasAbertoFiltradas,

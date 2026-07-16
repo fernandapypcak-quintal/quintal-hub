@@ -35,7 +35,7 @@ export default function Sidebar({ page, setPage, collapsed, setCollapsed }) {
           : <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <img src="/logo.png" style={{ width: 36, height: 36, objectFit: 'contain', flexShrink: 0 }}/>
               <div>
-                <div style={{ color: '#fff', fontWeight: 700, fontSize: 14, lineHeight: 1.2 }}>Relatórios</div>
+                <div style={{ color: '#fff', fontWeight: 700, fontSize: 14, lineHeight: 1.2 }}>Relatório de Descontos</div>
                 <div style={{ color: '#888', fontSize: 10, lineHeight: 1.3 }}>Quintal do Espeto</div>
               </div>
             </div>

@@ -55,7 +55,7 @@ function AppInner() {
           ← Voltar ao HUB
         </Link>
         <span className="text-zinc-700 text-xs">|</span>
-        <span className="text-xs text-zinc-500">Relatórios</span>
+        <span className="text-xs text-zinc-500">Relatório de Descontos</span>
       </div>
 
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
