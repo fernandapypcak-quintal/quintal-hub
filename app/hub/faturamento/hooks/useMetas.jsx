@@ -1,5 +1,6 @@
 // src/hooks/useMetas.jsx
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { isUnitAllowed } from '@/lib/units';
 
 const MetasContext   = createContext(null);
 const STORAGE_KEY    = 'quintal_metas_v1';
@@ -9,7 +10,21 @@ function toKey(ano, mes) {
   return `${ano}-${String(mes).padStart(2, '0')}`;
 }
 
-export function MetasProvider({ children }) {
+// metas vem como { 'YYYY-MM': { LOJA: valor, ... } } — filtra as chaves
+// de loja de cada mês pra só sobrar as unidades permitidas.
+function filtraMetasPorUnidade(metas, allowedLojas) {
+  if (allowedLojas === '*' || !metas) return metas;
+  const out = {};
+  for (const [anoMes, porLoja] of Object.entries(metas)) {
+    out[anoMes] = {};
+    for (const [loja, valor] of Object.entries(porLoja || {})) {
+      if (isUnitAllowed(loja, allowedLojas)) out[anoMes][loja] = valor;
+    }
+  }
+  return out;
+}
+
+export function MetasProvider({ children, allowedLojas = '*' }) {
   const [metas, setMetas]             = useState({});
   const [sheetsStatus, setSheetsStatus] = useState('idle'); // idle | loading | ok | error
   const [sheetsError, setSheetsError]   = useState('');
@@ -29,7 +44,7 @@ export function MetasProvider({ children }) {
       if (!json.metas?.length) {
         // Sem metas ainda — carrega do localStorage como fallback
         const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) setMetas(JSON.parse(saved));
+        if (saved) setMetas(filtraMetasPorUnidade(JSON.parse(saved), allowedLojas));
         setSheetsStatus('idle');
         return;
       }
@@ -40,9 +55,11 @@ export function MetasProvider({ children }) {
         if (!parsed[key]) parsed[key] = {};
         parsed[key][m.Loja] = parseFloat(m.Meta) || 0;
       });
-      setMetas(parsed);
-      // Salva localmente como cache
+      // Guarda o cache local com tudo (útil pra quem tem acesso total),
+      // mas o estado usado pelo dashboard só enxerga a(s) unidade(s)
+      // permitida(s) do usuário logado.
       localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+      setMetas(filtraMetasPorUnidade(parsed, allowedLojas));
       setSheetsStatus('ok');
     } catch (e) {
       setSheetsError(e.message);
@@ -50,7 +67,7 @@ export function MetasProvider({ children }) {
       // Tenta carregar do cache local
       try {
         const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) setMetas(JSON.parse(saved));
+        if (saved) setMetas(filtraMetasPorUnidade(JSON.parse(saved), allowedLojas));
       } catch (_) {}
     }
   }

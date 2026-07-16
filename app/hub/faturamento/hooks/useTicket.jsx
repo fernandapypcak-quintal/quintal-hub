@@ -1,11 +1,12 @@
 // src/hooks/useTicket.jsx
 import { createContext, useContext, useState, useEffect } from 'react';
+import { filterRowsByUnit } from '@/lib/units';
 
 const URL = 'https://script.google.com/macros/s/AKfycbyEoeYAWVUGc8n-_J61Sd91XDhkRPJOaVQnvUbk_-UcWyuaRtoyvFwtqMMcFq8_H80vwA/exec';
 
 const Ctx = createContext(null);
 
-export function TicketProvider({ children }) {
+export function TicketProvider({ children, allowedLojas = '*' }) {
   const [ticket,   setTicket]   = useState([]);
   const [descontos, setDescontos] = useState([]);
   const [loading,  setLoading]  = useState(true);
@@ -15,11 +16,11 @@ export function TicketProvider({ children }) {
       fetch(`${URL}?tipo=ticket`).then(r => r.json()),
       fetch(`${URL}?tipo=descontos`).then(r => r.json()),
     ]).then(([rt, rd]) => {
-      if (rt.status === 'fulfilled' && rt.value?.ticket) setTicket(rt.value.ticket);
-      if (rd.status === 'fulfilled' && rd.value?.descontos) setDescontos(rd.value.descontos);
+      if (rt.status === 'fulfilled' && rt.value?.ticket) setTicket(filterRowsByUnit(rt.value.ticket, 'Loja', allowedLojas));
+      if (rd.status === 'fulfilled' && rd.value?.descontos) setDescontos(filterRowsByUnit(rd.value.descontos, 'Loja', allowedLojas));
       setLoading(false);
     });
-  }, []);
+  }, [allowedLojas]);
 
   // Retorna { pessoas, ticket } para o período/canal/lojas solicitado
   // ticket médio = média ponderada dos tickets das lojas (pessoas como peso)
