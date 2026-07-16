@@ -1,6 +1,6 @@
 // src/hooks/useAlmoco.jsx
 import { createContext, useContext, useState, useEffect } from 'react';
-import { filterRowsByUnit } from '@/lib/units';
+import { filterRowsByUnit, servesAlmoco } from '@/lib/units';
 
 const URL = 'https://script.google.com/macros/s/AKfycbyEoeYAWVUGc8n-_J61Sd91XDhkRPJOaVQnvUbk_-UcWyuaRtoyvFwtqMMcFq8_H80vwA/exec';
 
@@ -14,10 +14,15 @@ export function AlmocoProvider({ children, allowedLojas = '*' }) {
     fetch(`${URL}?tipo=almoco`)
       .then(r => r.json())
       .then(json => {
-        // Mesma regra de acesso por unidade aplicada em rawData (useFilters) —
-        // esse hook busca de um Apps Script separado, então precisa filtrar
-        // aqui também, senão a seção de Almoço vaza dado de loja não permitida.
-        if (json.almoco) setAlmoco(filterRowsByUnit(json.almoco, 'Loja', allowedLojas));
+        if (json.almoco) {
+          // Alguns lançamentos caem em "Almoço" só pelo horário do
+          // registro (11h-15h), mesmo em lojas que não têm esse serviço
+          // (ex: ajuste manual/atraso de fechamento em Santo André) — por
+          // isso filtramos também pela lista real de lojas com almoço,
+          // além da permissão por unidade do usuário logado.
+          const comServico = json.almoco.filter(r => servesAlmoco(r.Loja));
+          setAlmoco(filterRowsByUnit(comServico, 'Loja', allowedLojas));
+        }
         setLoading(false);
       })
       .catch(() => setLoading(false));
