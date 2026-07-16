@@ -1,7 +1,7 @@
 // src/hooks/useFilters.jsx
 import { createContext, useContext, useState, useMemo, useEffect } from 'react';
 import { loadData } from '../data/loader';
-import { filterRowsByUnit } from '@/lib/units';
+import { filterRowsByUnit, allowedNativeLabels } from '@/lib/units';
 
 const Ctx = createContext(null);
 
@@ -11,10 +11,15 @@ const MESES = [
   {num:9,nome:'Set'},{num:10,nome:'Out'},{num:11,nome:'Nov'},{num:12,nome:'Dez'},
 ];
 
-function defaultFilters() {
+function defaultFilters(allowedLojas = '*') {
   const now = new Date();
+  // Quem tem acesso a todas as unidades abre com o filtro de loja vazio
+  // ("Todas"). Quem tem acesso restrito já abre com a(s) própria(s)
+  // unidade(s) marcada(s) — em vez de aparecer "Todos" marcado, que
+  // confunde mesmo não vazando dado nenhum (o rawData já vem restrito).
+  const lojasPermitidas = allowedNativeLabels(allowedLojas, 'zigLabel');
   return {
-    lojas: new Set(),                    // vazio = todas
+    lojas: allowedLojas === '*' ? new Set() : new Set(lojasPermitidas),
     meses: new Set([now.getMonth()+1]),  // mês atual
     canal: 'Todos',
     ano:   String(now.getFullYear()),    // ano atual
@@ -32,7 +37,7 @@ export function FilterProvider({ children, allowedLojas = '*' }) {
   const [rawDataFull, setRawDataFull] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(null);
-  const [filters, setFilters] = useState(defaultFilters());
+  const [filters, setFilters] = useState(defaultFilters(allowedLojas));
 
   useEffect(() => {
     loadData(modoAoVivo)
@@ -65,9 +70,17 @@ export function FilterProvider({ children, allowedLojas = '*' }) {
   }, [rawData, filters]);
 
   const updateFilter = (key, val) => setFilters(p => ({...p, [key]: val}));
-  const resetFilters = () => setFilters(defaultFilters());
+  const resetFilters = () => setFilters(defaultFilters(allowedLojas));
+
+  // Quem tem acesso restrito já abre com a própria unidade marcada — isso
+  // não deve contar como "filtro ativo" (não é algo que a pessoa escolheu).
+  const lojasSaoPadrao = allowedLojas === '*'
+    ? filters.lojas.size === 0
+    : filters.lojas.size === (allowedNativeLabels(allowedLojas, 'zigLabel')?.length ?? 0)
+        && [...filters.lojas].every(l => (allowedNativeLabels(allowedLojas, 'zigLabel') || []).includes(l));
+
   const hasActiveFilters =
-    filters.lojas.size > 0 || filters.meses.size > 0 ||
+    !lojasSaoPadrao || filters.meses.size > 0 ||
     filters.canal !== 'Todos' || filters.ano !== 'Todos';
 
   return (
