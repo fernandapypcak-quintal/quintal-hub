@@ -25,15 +25,12 @@ export type Unit = {
   id: UnitId
   label: string
   aliases: string[]
-  // Grafia exata usada em cada sistema/dashboard — necessária pra
-  // selecionar/comparar com precisão (cada um nomeia diferente).
-  custosLabel: string     // app/hub/custos (config.js LOJAS) e app/hub/relatorios
-  turnoverLabel: string   // app/hub/turnover (useGASData.js UNIDADES)
-  zigLabel?: string       // app/hub/faturamento e app/api/zig (Loja em maiúsculas)
-  comercialId?: string    // app/hub/comercial (Pipedrive UNIDADES)
+  custosLabel: string
+  turnoverLabel: string
+  zigLabel?: string
+  comercialId?: string
 }
 
-// "Figueiras" / "Espaço Figueiras" é sempre a unidade Santo André.
 export const UNITS: Unit[] = [
   { id: 'carinas', label: 'Carinás', custosLabel: 'Carinas', turnoverLabel: 'Carinas', zigLabel: 'CARINAS', comercialId: '14', aliases: [
     'carinas', 'carinás', 'moema carinas', 'moema carinás', 'quintal do espeto carinas', 'quintal do espeto carinás', 'delivery carinas', 'delivery carinás',
@@ -72,9 +69,68 @@ export const UNITS: Unit[] = [
 
 export const ALL_UNIT_IDS: UnitId[] = UNITS.map(u => u.id)
 
-// Unidades que efetivamente servem almoço (Casa, seg-sex). Usado pra
-// corrigir registros do Zig que caem em "Almoço" só por causa do
-// horário do lançamento (11h-15h), mesmo em lojas que não têm esse
-// serviço — ex: lançamento atrasado/ajuste manual em Santo André.
 export const SERVE_ALMOCO: UnitId[] = [
-  'carinas', 'vila_mariana', 'lapa', 'perdizes',
+  'carinas', 'vila_mariana', 'lapa', 'perdizes', 'pavao', 'vila_madalena', 'chacara',
+]
+
+export function servesAlmoco(raw: string | null | undefined): boolean {
+  const id = unitIdFromString(raw)
+  if (!id) return false
+  return SERVE_ALMOCO.includes(id)
+}
+
+function normalize(s: string): string {
+  return String(s ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
+export function unitIdFromString(raw: string | null | undefined): UnitId | null {
+  const n = normalize(raw || '')
+  if (!n) return null
+  for (const u of UNITS) {
+    if (u.aliases.some(a => normalize(a) === n)) return u.id
+  }
+  for (const u of UNITS) {
+    if (u.aliases.some(a => n.includes(normalize(a)))) return u.id
+  }
+  return null
+}
+
+export function labelForUnit(id: UnitId): string {
+  return UNITS.find(u => u.id === id)?.label ?? id
+}
+
+export function allowedLabels(allowed: UnitId[] | '*'): string[] | '*' {
+  if (allowed === '*') return '*'
+  return UNITS.filter(u => allowed.includes(u.id)).map(u => u.label)
+}
+
+export function allowedNativeLabels(
+  allowed: UnitId[] | '*',
+  system: 'custosLabel' | 'turnoverLabel' | 'zigLabel' | 'comercialId'
+): string[] | '*' {
+  if (allowed === '*') return '*'
+  return UNITS.filter(u => allowed.includes(u.id))
+    .map(u => u[system])
+    .filter((v): v is string => Boolean(v))
+}
+
+export function isUnitAllowed(raw: string | null | undefined, allowed: UnitId[] | '*'): boolean {
+  if (allowed === '*') return true
+  if (allowed.length === 0) return false
+  const id = unitIdFromString(raw)
+  if (!id) return false
+  return allowed.includes(id)
+}
+
+export function filterRowsByUnit<T extends Record<string, any>>(
+  rows: T[],
+  field: string,
+  allowed: UnitId[] | '*'
+): T[] {
+  if (allowed === '*') return rows
+  return rows.filter(r => isUnitAllowed(r[field], allowed))
+}
