@@ -72,74 +72,9 @@ export const UNITS: Unit[] = [
 
 export const ALL_UNIT_IDS: UnitId[] = UNITS.map(u => u.id)
 
-function normalize(s: string): string {
-  return String(s ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // remove acentos
-    .toLowerCase()
-    .trim()
-}
-
-// Resolve uma string de qualquer sistema (ex: "SANTO ANDRÉ", "Figueiras",
-// "V. Mariana", "Moema Carinás") para o id canônico da unidade.
-export function unitIdFromString(raw: string | null | undefined): UnitId | null {
-  const n = normalize(raw || '')
-  if (!n) return null
-  // match exato contra os apelidos
-  for (const u of UNITS) {
-    if (u.aliases.some(a => normalize(a) === n)) return u.id
-  }
-  // match por substring (nomes de loja no ZIG/relatórios costumam vir com
-  // prefixos como "Quintal do Espeto " ou "Delivery ")
-  for (const u of UNITS) {
-    if (u.aliases.some(a => n.includes(normalize(a)))) return u.id
-  }
-  return null
-}
-
-export function labelForUnit(id: UnitId): string {
-  return UNITS.find(u => u.id === id)?.label ?? id
-}
-
-// Converte a permissão salva (ids canônicos, ou '*') na lista de rótulos
-// "bonitos" (labels de exibição) — usado no painel /hub/admin.
-export function allowedLabels(allowed: UnitId[] | '*'): string[] | '*' {
-  if (allowed === '*') return '*'
-  return UNITS.filter(u => allowed.includes(u.id)).map(u => u.label)
-}
-
-// Mesma ideia, mas devolvendo a grafia EXATA usada por um sistema
-// específico — necessário pra comparar/selecionar com precisão nos
-// filtros de cada dashboard (cada um nomeia as lojas de um jeito).
-export function allowedNativeLabels(
-  allowed: UnitId[] | '*',
-  system: 'custosLabel' | 'turnoverLabel' | 'zigLabel' | 'comercialId'
-): string[] | '*' {
-  if (allowed === '*') return '*'
-  return UNITS.filter(u => allowed.includes(u.id))
-    .map(u => u[system])
-    .filter((v): v is string => Boolean(v))
-}
-
-// Verifica se o valor de "loja"/"unidade" de uma linha de dado está
-// dentro da permissão do usuário. Fecha por padrão (fail-closed): se a
-// unidade da linha não for reconhecida, a linha é ocultada — evita
-// vazar dados de uma unidade nova/mal digitada que ainda não tenha
-// entrado no registro de aliases acima.
-export function isUnitAllowed(raw: string | null | undefined, allowed: UnitId[] | '*'): boolean {
-  if (allowed === '*') return true
-  if (allowed.length === 0) return false
-  const id = unitIdFromString(raw)
-  if (!id) return false
-  return allowed.includes(id)
-}
-
-// Filtra um array de linhas por um campo que contenha o nome da loja.
-export function filterRowsByUnit<T extends Record<string, any>>(
-  rows: T[],
-  field: string,
-  allowed: UnitId[] | '*'
-): T[] {
-  if (allowed === '*') return rows
-  return rows.filter(r => isUnitAllowed(r[field], allowed))
-}
+// Unidades que efetivamente servem almoço (Casa, seg-sex). Usado pra
+// corrigir registros do Zig que caem em "Almoço" só por causa do
+// horário do lançamento (11h-15h), mesmo em lojas que não têm esse
+// serviço — ex: lançamento atrasado/ajuste manual em Santo André.
+export const SERVE_ALMOCO: UnitId[] = [
+  'carinas', 'vila_mariana', 'lapa', 'perdizes',
