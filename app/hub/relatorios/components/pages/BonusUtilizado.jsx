@@ -2,6 +2,7 @@ import React, { useMemo } from 'react'
 import Header from '../layout/Header.jsx'
 import KpiCard from '../ui/KpiCard.jsx'
 import Tabela, { formatarReais, formatarData } from '../ui/Tabela.jsx'
+import TabelaExpansivel from '../ui/TabelaExpansivel.jsx'
 import GraficoBarraUnidade, { Card } from '../ui/GraficoBarraUnidade.jsx'
 import { useRelatorios, agruparPorChave, agruparPorUnidade, somar } from '../../hooks/useRelatorios.jsx'
 import { Award, Receipt, Clock, Ticket } from 'lucide-react'
@@ -35,34 +36,50 @@ export default function BonusUtilizado() {
 
   return (
     <>
-      <Header title="Bônus Utilizado" subtitle="Consumo dos bônus concedidos, uso por uso" />
+      <Header
+        title="Bônus Utilizado"
+        subtitle="Consumo dos bônus concedidos, uso por uso"
+        dadosExport={bonusUtilizado}
+        nomeArquivoExport="bonus_utilizado"
+      />
 
       <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
           <KpiCard label="Total Utilizado" valor={formatarReais(totalUtilizado)} icon={Award} />
           <KpiCard label="Qtd de Usos" valor={totalQtd.toLocaleString('pt-BR')} icon={Receipt} />
-          <KpiCard label="Tempo Médio Até o Uso" valor={`${diasMedios.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} dias`} icon={Clock} />
+          <KpiCard
+            label="Tempo Médio Até o Uso"
+            valor={`${diasMedios.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} dias`}
+            icon={Clock}
+          />
           <KpiCard label="Ticket Médio por Uso" valor={formatarReais(totalQtd > 0 ? totalUtilizado / totalQtd : 0)} icon={Ticket} />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          <Card titulo="Bônus Utilizado por Unidade">
-            <GraficoBarraUnidade dados={porUnidade} cor="#6366f1" />
-          </Card>
+        <Card titulo="Bônus Utilizado por Unidade">
+          <GraficoBarraUnidade dados={porUnidade} cor="#6366f1" />
+        </Card>
 
-          <Card titulo="Por Quem Concedeu o Bônus Original">
-            <Tabela
-              colunas={[
-                { chave: 'chave', titulo: 'Concedido Por' },
-                { chave: 'qtd', titulo: 'Qtd Usos', alinhamento: 'right' },
-                { chave: 'valor', titulo: 'Valor Utilizado', alinhamento: 'right', render: l => formatarReais(l.valor) },
-              ]}
-              linhas={porConcedente}
-              chaveLinha={l => l.chave}
-              limite={8}
-            />
-          </Card>
-        </div>
+        <Card titulo="Por Quem Concedeu o Bônus Original">
+          <p style={{ fontSize: 12, color: '#999', margin: '0 0 12px' }}>Clica num responsável pra ver os usos individuais</p>
+          <TabelaExpansivel
+            linhasResumo={porConcedente}
+            colunasResumo={[
+              { chave: 'chave', titulo: 'Concedido Por' },
+              { chave: 'qtd', titulo: 'Qtd Usos', alinhamento: 'right' },
+              { chave: 'valor', titulo: 'Valor Utilizado', alinhamento: 'right', render: l => formatarReais(l.valor) },
+            ]}
+            dadosDetalhe={bonusUtilizado}
+            campoAgrupador="concedidoPor"
+            ordenarDetalhePor="utilizadoEm"
+            colunasDetalhe={[
+              { chave: 'cliente', titulo: 'Cliente' },
+              { chave: 'unidade', titulo: 'Unidade' },
+              { chave: 'concedidoEm', titulo: 'Concedido Em', render: l => formatarData(l.concedidoEm) },
+              { chave: 'utilizadoEm', titulo: 'Utilizado Em', render: l => formatarData(l.utilizadoEm) },
+              { chave: 'valorUtilizado', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valorUtilizado) },
+            ]}
+          />
+        </Card>
 
         <Card titulo="Últimos Usos de Bônus">
           <Tabela

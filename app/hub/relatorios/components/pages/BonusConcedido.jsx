@@ -2,6 +2,7 @@ import React, { useMemo } from 'react'
 import Header from '../layout/Header.jsx'
 import KpiCard from '../ui/KpiCard.jsx'
 import Tabela, { formatarReais, formatarData } from '../ui/Tabela.jsx'
+import TabelaExpansivel from '../ui/TabelaExpansivel.jsx'
 import GraficoBarraUnidade, { Card } from '../ui/GraficoBarraUnidade.jsx'
 import { useRelatorios, agruparPorChave, agruparPorUnidade, crossTab, somar } from '../../hooks/useRelatorios.jsx'
 import { Gift, Receipt, Wallet2, PiggyBank } from 'lucide-react'
@@ -29,7 +30,12 @@ export default function BonusConcedido() {
 
   return (
     <>
-      <Header title="Bônus Concedido" subtitle="Bônus dados a clientes, por unidade e responsável" />
+      <Header
+        title="Bônus Concedido"
+        subtitle="Bônus dados a clientes, por unidade e responsável"
+        dadosExport={bonusConcedido}
+        nomeArquivoExport="bonus_concedido"
+      />
 
       <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
@@ -39,24 +45,31 @@ export default function BonusConcedido() {
           <KpiCard label="Saldo Ainda Não Usado" valor={formatarReais(saldoNaoUsado)} icon={PiggyBank} />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          <Card titulo="Bônus Concedido por Unidade">
-            <GraficoBarraUnidade dados={porUnidade} cor="#97A624" />
-          </Card>
+        <Card titulo="Bônus Concedido por Unidade">
+          <GraficoBarraUnidade dados={porUnidade} cor="#97A624" />
+        </Card>
 
-          <Card titulo="Quem Mais Concedeu Bônus">
-            <Tabela
-              colunas={[
-                { chave: 'chave', titulo: 'Concedido Por' },
-                { chave: 'qtd', titulo: 'Qtd', alinhamento: 'right' },
-                { chave: 'valor', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valor) },
-              ]}
-              linhas={porConcedente}
-              chaveLinha={l => l.chave}
-              limite={8}
-            />
-          </Card>
-        </div>
+        <Card titulo="Quem Mais Concedeu Bônus">
+          <p style={{ fontSize: 12, color: '#999', margin: '0 0 12px' }}>Clica num responsável pra ver as concessões individuais</p>
+          <TabelaExpansivel
+            linhasResumo={porConcedente}
+            colunasResumo={[
+              { chave: 'chave', titulo: 'Concedido Por' },
+              { chave: 'qtd', titulo: 'Qtd', alinhamento: 'right' },
+              { chave: 'valor', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valor) },
+            ]}
+            dadosDetalhe={bonusConcedido}
+            campoAgrupador="concedidoPor"
+            ordenarDetalhePor="dataConcessao"
+            colunasDetalhe={[
+              { chave: 'dataConcessao', titulo: 'Data', render: l => formatarData(l.dataConcessao) },
+              { chave: 'unidade', titulo: 'Unidade' },
+              { chave: 'cliente', titulo: 'Cliente' },
+              { chave: 'motivo', titulo: 'Motivo' },
+              { chave: 'valorRecebido', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valorRecebido) },
+            ]}
+          />
+        </Card>
 
         <Card titulo="Motivo da Concessão (Motivo × Categoria)">
           <Tabela

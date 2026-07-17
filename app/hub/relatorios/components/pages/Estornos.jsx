@@ -2,6 +2,7 @@ import React, { useMemo } from 'react'
 import Header from '../layout/Header.jsx'
 import KpiCard from '../ui/KpiCard.jsx'
 import Tabela, { formatarReais, formatarData } from '../ui/Tabela.jsx'
+import TabelaExpansivel from '../ui/TabelaExpansivel.jsx'
 import GraficoBarraUnidade, { Card } from '../ui/GraficoBarraUnidade.jsx'
 import { useRelatorios, agruparPorChave, agruparPorUnidade, crossTab, contarDistintos, somar } from '../../hooks/useRelatorios.jsx'
 import { RotateCcw, Users, XCircle, TrendingDown } from 'lucide-react'
@@ -24,9 +25,21 @@ export default function Estornos() {
     [estornos]
   )
 
+  // enriquece cada linha com o valor total (unitario x quantidade), pra
+  // a tabela expansivel e a exportacao mostrarem o valor certo direto
+  const estornosComValor = useMemo(
+    () => estornos.map(e => ({ ...e, valorTotal: valorLinha(e) })),
+    [estornos]
+  )
+
   return (
     <>
-      <Header title="Produtos Estornados" subtitle="Estornos e cancelamentos por unidade e funcionário" />
+      <Header
+        title="Produtos Estornados"
+        subtitle="Estornos e cancelamentos por unidade e funcionário"
+        dadosExport={estornosComValor}
+        nomeArquivoExport="estornos"
+      />
 
       <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
@@ -41,15 +54,25 @@ export default function Estornos() {
         </Card>
 
         <Card titulo="Detalhe por Funcionário (quem estornou)">
-          <Tabela
-            colunas={[
+          <p style={{ fontSize: 12, color: '#999', margin: '0 0 12px' }}>Clica num funcionário pra ver os estornos individuais</p>
+          <TabelaExpansivel
+            linhasResumo={porFuncionario}
+            colunasResumo={[
               { chave: 'chave', titulo: 'Funcionário' },
               { chave: 'qtd', titulo: 'Qtd Estornos', alinhamento: 'right' },
               { chave: 'valor', titulo: 'Valor Total', alinhamento: 'right', render: l => formatarReais(l.valor) },
             ]}
-            linhas={porFuncionario}
-            chaveLinha={l => l.chave}
-            limite={15}
+            dadosDetalhe={estornosComValor}
+            campoAgrupador="estornadoPor"
+            ordenarDetalhePor="data"
+            colunasDetalhe={[
+              { chave: 'data', titulo: 'Data', render: l => formatarData(l.data) },
+              { chave: 'unidade', titulo: 'Unidade' },
+              { chave: 'produto', titulo: 'Produto' },
+              { chave: 'tipo', titulo: 'Tipo' },
+              { chave: 'motivo', titulo: 'Motivo' },
+              { chave: 'valorTotal', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valorTotal) },
+            ]}
           />
         </Card>
 
@@ -76,9 +99,9 @@ export default function Estornos() {
               { chave: 'tipo', titulo: 'Tipo' },
               { chave: 'estornadoPor', titulo: 'Estornado Por' },
               { chave: 'motivo', titulo: 'Motivo' },
-              { chave: 'valor', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(valorLinha(l)) },
+              { chave: 'valorTotal', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valorTotal) },
             ]}
-            linhas={[...estornos].sort((a, b) => b.data.localeCompare(a.data))}
+            linhas={[...estornosComValor].sort((a, b) => b.data.localeCompare(a.data))}
             chaveLinha={(l, idx) => `${l.data}-${l.produto}-${idx}`}
             limite={30}
           />

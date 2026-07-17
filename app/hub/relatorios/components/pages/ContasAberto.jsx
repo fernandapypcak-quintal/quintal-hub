@@ -23,7 +23,12 @@ export default function ContasAberto() {
 
   return (
     <>
-      <Header title="Contas em Aberto" subtitle="Pendências de pagamento por unidade e cliente" />
+      <Header
+        title="Contas em Aberto"
+        subtitle="Pendências de pagamento por unidade e cliente"
+        dadosExport={contasAberto}
+        nomeArquivoExport="contas_em_aberto"
+      />
 
       <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
