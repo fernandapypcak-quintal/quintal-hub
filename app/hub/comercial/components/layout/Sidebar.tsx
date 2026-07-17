@@ -1,9 +1,10 @@
 'use client'
 
 const PAGES = [
-  { id: 'funil',     icon: '📊', label: 'Funil' },
-  { id: 'eventos',   icon: '📋', label: 'Eventos' },
-  { id: 'calendario',icon: '📅', label: 'Calendário' },
+  { id: 'funil',      icon: '📊', label: 'Funil' },
+  { id: 'eventos',    icon: '📋', label: 'Eventos' },
+  { id: 'calendario', icon: '📅', label: 'Calendário' },
+  { id: 'leads',      icon: '📥', label: 'Leads diários' },
 ]
 
 export default function Sidebar({ activePage, onPageChange }: {

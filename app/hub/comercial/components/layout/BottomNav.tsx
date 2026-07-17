@@ -4,6 +4,7 @@ const PAGES = [
   { id: 'funil',      icon: '📊', label: 'Funil' },
   { id: 'eventos',    icon: '📋', label: 'Eventos' },
   { id: 'calendario', icon: '📅', label: 'Cal.' },
+  { id: 'leads',      icon: '📥', label: 'Leads' },
 ]
 
 export default function BottomNav({ activePage, onPageChange }: {
