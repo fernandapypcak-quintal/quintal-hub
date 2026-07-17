@@ -1,7 +1,9 @@
 import React from 'react'
+import { Download } from 'lucide-react'
 import { useRelatorios } from '../../hooks/useRelatorios.jsx'
+import { exportarCSV } from '../ui/exportar.js'
 
-export default function Header({ title, subtitle }) {
+export default function Header({ title, subtitle, dadosExport, nomeArquivoExport }) {
   const {
     unidadeFiltro, setUnidadeFiltro, unidadesDisponiveis,
     dataInicio, setDataInicio, dataFim, setDataFim,
@@ -75,6 +77,22 @@ export default function Header({ title, subtitle }) {
             ))}
           </select>
         </div>
+
+        {dadosExport && (
+          <button
+            onClick={() => exportarCSV(nomeArquivoExport || 'exportacao', dadosExport)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              height: 32, padding: '0 14px', borderRadius: 99,
+              border: '1px solid #E8E8E8', background: '#fff',
+              color: '#333', fontSize: 12.5, fontWeight: 500,
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}
+            title="Exportar dados filtrados em CSV"
+          >
+            <Download size={13} /> Exportar
+          </button>
+        )}
       </div>
     </header>
   )
