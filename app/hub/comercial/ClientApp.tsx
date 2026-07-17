@@ -7,6 +7,7 @@ import BottomNav from './components/layout/BottomNav'
 import Funil from './components/pages/Funil'
 import Eventos from './components/pages/Eventos'
 import Calendario from './components/pages/Calendario'
+import Leads from './components/pages/Leads'
 import { allowedNativeLabels } from '@/lib/units'
 
 const TODAS_UNIDADES = [
@@ -21,6 +22,7 @@ const PAGES: Record<string, React.ComponentType<any>> = {
   funil:      Funil,
   eventos:    Eventos,
   calendario: Calendario,
+  leads:      Leads,
 }
 
 const currentYear = new Date().getFullYear()
@@ -39,6 +41,7 @@ export default function ComercialClientApp({ allowedLojas = '*' }: { allowedLoja
     status: '' as '' | 'open' | 'won' | 'lost',
     unidade: podeVerTodas ? '' : (UNIDADES[0]?.id ?? ''),
     ano: String(currentYear),
+    mes: '',
   })
 
   const Page = PAGES[activePage] || Funil
@@ -75,6 +78,15 @@ export default function ComercialClientApp({ allowedLojas = '*' }: { allowedLoja
             <select value={filtros.ano} onChange={e => setFiltros(f => ({ ...f, ano: e.target.value }))}
               style={{ padding: '5px 10px', borderRadius: 8, border: 'none', fontSize: 12, background: 'rgba(255,255,255,0.15)', color: '#fff', cursor: 'pointer' }}>
               {ANOS.map(a => <option key={a} value={a} style={{ color: '#0D0F14' }}>{a || 'Todos os anos'}</option>)}
+            </select>
+            <select value={filtros.mes} onChange={e => setFiltros(f => ({ ...f, mes: e.target.value }))}
+              style={{ padding: '5px 10px', borderRadius: 8, border: 'none', fontSize: 12, background: 'rgba(255,255,255,0.15)', color: '#fff', cursor: 'pointer' }}>
+              <option value="" style={{ color: '#0D0F14' }}>Todos os meses</option>
+              {['01','02','03','04','05','06','07','08','09','10','11','12'].map((m, i) => (
+                <option key={m} value={m} style={{ color: '#0D0F14' }}>
+                  {['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][i]}
+                </option>
+              ))}
             </select>
             <select value={filtros.status} onChange={e => setFiltros(f => ({ ...f, status: e.target.value as any }))}
               style={{ padding: '5px 10px', borderRadius: 8, border: 'none', fontSize: 12, background: 'rgba(255,255,255,0.15)', color: '#fff', cursor: 'pointer' }}>

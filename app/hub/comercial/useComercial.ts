@@ -68,6 +68,7 @@ export type Filtros = {
   status: '' | 'open' | 'won' | 'lost'
   unidade: string
   ano: string
+  mes: string
 }
 
 // ─── Hook sumário (KPIs) ──────────────────────────────────────
@@ -84,6 +85,7 @@ export function useSumario(filtros: Filtros) {
     if (filtros.status)  params.set('status',  filtros.status)
     if (filtros.unidade) params.set('unidade', filtros.unidade)
     if (filtros.ano)     params.set('ano',     filtros.ano)
+    if (filtros.mes)     params.set('mes',     filtros.mes)
 
     fetch(`${GAS_URL}?${params}`)
       .then(r => r.json())
@@ -93,7 +95,7 @@ export function useSumario(filtros: Filtros) {
       })
       .catch(e => setErro(e.message))
       .finally(() => setLoading(false))
-  }, [filtros.status, filtros.unidade, filtros.ano])
+  }, [filtros.status, filtros.unidade, filtros.ano, filtros.mes])
 
   useEffect(() => { fetch_() }, [fetch_])
   return { sumario, loading, erro, refetch: fetch_ }
@@ -115,6 +117,7 @@ export function useDeals(filtros: Filtros, page = 1) {
     if (filtros.status)  params.set('status',  filtros.status)
     if (filtros.unidade) params.set('unidade', filtros.unidade)
     if (filtros.ano)     params.set('ano',     filtros.ano)
+    if (filtros.mes)     params.set('mes',     filtros.mes)
 
     fetch(`${GAS_URL}?${params}`)
       .then(r => r.json())
@@ -126,7 +129,7 @@ export function useDeals(filtros: Filtros, page = 1) {
       })
       .catch(e => setErro(e.message))
       .finally(() => setLoading(false))
-  }, [filtros.status, filtros.unidade, filtros.ano, page])
+  }, [filtros.status, filtros.unidade, filtros.ano, filtros.mes, page])
 
   return { deals, total, pages, loading, erro }
 }
