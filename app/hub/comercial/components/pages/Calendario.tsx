@@ -16,7 +16,7 @@ function fmtDate(s: string) {
   return `${d}/${m}/${y}`
 }
 
-export default function Calendario({ filtros }: { filtros: { status: any; unidade: string; ano: string } }) {
+export default function Calendario({ filtros }: { filtros: { status: any; unidade: string; ano: string; mes: string } }) {
   const today = new Date()
   const [year, setYear]   = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())

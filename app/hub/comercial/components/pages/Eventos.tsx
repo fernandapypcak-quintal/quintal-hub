@@ -59,7 +59,7 @@ function DetalheModal({ deal, onClose }: { deal: Deal; onClose: () => void }) {
   )
 }
 
-export default function Eventos({ filtros }: { filtros: { status: any; unidade: string; ano: string } }) {
+export default function Eventos({ filtros }: { filtros: { status: any; unidade: string; ano: string; mes: string } }) {
   const [page, setPage]         = useState(1)
   const [search, setSearch]     = useState('')
   const [selected, setSelected] = useState<Deal | null>(null)

@@ -22,7 +22,7 @@ function KpiCard({ label, value, sub, color = '#97A624' }: { label: string; valu
   )
 }
 
-export default function Funil({ filtros }: { filtros: { status: any; unidade: string; ano: string } }) {
+export default function Funil({ filtros }: { filtros: { status: any; unidade: string; ano: string; mes: string } }) {
   const { sumario, loading, erro } = useSumario(filtros)
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#9a9c9f' }}>Carregando...</div>
@@ -107,8 +107,6 @@ export default function Funil({ filtros }: { filtros: { status: any; unidade: st
             { label: 'Receita total', value: fmtBRL(sumario.receitaTotal) },
             { label: 'Ticket médio', value: fmtBRL(sumario.ticketMedio) },
             { label: 'Ciclo médio', value: `${sumario.cicloMedio} dias` },
-            { label: 'Pax total', value: sumario.paxTotal.toLocaleString('pt-BR') },
-            { label: 'Pax médio/evento', value: String(sumario.mediaPaxPorEvento) },
             { label: 'Eventos futuros', value: String(sumario.futuros) },
           ].map(r => (
             <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '0.5px solid #F3F3EE', fontSize: 12 }}>
