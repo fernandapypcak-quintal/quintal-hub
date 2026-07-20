@@ -5,6 +5,7 @@ const PAGES = [
   { id: 'eventos',    icon: '📋', label: 'Eventos' },
   { id: 'calendario', icon: '📅', label: 'Calendário' },
   { id: 'leads',      icon: '📥', label: 'Leads diários' },
+  { id: 'conversoes',  icon: '🏆', label: 'Conversões' },
 ]
 
 export default function Sidebar({ activePage, onPageChange }: {
