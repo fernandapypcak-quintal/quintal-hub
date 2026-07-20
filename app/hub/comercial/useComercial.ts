@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 
-// ─── Cole aqui a URL do Web App após publicar o Apps Script ───
 const GAS_URL = '/api/pipedrive'
 
 // ─── Tipos ────────────────────────────────────────────────────
@@ -71,23 +70,28 @@ export type Filtros = {
   mes: string
 }
 
-// ─── Hook sumário (KPIs) ──────────────────────────────────────
+function buildParams(extra: Record<string, string>, filtros: Filtros) {
+  const p = new URLSearchParams(extra)
+  if (filtros.status)  p.set('status',  filtros.status)
+  if (filtros.unidade) p.set('unidade', filtros.unidade)
+  if (filtros.ano)     p.set('ano',     filtros.ano)
+  if (filtros.mes)     p.set('mes',     filtros.mes)
+  return p.toString()
+}
+
+// ─── Hook sumário ─────────────────────────────────────────────
 export function useSumario(filtros: Filtros) {
   const [sumario, setSumario] = useState<Sumario | null>(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro]       = useState<string | null>(null)
 
-  const fetch_ = useCallback(() => {
+  useEffect(() => {
     setLoading(true)
     setErro(null)
+    setSumario(null)
 
-    const params = new URLSearchParams({ tipo: 'sumario' })
-    if (filtros.status)  params.set('status',  filtros.status)
-    if (filtros.unidade) params.set('unidade', filtros.unidade)
-    if (filtros.ano)     params.set('ano',     filtros.ano)
-    if (filtros.mes)     params.set('mes',     filtros.mes)
-
-    fetch(`${GAS_URL}?${params}`)
+    const qs = buildParams({ tipo: 'sumario' }, filtros)
+    fetch(`${GAS_URL}?${qs}`)
       .then(r => r.json())
       .then(data => {
         if (data.erro) throw new Error(data.erro)
@@ -95,17 +99,17 @@ export function useSumario(filtros: Filtros) {
       })
       .catch(e => setErro(e.message))
       .finally(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtros.status, filtros.unidade, filtros.ano, filtros.mes])
 
-  useEffect(() => { fetch_() }, [fetch_])
-  return { sumario, loading, erro, refetch: fetch_ }
+  return { sumario, loading, erro }
 }
 
-// ─── Hook deals (lista) ───────────────────────────────────────
+// ─── Hook deals (lista paginada) ──────────────────────────────
 export function useDeals(filtros: Filtros, page = 1) {
-  const [deals, setDeals]   = useState<Deal[]>([])
-  const [total, setTotal]   = useState(0)
-  const [pages, setPages]   = useState(1)
+  const [deals, setDeals]     = useState<Deal[]>([])
+  const [total, setTotal]     = useState(0)
+  const [pages, setPages]     = useState(1)
   const [loading, setLoading] = useState(true)
   const [erro, setErro]       = useState<string | null>(null)
 
@@ -113,13 +117,8 @@ export function useDeals(filtros: Filtros, page = 1) {
     setLoading(true)
     setErro(null)
 
-    const params = new URLSearchParams({ tipo: 'deals', page: String(page), limit: '200' })
-    if (filtros.status)  params.set('status',  filtros.status)
-    if (filtros.unidade) params.set('unidade', filtros.unidade)
-    if (filtros.ano)     params.set('ano',     filtros.ano)
-    if (filtros.mes)     params.set('mes',     filtros.mes)
-
-    fetch(`${GAS_URL}?${params}`)
+    const qs = buildParams({ tipo: 'deals', page: String(page), limit: '500' }, filtros)
+    fetch(`${GAS_URL}?${qs}`)
       .then(r => r.json())
       .then(data => {
         if (data.erro) throw new Error(data.erro)
@@ -129,7 +128,42 @@ export function useDeals(filtros: Filtros, page = 1) {
       })
       .catch(e => setErro(e.message))
       .finally(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtros.status, filtros.unidade, filtros.ano, filtros.mes, page])
 
   return { deals, total, pages, loading, erro }
+}
+
+// ─── Hook leads diários ───────────────────────────────────────
+// Busca deals criados num período específico (por add_time)
+export function useLeadsDiarios(filtros: Filtros, dataInicio: string, dataFim: string) {
+  const [leads, setLeads]     = useState<Deal[]>([])
+  const [loading, setLoading] = useState(true)
+  const [erro, setErro]       = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!dataInicio || !dataFim) return
+    setLoading(true)
+    setErro(null)
+
+    const p = new URLSearchParams({
+      tipo:        'leads',
+      dataInicio,
+      dataFim,
+      limit:       '1000',
+    })
+    if (filtros.unidade) p.set('unidade', filtros.unidade)
+
+    fetch(`${GAS_URL}?${p}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.erro) throw new Error(data.erro)
+        setLeads(data.deals || [])
+      })
+      .catch(e => setErro(e.message))
+      .finally(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtros.unidade, dataInicio, dataFim])
+
+  return { leads, loading, erro }
 }
