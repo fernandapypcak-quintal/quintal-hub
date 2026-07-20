@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useDeals, Deal } from '../../useComercial'
+import DealModal from '../ui/DealModal'
 
 function fmtDate(s: string) {
   if (!s) return '—'
@@ -19,7 +20,8 @@ function StatusTag({ status }: { status: string }) {
   return <span style={{ fontSize: 10, fontWeight: 600, padding: '3px 9px', borderRadius: 20, background: s.bg, color: s.color, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{s.label}</span>
 }
 
-function DetalheModal({ deal, onClose }: { deal: Deal; onClose: () => void }) {
+// DetalheModal removido - usa DealModal compartilhado
+function _unused_({ deal, onClose }: { deal: Deal; onClose: () => void }) {
   const rows = [
     ['Empresa', deal.empresa], ['Razão Social', deal.razao_social], ['CNPJ/CPF', deal.cnpj_cpf],
     ['Contato', deal.contato], ['Telefone', deal.telefone_contato], ['Email', deal.email_contato],
@@ -73,7 +75,7 @@ export default function Eventos({ filtros }: { filtros: { status: any; unidade: 
 
   return (
     <div style={{ padding: '20px' }}>
-      {selected && <DetalheModal deal={selected} onClose={() => setSelected(null)} />}
+      {selected && <DealModal deal={selected} onClose={() => setSelected(null)} />}
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar empresa..."

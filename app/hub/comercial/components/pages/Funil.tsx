@@ -1,6 +1,8 @@
 'use client'
 
-import { useSumario } from '../../useComercial'
+import { useState } from 'react'
+import { useSumario, Deal } from '../../useComercial'
+import DealModal from '../ui/DealModal'
 
 const STAGE_ORDER = ['[LEADS] Campanhas','1º Contato SDR','Follow UP SDR','RMKT','Clientes Qualificados','1º Contato Vendas','Em Negociação','Orçamento','Visitas','Ficha Técnica','Aguardando Assinatura']
 const STAGE_COLORS: Record<string, string> = {
@@ -23,6 +25,7 @@ function KpiCard({ label, value, sub, color = '#97A624' }: { label: string; valu
 }
 
 export default function Funil({ filtros }: { filtros: { status: any; unidade: string; ano: string; mes: string } }) {
+  const [selected, setSelected] = useState<Deal | null>(null)
   const { sumario, loading, erro } = useSumario(filtros)
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#9a9c9f' }}>Carregando...</div>
@@ -33,6 +36,7 @@ export default function Funil({ filtros }: { filtros: { status: any; unidade: st
 
   return (
     <div style={{ padding: '24px 20px' }}>
+      {selected && <DealModal deal={selected} onClose={() => setSelected(null)} />}
       {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 24 }}>
         <KpiCard label="Total de deals" value={String(sumario.total)} sub={`${sumario.open} em aberto`} />

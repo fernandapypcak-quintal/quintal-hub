@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { useLeadsDiarios } from '../../useComercial'
+import { useLeadsDiarios, Deal } from '../../useComercial'
+import DealModal from '../ui/DealModal'
 
 function fmtDate(s: string) {
   if (!s) return '—'
@@ -44,6 +45,7 @@ export default function Leads({ filtros }: { filtros: { status: any; unidade: st
   const inicio   = isCustom ? customInicio : PERIODOS[periodoIdx].inicio
   const fim      = isCustom ? customFim    : PERIODOS[periodoIdx].fim
 
+  const [selected, setSelected] = useState<Deal | null>(null)
   const { leads, loading, erro } = useLeadsDiarios(
     { ...filtros, status: '', ano: '', mes: '' },
     inicio,
@@ -75,6 +77,7 @@ export default function Leads({ filtros }: { filtros: { status: any; unidade: st
 
   return (
     <div style={{ padding: '20px' }}>
+      {selected && <DealModal deal={selected} onClose={() => setSelected(null)} />}
 
       {/* Filtro de período */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -148,7 +151,7 @@ export default function Leads({ filtros }: { filtros: { status: any; unidade: st
 
                 <div style={{ padding: '4px 8px' }}>
                   {porDia[dia].map(d => (
-                    <div key={d.id} style={{ display: 'grid', gridTemplateColumns: '1fr 130px 110px 70px', gap: 10, padding: '8px 8px', borderRadius: 6, alignItems: 'center', fontSize: 12, borderBottom: '0.5px solid #F5F5F2' }}>
+                    <div key={d.id} onClick={() => setSelected(d as Deal)} style={{ display: 'grid', gridTemplateColumns: '1fr 130px 110px 70px', gap: 10, padding: '8px 8px', borderRadius: 6, alignItems: 'center', fontSize: 12, borderBottom: '0.5px solid #F5F5F2', cursor: 'pointer' }} onMouseOver={e => (e.currentTarget.style.background='#F5F5F2')} onMouseOut={e => (e.currentTarget.style.background='')}>
                       <div>
                         <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.empresa || d.titulo}</div>
                         <div style={{ fontSize: 10, color: '#9a9c9f', marginTop: 1 }}>{d.stage_nome}</div>

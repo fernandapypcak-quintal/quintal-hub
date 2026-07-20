@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useDeals, Deal } from '../../useComercial'
+import DealModal from '../ui/DealModal'
 
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 const MONTHS_SHORT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
@@ -20,6 +21,7 @@ export default function Calendario({ filtros }: { filtros: { status: any; unidad
   const today = new Date()
   const [year, setYear]   = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
+  const [selected, setSelected] = useState<Deal | null>(null)
   const [dayEvents, setDayEvents] = useState<Deal[] | null>(null)
   const [dayLabel, setDayLabel]   = useState('')
 
@@ -71,6 +73,7 @@ export default function Calendario({ filtros }: { filtros: { status: any; unidad
 
   return (
     <div style={{ padding: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      {selected && <DealModal deal={selected} onClose={() => setSelected(null)} />}
 
       {/* Calendário */}
       <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 18 }}>
@@ -153,7 +156,7 @@ export default function Calendario({ filtros }: { filtros: { status: any; unidad
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 440, overflowY: 'auto' }}>
             {(dayEvents || monthDeals).map(d => (
-              <div key={d.id} style={{ background: '#F5F5F2', borderRadius: 7, padding: '8px 10px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div key={d.id} onClick={() => setSelected(d)} style={{ background: '#F5F5F2', borderRadius: 7, padding: '8px 10px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
                 <div style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor(d.status), flexShrink: 0 }} />
                 <div style={{ flex: 1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.empresa || d.titulo}</div>
                 {d.unidade_nome && (
