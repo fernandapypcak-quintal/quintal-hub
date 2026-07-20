@@ -135,7 +135,7 @@ export default function Leads({ filtros }: { filtros: { status: any; unidade: st
               <div key={dia} style={{ background: '#fff', border: `0.5px solid ${isOntem ? '#97A624' : '#E8E8E2'}`, borderRadius: 12, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', background: isOntem ? '#f0f4e0' : '#F5F5F2', borderBottom: '0.5px solid #E8E8E2' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    {isOntem && <span style={{ fontSize: 10, fontWeight: 700, color: '#6e7a1a', background: '#97A624', padding: '2px 8px', borderRadius: 20, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#fff' }}>Ontem</span>}
+                    {isOntem && <span style={{ fontSize: 10, fontWeight: 700, background: '#97A624', padding: '2px 8px', borderRadius: 20, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#fff' }}>Ontem</span>}
                     <span style={{ fontSize: 13, fontWeight: 700 }}>{fmtDate(dia)}</span>
                     <span style={{ fontSize: 11, color: '#9a9c9f' }}>
                       {new Date(dia + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long' })}
