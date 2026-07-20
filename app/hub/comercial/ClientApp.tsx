@@ -8,6 +8,7 @@ import Funil from './components/pages/Funil'
 import Eventos from './components/pages/Eventos'
 import Calendario from './components/pages/Calendario'
 import Leads from './components/pages/Leads'
+import Conversoes from './components/pages/Conversoes'
 import { allowedNativeLabels } from '@/lib/units'
 
 const TODAS_UNIDADES = [
@@ -23,6 +24,7 @@ const PAGES: Record<string, React.ComponentType<any>> = {
   eventos:    Eventos,
   calendario: Calendario,
   leads:      Leads,
+  conversoes: Conversoes,
 }
 
 const currentYear = new Date().getFullYear()
