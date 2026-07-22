@@ -77,6 +77,7 @@ export default function Descontos() {
               { chave: 'cliente', titulo: 'Cliente' },
               { chave: 'justificativa', titulo: 'Justificativa' },
               { chave: 'categoria', titulo: 'Categoria' },
+              { chave: 'produtos', titulo: 'Produtos' },
               { chave: 'valor', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valor) },
             ]}
           />
@@ -105,6 +106,7 @@ export default function Descontos() {
               { chave: 'cliente', titulo: 'Cliente' },
               { chave: 'justificativa', titulo: 'Justificativa' },
               { chave: 'categoria', titulo: 'Categoria' },
+              { chave: 'produtos', titulo: 'Produtos' },
               { chave: 'valor', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valor) },
             ]}
             linhas={[...descontos].sort((a, b) => b.data.localeCompare(a.data))}
