@@ -66,6 +66,7 @@ export default function Desperdicio() {
               { chave: 'unidade', titulo: 'Unidade' },
               { chave: 'origem', titulo: 'Origem' },
               { chave: 'cliente', titulo: 'Comanda/Cliente' },
+              { chave: 'produto', titulo: 'Produto' },
               { chave: 'motivo', titulo: 'Motivo' },
               { chave: 'categoria', titulo: 'Categoria' },
               { chave: 'valor', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valor) },
@@ -95,6 +96,7 @@ export default function Desperdicio() {
               { chave: 'origem', titulo: 'Origem' },
               { chave: 'responsavel', titulo: 'Funcionário' },
               { chave: 'cliente', titulo: 'Comanda/Cliente' },
+              { chave: 'produto', titulo: 'Produto' },
               { chave: 'motivo', titulo: 'Motivo' },
               { chave: 'valor', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valor) },
             ]}
