@@ -1,9 +1,10 @@
-import { LayoutDashboard, Percent, RotateCcw, Wallet, Gift, Award } from 'lucide-react'
+import { LayoutDashboard, Percent, RotateCcw, Wallet, Gift, Award, Trash2 } from 'lucide-react'
 
 const NAV = [
   { id: 'home',           label: 'Geral',     icon: LayoutDashboard },
   { id: 'descontos',      label: 'Descontos', icon: Percent },
   { id: 'estornos',       label: 'Estornos',  icon: RotateCcw },
+  { id: 'desperdicio',    label: 'Desperd.',  icon: Trash2 },
   { id: 'contasAberto',   label: 'Contas',    icon: Wallet },
   { id: 'bonusConcedido', label: 'B. Conc.',  icon: Gift },
   { id: 'bonusUtilizado', label: 'B. Util.',  icon: Award },
