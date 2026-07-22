@@ -1,10 +1,11 @@
 import React from 'react'
-import { LayoutDashboard, Percent, RotateCcw, Wallet, Gift, Award, ChevronLeft, ChevronRight } from 'lucide-react'
+import { LayoutDashboard, Percent, RotateCcw, Wallet, Gift, Award, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
 
 const NAV = [
   { id: 'home',           label: 'Visão Geral',      icon: LayoutDashboard },
   { id: 'descontos',      label: 'Descontos',        icon: Percent },
   { id: 'estornos',       label: 'Estornos',         icon: RotateCcw },
+  { id: 'desperdicio',    label: 'Desperdício',      icon: Trash2 },
   { id: 'contasAberto',   label: 'Contas em Aberto', icon: Wallet },
   { id: 'bonusConcedido', label: 'Bônus Concedido',  icon: Gift },
   { id: 'bonusUtilizado', label: 'Bônus Utilizado',  icon: Award },
