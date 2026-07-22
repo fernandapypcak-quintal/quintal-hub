@@ -7,6 +7,7 @@ import BottomNav from './components/layout/BottomNav'
 import Home from './components/pages/Home'
 import Descontos from './components/pages/Descontos'
 import Estornos from './components/pages/Estornos'
+import Desperdicio from './components/pages/Desperdicio'
 import ContasAberto from './components/pages/ContasAberto'
 import BonusConcedido from './components/pages/BonusConcedido'
 import BonusUtilizado from './components/pages/BonusUtilizado'
@@ -16,6 +17,7 @@ const PAGES: Record<string, React.ComponentType<any>> = {
   home: Home,
   descontos: Descontos,
   estornos: Estornos,
+  desperdicio: Desperdicio,
   contasAberto: ContasAberto,
   bonusConcedido: BonusConcedido,
   bonusUtilizado: BonusUtilizado,
