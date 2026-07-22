@@ -46,11 +46,6 @@ export function somar(linhas, extrair) {
 }
 
 // ── Detecção de "Desperdício" ──────────────────────────────────────
-// Gerentes as vezes lançam desperdício como desconto, as vezes como
-// estorno/cancelamento -- e o texto pode estar no nome do cliente
-// (comanda "Desperdício"), na justificativa/motivo, ou na categoria.
-// Detectamos por qualquer um desses campos conter a palavra, sem
-// acento e sem diferenciar maiúscula/minúscula.
 function _normalizarTexto(s) {
   return String(s || '')
     .toLowerCase()
@@ -79,8 +74,6 @@ export function RelatoriosProvider({ children, allowedLojas = '*' }) {
   useEffect(() => {
     loadTudo()
       .then(d => {
-        // Restringe à(s) unidade(s) permitida(s) antes de guardar no
-        // estado — nenhuma tela do dashboard chega a ver dado de fora.
         const porUnidade = arr => filterRowsByUnit(arr || [], 'unidade', allowedLojas)
 
         const descontosF      = porUnidade(d.descontos)
@@ -95,8 +88,6 @@ export function RelatoriosProvider({ children, allowedLojas = '*' }) {
         setBonusConcedido(bonusConcedidoF)
         setBonusUtilizado(bonusUtilizadoF)
 
-        // Se, depois de filtrar, só sobrou uma unidade nos dados, já
-        // abre o dashboard filtrado nela.
         const unicas = new Set(
           [...descontosF, ...estornosF, ...contasAbertoF, ...bonusConcedidoF, ...bonusUtilizadoF]
             .map(l => l.unidade).filter(Boolean)
@@ -126,9 +117,6 @@ export function RelatoriosProvider({ children, allowedLojas = '*' }) {
     return ['Todas', ...Array.from(set).sort()]
   }, [descontos, estornos, contasAberto, bonusConcedido, bonusUtilizado])
 
-  // Filtra por unidade + (opcionalmente) por um campo de data específico
-  // do relatório -- Contas em Aberto não tem campo de data (é um retrato
-  // do saldo atual, não um evento datado), então não passa campoData.
   const filtra = (arr, campoData) => {
     let r = arr
     if (unidadeFiltro !== 'Todas') r = r.filter(l => l.unidade === unidadeFiltro)
@@ -165,10 +153,6 @@ export function RelatoriosProvider({ children, allowedLojas = '*' }) {
     [bonusUtilizado, unidadeFiltro, dataInicio, dataFim]
   )
 
-  // Separa desperdício de dentro de descontos e estornos -- some das
-  // duas telas originais e vira um conjunto próprio, normalizado num
-  // formato comum (origem, responsavel, cliente, motivo) pra dar pra
-  // usar a mesma visão (gráfico por unidade, ranking, expandir, etc).
   const { descontosSemDesperdicio, desperdicioDeDescontos } = useMemo(() => {
     const normal = []
     const desperdicio = []
@@ -183,6 +167,7 @@ export function RelatoriosProvider({ children, allowedLojas = '*' }) {
           cliente: d.cliente,
           motivo: d.justificativa,
           categoria: d.categoria,
+          produto: d.produtos,
           valor: d.valor,
         })
       } else {
@@ -207,6 +192,7 @@ export function RelatoriosProvider({ children, allowedLojas = '*' }) {
           cliente: e.clientes,
           motivo: e.motivo,
           categoria: e.categoria,
+          produto: e.produto,
           valor: valorTotal,
         })
       } else {
