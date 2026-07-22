@@ -45,6 +45,23 @@ export function somar(linhas, extrair) {
   return linhas.reduce((acc, l) => acc + (extrair(l) || 0), 0)
 }
 
+// ── Detecção de "Desperdício" ──────────────────────────────────────
+// Gerentes as vezes lançam desperdício como desconto, as vezes como
+// estorno/cancelamento -- e o texto pode estar no nome do cliente
+// (comanda "Desperdício"), na justificativa/motivo, ou na categoria.
+// Detectamos por qualquer um desses campos conter a palavra, sem
+// acento e sem diferenciar maiúscula/minúscula.
+function _normalizarTexto(s) {
+  return String(s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+}
+
+function _ehDesperdicio(campos) {
+  return campos.some(c => _normalizarTexto(c).includes('desperdicio'))
+}
+
 // ── Provider ──────────────────────────────────────────────────────
 export function RelatoriosProvider({ children, allowedLojas = '*' }) {
   const [descontos, setDescontos] = useState([])
@@ -148,16 +165,73 @@ export function RelatoriosProvider({ children, allowedLojas = '*' }) {
     [bonusUtilizado, unidadeFiltro, dataInicio, dataFim]
   )
 
+  // Separa desperdício de dentro de descontos e estornos -- some das
+  // duas telas originais e vira um conjunto próprio, normalizado num
+  // formato comum (origem, responsavel, cliente, motivo) pra dar pra
+  // usar a mesma visão (gráfico por unidade, ranking, expandir, etc).
+  const { descontosSemDesperdicio, desperdicioDeDescontos } = useMemo(() => {
+    const normal = []
+    const desperdicio = []
+    descontosFiltrados.forEach(d => {
+      if (_ehDesperdicio([d.cliente, d.justificativa, d.categoria])) {
+        desperdicio.push({
+          origem: 'Desconto',
+          data: d.data,
+          unidade: d.unidade,
+          canal: d.canal,
+          responsavel: d.funcionario,
+          cliente: d.cliente,
+          motivo: d.justificativa,
+          categoria: d.categoria,
+          valor: d.valor,
+        })
+      } else {
+        normal.push(d)
+      }
+    })
+    return { descontosSemDesperdicio: normal, desperdicioDeDescontos: desperdicio }
+  }, [descontosFiltrados])
+
+  const { estornosSemDesperdicio, desperdicioDeEstornos } = useMemo(() => {
+    const normal = []
+    const desperdicio = []
+    estornosFiltrados.forEach(e => {
+      const valorTotal = e.valorUnitario * (e.quantidade || 1)
+      if (_ehDesperdicio([e.clientes, e.motivo, e.categoria])) {
+        desperdicio.push({
+          origem: 'Estorno',
+          data: e.data,
+          unidade: e.unidade,
+          canal: e.canal,
+          responsavel: e.estornadoPor,
+          cliente: e.clientes,
+          motivo: e.motivo,
+          categoria: e.categoria,
+          valor: valorTotal,
+        })
+      } else {
+        normal.push(e)
+      }
+    })
+    return { estornosSemDesperdicio: normal, desperdicioDeEstornos: desperdicio }
+  }, [estornosFiltrados])
+
+  const desperdicio = useMemo(
+    () => [...desperdicioDeDescontos, ...desperdicioDeEstornos],
+    [desperdicioDeDescontos, desperdicioDeEstornos]
+  )
+
   return (
     <RelatoriosCtx.Provider value={{
       loading, error,
       unidadeFiltro, setUnidadeFiltro, unidadesDisponiveis,
       dataInicio, setDataInicio, dataFim, setDataFim,
-      descontos: descontosFiltrados,
-      estornos: estornosFiltrados,
+      descontos: descontosSemDesperdicio,
+      estornos: estornosSemDesperdicio,
       contasAberto: contasAbertoFiltradas,
       bonusConcedido: bonusConcedidoFiltrado,
       bonusUtilizado: bonusUtilizadoFiltrado,
+      desperdicio,
     }}>
       {children}
     </RelatoriosCtx.Provider>
