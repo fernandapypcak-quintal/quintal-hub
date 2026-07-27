@@ -22,6 +22,15 @@ function formatarData(iso: string | null | undefined): string {
   return `${dia}/${mes}/${ano}`
 }
 
+type Loja = {
+  unidade: string
+  unidade_nome: string
+  banco: number
+  aplicacoes: number
+  recebiveis: number
+  total: number
+}
+
 type KpiCardProps = {
   label: string
   valor: string
@@ -164,15 +173,15 @@ export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = fals
                 </tr>
               </thead>
               <tbody>
-                {data.por_loja
-                  .filter((loja) => unidadeVisivel(loja.unidade))
-                  .sort((a, b) => b.total - a.total)
-                  .map((loja) => (
+                {(data.por_loja as Loja[])
+                  .filter((loja: Loja) => unidadeVisivel(loja.unidade))
+                  .sort((a: Loja, b: Loja) => b.total - a.total)
+                  .map((loja: Loja) => (
                     <tr key={loja.unidade}>
                       <td style={{ padding: '8px', borderBottom: '1px solid #F5F5F3' }}>
                         {loja.unidade === 'holding' || loja.unidade === 'servicos'
                           ? loja.unidade_nome
-                          : labelForUnit(loja.unidade)}
+                          : labelForUnit(loja.unidade as any)}
                       </td>
                       <td style={{ padding: '8px', borderBottom: '1px solid #F5F5F3', textAlign: 'right', fontFamily: "'DM Mono', monospace" }}>{formatarMoeda(loja.banco)}</td>
                       <td style={{ padding: '8px', borderBottom: '1px solid #F5F5F3', textAlign: 'right', fontFamily: "'DM Mono', monospace" }}>{formatarMoeda(loja.aplicacoes)}</td>
