@@ -6,7 +6,7 @@ import { labelForUnit } from '@/lib/units'
 
 const COR = '#0369A1' // azul — cor do dashboard Financeiro em lib/dashboards.ts
 
-function formatarMoeda(valor) {
+function formatarMoeda(valor: number | null | undefined): string {
   if (valor == null) return '—'
   return valor.toLocaleString('pt-BR', {
     style: 'currency',
@@ -16,13 +16,21 @@ function formatarMoeda(valor) {
   })
 }
 
-function formatarData(iso) {
+function formatarData(iso: string | null | undefined): string {
   if (!iso) return '—'
   const [ano, mes, dia] = iso.split('-')
   return `${dia}/${mes}/${ano}`
 }
 
-function KpiCard({ label, valor, sub, cor = '#0D0D0D', destaque = false }) {
+type KpiCardProps = {
+  label: string
+  valor: string
+  sub?: string
+  cor?: string
+  destaque?: boolean
+}
+
+function KpiCard({ label, valor, sub, cor = '#0D0D0D', destaque = false }: KpiCardProps) {
   return (
     <div style={{
       background: '#fff',
@@ -41,7 +49,7 @@ function KpiCard({ label, valor, sub, cor = '#0D0D0D', destaque = false }) {
   )
 }
 
-function CardIndisponivel({ label, motivo }) {
+function CardIndisponivel({ label, motivo }: { label: string; motivo: string }) {
   return (
     <div style={{ background: '#fff', border: '1px dashed #D0D0CC', borderRadius: 8, padding: '16px 20px', opacity: 0.7 }}>
       <div style={{ fontSize: 10.5, fontWeight: 600, color: '#ABABAB', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>
@@ -62,7 +70,7 @@ function LoadingScreen() {
   )
 }
 
-function ErrorScreen({ error }) {
+function ErrorScreen({ error }: { error: string }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 40 }}>
       <div style={{ fontSize: 28 }}>⚠️</div>
@@ -72,12 +80,17 @@ function ErrorScreen({ error }) {
   )
 }
 
-export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = false }) {
-  const { data, loading, erro } = useFinanceiro()
+type FinanceiroClientAppProps = {
+  allowedLojas?: string[] | '*'
+  isAdmin?: boolean
+}
+
+export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = false }: FinanceiroClientAppProps) {
+  const { data, loading, erro } = useFinanceiro() as { data: any; loading: boolean; erro: string | null }
 
   // Entidades não-loja (holding, mott serviços) só aparecem pra quem tem
   // acesso total — não são unidades operacionais de verdade.
-  function unidadeVisivel(id) {
+  function unidadeVisivel(id: string): boolean {
     if (allowedLojas === '*') return true
     if (id === 'holding' || id === 'servicos') return isAdmin
     return Array.isArray(allowedLojas) && allowedLojas.includes(id)
