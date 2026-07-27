@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-export function useFinanceiro() {
+export function useFinanceiro(dataSelecionada) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState(null)
@@ -8,7 +8,8 @@ export function useFinanceiro() {
   useEffect(() => {
     setLoading(true)
     setErro(null)
-    fetch('/api/financeiro')
+    const query = dataSelecionada ? `?data=${encodeURIComponent(dataSelecionada)}` : ''
+    fetch(`/api/financeiro${query}`)
       .then((r) => r.json())
       .then((json) => {
         if (json.erro) throw new Error(json.erro)
@@ -16,7 +17,7 @@ export function useFinanceiro() {
       })
       .catch((e) => { console.error('Financeiro erro:', e); setErro(e.message) })
       .finally(() => setLoading(false))
-  }, [])
+  }, [dataSelecionada])
 
   return { data, loading, erro }
 }
