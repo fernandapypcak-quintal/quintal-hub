@@ -2,11 +2,15 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, ChevronUp, X } from 'lucide-react'
 import { useFinanceiro } from './hooks/useFinanceiro'
-import { labelForUnit } from '@/lib/units'
+import { labelForUnit, ALL_UNIT_IDS } from '@/lib/units'
 
 const MONO = { fontFamily: "'DM Mono', monospace" }
+
+// Mesma paleta usada no dashboard de Faturamento (Stores.jsx) — mantém
+// a mesma cor por loja em todo o HUB.
+const STORE_COLORS = ['#97A624', '#D9B504', '#D9CB04', '#8C1414', '#0D9488', '#7C3AED', '#EA580C', '#0284C7', '#65A30D', '#6B7280']
 
 type Loja = {
   unidade: string
@@ -41,19 +45,17 @@ function formatarMoeda(valor: number | null | undefined): string {
   })
 }
 
-function formatarMoedaCompacta(valor: number | null | undefined): string {
-  if (valor == null) return '—'
-  const abs = Math.abs(valor)
-  const sinal = valor < 0 ? '-' : ''
-  if (abs >= 1_000_000) return `${sinal}R$ ${(abs / 1_000_000).toFixed(1)}M`
-  if (abs >= 1_000) return `${sinal}R$ ${(abs / 1_000).toFixed(1)}k`
-  return formatarMoeda(valor)
-}
-
 function formatarData(iso: string | null | undefined): string {
   if (!iso) return '—'
   const [ano, mes, dia] = iso.split('-')
   return `${dia}/${mes}/${ano}`
+}
+
+function corParaUnidade(id: string): string {
+  const idx = ALL_UNIT_IDS.indexOf(id as any)
+  if (idx >= 0) return STORE_COLORS[idx % STORE_COLORS.length]
+  // holding, servicos, ou qualquer coisa fora do registro canônico
+  return '#6B7280'
 }
 
 function KpiCard({
@@ -73,20 +75,6 @@ function CardIndisponivel({ label, motivo }: { label: string; motivo: string }) 
     <div style={{ background: '#FAFAFA', border: '1px dashed #E0E0E0', borderRadius: 10, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 6 }}>
       <span style={{ fontSize: 10.5, fontWeight: 500, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#BBB' }}>{label}</span>
       <div style={{ fontSize: 13, color: '#AAA' }}>{motivo}</div>
-    </div>
-  )
-}
-
-function CardResumoLoja({ loja, nome }: { loja: Loja; nome: string }) {
-  return (
-    <div style={{ background: '#fff', border: '1px solid #EBEBEB', borderRadius: 10, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ fontSize: 12.5, fontWeight: 600, color: '#1a1a1a' }}>{nome}</div>
-      <div style={{ ...MONO, fontSize: 20, fontWeight: 700, color: '#111' }}>{formatarMoedaCompacta(loja.total)}</div>
-      <div style={{ display: 'flex', gap: 10, fontSize: 11, color: '#999', ...MONO }}>
-        <span>Banco {formatarMoedaCompacta(loja.banco)}</span>
-        <span>Apl. {formatarMoedaCompacta(loja.aplicacoes)}</span>
-        {loja.recebiveis > 0 && <span>Receb. {formatarMoedaCompacta(loja.recebiveis)}</span>}
-      </div>
     </div>
   )
 }
@@ -123,6 +111,82 @@ function selectStyle(ativo: boolean): React.CSSProperties {
   }
 }
 
+// Card expansível por loja — mesmo padrão visual do Stores.jsx (Faturamento)
+function CardLoja({
+  loja, nome, cor, expandido, onToggle,
+}: { loja: Loja; nome: string; cor: string; expandido: boolean; onToggle: () => void }) {
+  const pctAplicado = loja.total > 0 ? (loja.aplicacoes / loja.total) * 100 : 0
+
+  return (
+    <div className="bg-white border border-surface-border rounded-2xl" style={{ borderLeft: `4px solid ${cor}` }}>
+      <button
+        className="w-full text-left px-5 py-4 flex items-center justify-between hover:bg-surface-muted/30 transition-colors"
+        onClick={onToggle}
+      >
+        <div className="flex items-center gap-5 flex-wrap flex-1 min-w-0">
+          <div className="min-w-[140px]">
+            <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-0.5">{nome}</p>
+            <p className="text-xl font-bold" style={{ ...MONO, color: cor }}>{formatarMoeda(loja.total)}</p>
+          </div>
+
+          <div className="flex items-center gap-6 flex-wrap text-sm">
+            <div>
+              <p className="text-[10px] text-zinc-400 uppercase tracking-wider mb-0.5">Banco</p>
+              <p className="font-semibold text-zinc-700" style={MONO}>{formatarMoeda(loja.banco)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-zinc-400 uppercase tracking-wider mb-0.5">Aplicações</p>
+              <p className="font-semibold text-zinc-700" style={MONO}>{formatarMoeda(loja.aplicacoes)}</p>
+            </div>
+            {loja.recebiveis > 0 && (
+              <div>
+                <p className="text-[10px] text-zinc-400 uppercase tracking-wider mb-0.5">Recebíveis</p>
+                <p className="font-semibold text-zinc-700" style={MONO}>{formatarMoeda(loja.recebiveis)}</p>
+              </div>
+            )}
+            <div>
+              <p className="text-[10px] text-zinc-400 uppercase tracking-wider mb-0.5">% Aplicado</p>
+              <p className="font-semibold text-zinc-600">{pctAplicado.toFixed(1)}%</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 ml-4 flex-shrink-0">
+          <div className="hidden sm:flex items-center gap-2">
+            <div className="w-20 h-1.5 bg-surface-muted rounded-full overflow-hidden">
+              <div className="h-full rounded-full" style={{ width: `${Math.min(pctAplicado, 100)}%`, backgroundColor: cor }} />
+            </div>
+          </div>
+          {expandido ? <ChevronUp size={16} className="text-zinc-400" /> : <ChevronDown size={16} className="text-zinc-400" />}
+        </div>
+      </button>
+
+      {expandido && (
+        <div className="border-t border-surface-border px-5 py-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+            <div>
+              <p className="text-[10px] text-zinc-400 uppercase tracking-wider mb-0.5">Saldo em Banco</p>
+              <p className="font-semibold text-zinc-700" style={MONO}>{formatarMoeda(loja.banco)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-zinc-400 uppercase tracking-wider mb-0.5">Aplicações Financeiras</p>
+              <p className="font-semibold text-zinc-700" style={MONO}>{formatarMoeda(loja.aplicacoes)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-zinc-400 uppercase tracking-wider mb-0.5">Recebíveis em Aberto</p>
+              <p className="font-semibold text-zinc-700" style={MONO}>{formatarMoeda(loja.recebiveis)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-zinc-400 uppercase tracking-wider mb-0.5">Total Geral</p>
+              <p className="font-bold" style={{ ...MONO, color: cor }}>{formatarMoeda(loja.total)}</p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 type FinanceiroClientAppProps = {
   allowedLojas?: string[] | '*'
   isAdmin?: boolean
@@ -131,6 +195,7 @@ type FinanceiroClientAppProps = {
 export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = false }: FinanceiroClientAppProps) {
   const [lojaFiltro, setLojaFiltro] = useState('Todas')
   const [dataFiltro, setDataFiltro] = useState('') // '' = mais recente
+  const [expandido, setExpandido] = useState<string | null>(null)
 
   const { data, loading, erro } = useFinanceiro(dataFiltro || undefined) as { data: Payload | null; loading: boolean; erro: string | null }
 
@@ -162,7 +227,6 @@ export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = fals
     ? lojasOrdenadas
     : lojasOrdenadas.filter((l) => nomeLoja(l) === lojaFiltro)
 
-  // KPIs recalculados a partir da seleção de loja (Todas = agregado geral)
   const kpi = linhasFiltradas.reduce(
     (acc, l) => ({
       banco: acc.banco + l.banco,
@@ -173,11 +237,9 @@ export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = fals
     { banco: 0, aplicacoes: 0, recebiveis: 0, total: 0 }
   )
 
-  // Datas disponíveis, mais recente primeiro
-  const datasOrdenadas = useMemo(
-    () => [...(data?.datas_disponiveis ?? [])].sort().reverse(),
-    [data]
-  )
+  const datasDisponiveis = data?.datas_disponiveis ?? []
+  const minData = datasDisponiveis.length ? [...datasDisponiveis].sort()[0] : undefined
+  const maxData = datasDisponiveis.length ? [...datasDisponiveis].sort().reverse()[0] : undefined
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: '#FAFAF8', fontFamily: "'DM Sans', sans-serif" }}>
@@ -210,21 +272,25 @@ export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = fals
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           {/* Data */}
-          {datasOrdenadas.length > 0 && (
-            <div style={{ position: 'relative' }}>
-              <select
-                value={dataFiltro}
-                onChange={(e) => setDataFiltro(e.target.value)}
-                style={selectStyle(!!dataFiltro)}
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <input
+              type="date"
+              value={dataFiltro}
+              min={minData}
+              max={maxData}
+              onChange={(e) => setDataFiltro(e.target.value)}
+              style={{ ...selectStyle(!!dataFiltro), paddingRight: dataFiltro ? 28 : 12 }}
+            />
+            {dataFiltro && (
+              <button
+                onClick={() => setDataFiltro('')}
+                title="Voltar pra data mais recente"
+                style={{ position: 'absolute', right: 8, background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}
               >
-                <option value="">Mais recente</option>
-                {datasOrdenadas.map((d) => (
-                  <option key={d} value={d}>{formatarData(d)}</option>
-                ))}
-              </select>
-              <ChevronDown size={12} color="#999" style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-            </div>
-          )}
+                <X size={13} color="#999" />
+              </button>
+            )}
+          </div>
 
           {/* Loja */}
           {opcoesLoja.length > 1 && (
@@ -276,41 +342,19 @@ export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = fals
             <CardIndisponivel label="Caixa Projetado" motivo="Ainda não implementado" />
           </div>
 
-          {/* RESUMO POR LOJA — visão em cards, sempre visível, sem precisar filtrar */}
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a', marginBottom: 10 }}>Resumo por Loja</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
-              {lojasOrdenadas.map((loja) => (
-                <CardResumoLoja key={loja.unidade} loja={loja} nome={nomeLoja(loja)} />
-              ))}
-            </div>
-          </div>
-
-          {/* TABELA DETALHADA */}
-          <div style={{ background: '#fff', border: '1px solid #EBEBEB', borderRadius: 10, padding: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a', marginBottom: 12 }}>Detalhamento por Loja</div>
-            <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ textAlign: 'left', color: '#999', fontSize: 10.5, fontWeight: 500, letterSpacing: '0.07em', textTransform: 'uppercase' }}>
-                  <th style={{ padding: '6px 8px', borderBottom: '1px solid #F0F0F0' }}>Unidade</th>
-                  <th style={{ padding: '6px 8px', borderBottom: '1px solid #F0F0F0', textAlign: 'right' }}>Banco</th>
-                  <th style={{ padding: '6px 8px', borderBottom: '1px solid #F0F0F0', textAlign: 'right' }}>Aplicações</th>
-                  <th style={{ padding: '6px 8px', borderBottom: '1px solid #F0F0F0', textAlign: 'right' }}>Recebíveis</th>
-                  <th style={{ padding: '6px 8px', borderBottom: '1px solid #F0F0F0', textAlign: 'right' }}>Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {linhasFiltradas.map((loja) => (
-                  <tr key={loja.unidade}>
-                    <td style={{ padding: '8px', borderBottom: '1px solid #F7F7F7', color: '#1a1a1a' }}>{nomeLoja(loja)}</td>
-                    <td style={{ ...MONO, padding: '8px', borderBottom: '1px solid #F7F7F7', textAlign: 'right', color: '#333' }}>{formatarMoeda(loja.banco)}</td>
-                    <td style={{ ...MONO, padding: '8px', borderBottom: '1px solid #F7F7F7', textAlign: 'right', color: '#333' }}>{formatarMoeda(loja.aplicacoes)}</td>
-                    <td style={{ ...MONO, padding: '8px', borderBottom: '1px solid #F7F7F7', textAlign: 'right', color: '#333' }}>{formatarMoeda(loja.recebiveis)}</td>
-                    <td style={{ ...MONO, padding: '8px', borderBottom: '1px solid #F7F7F7', textAlign: 'right', fontWeight: 700, color: '#111' }}>{formatarMoeda(loja.total)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {/* RESUMO POR LOJA — cards expansíveis, mesmo padrão do Faturamento */}
+          <div className="space-y-3">
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>Resumo por Loja</div>
+            {lojasOrdenadas.map((loja) => (
+              <CardLoja
+                key={loja.unidade}
+                loja={loja}
+                nome={nomeLoja(loja)}
+                cor={corParaUnidade(loja.unidade)}
+                expandido={expandido === loja.unidade}
+                onToggle={() => setExpandido(expandido === loja.unidade ? null : loja.unidade)}
+              />
+            ))}
           </div>
 
           {/* ROIC — fora de escopo */}
