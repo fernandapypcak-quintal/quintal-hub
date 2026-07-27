@@ -21,6 +21,7 @@ type Payload = {
   ultima_data: string
   ultima_data_saldos?: string
   ultima_data_recebiveis?: string
+  datas_disponiveis?: string[]
   saldo_atual: { banco: number; aplicacoes: number; recebiveis: number; total: number }
   por_loja: Loja[]
   vs_mes_anterior: {
@@ -38,6 +39,15 @@ function formatarMoeda(valor: number | null | undefined): string {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
   })
+}
+
+function formatarMoedaCompacta(valor: number | null | undefined): string {
+  if (valor == null) return '—'
+  const abs = Math.abs(valor)
+  const sinal = valor < 0 ? '-' : ''
+  if (abs >= 1_000_000) return `${sinal}R$ ${(abs / 1_000_000).toFixed(1)}M`
+  if (abs >= 1_000) return `${sinal}R$ ${(abs / 1_000).toFixed(1)}k`
+  return formatarMoeda(valor)
 }
 
 function formatarData(iso: string | null | undefined): string {
@@ -63,6 +73,20 @@ function CardIndisponivel({ label, motivo }: { label: string; motivo: string }) 
     <div style={{ background: '#FAFAFA', border: '1px dashed #E0E0E0', borderRadius: 10, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 6 }}>
       <span style={{ fontSize: 10.5, fontWeight: 500, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#BBB' }}>{label}</span>
       <div style={{ fontSize: 13, color: '#AAA' }}>{motivo}</div>
+    </div>
+  )
+}
+
+function CardResumoLoja({ loja, nome }: { loja: Loja; nome: string }) {
+  return (
+    <div style={{ background: '#fff', border: '1px solid #EBEBEB', borderRadius: 10, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ fontSize: 12.5, fontWeight: 600, color: '#1a1a1a' }}>{nome}</div>
+      <div style={{ ...MONO, fontSize: 20, fontWeight: 700, color: '#111' }}>{formatarMoedaCompacta(loja.total)}</div>
+      <div style={{ display: 'flex', gap: 10, fontSize: 11, color: '#999', ...MONO }}>
+        <span>Banco {formatarMoedaCompacta(loja.banco)}</span>
+        <span>Apl. {formatarMoedaCompacta(loja.aplicacoes)}</span>
+        {loja.recebiveis > 0 && <span>Receb. {formatarMoedaCompacta(loja.recebiveis)}</span>}
+      </div>
     </div>
   )
 }
@@ -105,8 +129,10 @@ type FinanceiroClientAppProps = {
 }
 
 export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = false }: FinanceiroClientAppProps) {
-  const { data, loading, erro } = useFinanceiro() as { data: Payload | null; loading: boolean; erro: string | null }
   const [lojaFiltro, setLojaFiltro] = useState('Todas')
+  const [dataFiltro, setDataFiltro] = useState('') // '' = mais recente
+
+  const { data, loading, erro } = useFinanceiro(dataFiltro || undefined) as { data: Payload | null; loading: boolean; erro: string | null }
 
   function unidadeVisivel(id: string): boolean {
     if (allowedLojas === '*') return true
@@ -130,7 +156,7 @@ export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = fals
     [lojasVisiveis]
   )
 
-  const opcoesLoja = ['Todas', ...lojasVisiveis.map((l) => nomeLoja(l))]
+  const opcoesLoja = ['Todas', ...lojasOrdenadas.map((l) => nomeLoja(l))]
 
   const linhasFiltradas = lojaFiltro === 'Todas'
     ? lojasOrdenadas
@@ -145,6 +171,12 @@ export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = fals
       total: acc.total + l.total,
     }),
     { banco: 0, aplicacoes: 0, recebiveis: 0, total: 0 }
+  )
+
+  // Datas disponíveis, mais recente primeiro
+  const datasOrdenadas = useMemo(
+    () => [...(data?.datas_disponiveis ?? [])].sort().reverse(),
+    [data]
   )
 
   return (
@@ -169,27 +201,47 @@ export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = fals
           <h1 style={{ fontSize: 19, fontWeight: 700, color: '#1a1a1a', margin: 0, lineHeight: 1.2 }}>
             Fluxo de Caixa
           </h1>
-          {data?.ultima_data && (
+          {data?.ultima_data && !dataFiltro && (
             <div style={{ fontSize: 12, color: '#999', marginTop: 2 }}>
               Última atualização: {formatarData(data.ultima_data)}
             </div>
           )}
         </div>
 
-        {opcoesLoja.length > 1 && (
-          <div style={{ position: 'relative' }}>
-            <select
-              value={lojaFiltro}
-              onChange={(e) => setLojaFiltro(e.target.value)}
-              style={selectStyle(lojaFiltro !== 'Todas')}
-            >
-              {opcoesLoja.map((l) => (
-                <option key={l} value={l}>{l === 'Todas' ? 'Todas as lojas' : l}</option>
-              ))}
-            </select>
-            <ChevronDown size={12} color="#999" style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-          </div>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {/* Data */}
+          {datasOrdenadas.length > 0 && (
+            <div style={{ position: 'relative' }}>
+              <select
+                value={dataFiltro}
+                onChange={(e) => setDataFiltro(e.target.value)}
+                style={selectStyle(!!dataFiltro)}
+              >
+                <option value="">Mais recente</option>
+                {datasOrdenadas.map((d) => (
+                  <option key={d} value={d}>{formatarData(d)}</option>
+                ))}
+              </select>
+              <ChevronDown size={12} color="#999" style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+            </div>
+          )}
+
+          {/* Loja */}
+          {opcoesLoja.length > 1 && (
+            <div style={{ position: 'relative' }}>
+              <select
+                value={lojaFiltro}
+                onChange={(e) => setLojaFiltro(e.target.value)}
+                style={selectStyle(lojaFiltro !== 'Todas')}
+              >
+                {opcoesLoja.map((l) => (
+                  <option key={l} value={l}>{l === 'Todas' ? 'Todas as lojas' : l}</option>
+                ))}
+              </select>
+              <ChevronDown size={12} color="#999" style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+            </div>
+          )}
+        </div>
       </header>
 
       {loading && <LoadingScreen />}
@@ -224,9 +276,19 @@ export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = fals
             <CardIndisponivel label="Caixa Projetado" motivo="Ainda não implementado" />
           </div>
 
-          {/* POR LOJA */}
+          {/* RESUMO POR LOJA — visão em cards, sempre visível, sem precisar filtrar */}
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a', marginBottom: 10 }}>Resumo por Loja</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
+              {lojasOrdenadas.map((loja) => (
+                <CardResumoLoja key={loja.unidade} loja={loja} nome={nomeLoja(loja)} />
+              ))}
+            </div>
+          </div>
+
+          {/* TABELA DETALHADA */}
           <div style={{ background: '#fff', border: '1px solid #EBEBEB', borderRadius: 10, padding: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a', marginBottom: 12 }}>Por Loja</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a', marginBottom: 12 }}>Detalhamento por Loja</div>
             <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ textAlign: 'left', color: '#999', fontSize: 10.5, fontWeight: 500, letterSpacing: '0.07em', textTransform: 'uppercase' }}>
