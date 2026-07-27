@@ -54,7 +54,6 @@ function formatarData(iso: string | null | undefined): string {
 function corParaUnidade(id: string): string {
   const idx = ALL_UNIT_IDS.indexOf(id as any)
   if (idx >= 0) return STORE_COLORS[idx % STORE_COLORS.length]
-  // holding, servicos, ou qualquer coisa fora do registro canônico
   return '#6B7280'
 }
 
@@ -99,6 +98,15 @@ function ErrorScreen({ error }: { error: string }) {
   )
 }
 
+function dateInputStyle(ativo: boolean): React.CSSProperties {
+  return {
+    height: 28, fontSize: 12.5, padding: '0 8px',
+    border: 'none', background: 'transparent', outline: 'none',
+    color: ativo ? '#1a1a1a' : '#666', fontFamily: 'inherit',
+    fontWeight: ativo ? 600 : 400, cursor: 'pointer', width: 128,
+  }
+}
+
 function selectStyle(ativo: boolean): React.CSSProperties {
   return {
     appearance: 'none', WebkitAppearance: 'none',
@@ -113,8 +121,8 @@ function selectStyle(ativo: boolean): React.CSSProperties {
 
 // Card expansível por loja — mesmo padrão visual do Stores.jsx (Faturamento)
 function CardLoja({
-  loja, nome, cor, expandido, onToggle,
-}: { loja: Loja; nome: string; cor: string; expandido: boolean; onToggle: () => void }) {
+  loja, nome, cor, expandido, onToggle, delta,
+}: { loja: Loja; nome: string; cor: string; expandido: boolean; onToggle: () => void; delta?: number | null }) {
   const pctAplicado = loja.total > 0 ? (loja.aplicacoes / loja.total) * 100 : 0
 
   return (
@@ -144,10 +152,19 @@ function CardLoja({
                 <p className="font-semibold text-zinc-700" style={MONO}>{formatarMoeda(loja.recebiveis)}</p>
               </div>
             )}
-            <div>
-              <p className="text-[10px] text-zinc-400 uppercase tracking-wider mb-0.5">% Aplicado</p>
-              <p className="font-semibold text-zinc-600">{pctAplicado.toFixed(1)}%</p>
-            </div>
+            {delta != null ? (
+              <div>
+                <p className="text-[10px] text-zinc-400 uppercase tracking-wider mb-0.5">Variação no período</p>
+                <p className={`font-bold ${delta >= 0 ? 'text-emerald-600' : 'text-rose-600'}`} style={MONO}>
+                  {delta >= 0 ? '+' : ''}{formatarMoeda(delta)}
+                </p>
+              </div>
+            ) : (
+              <div>
+                <p className="text-[10px] text-zinc-400 uppercase tracking-wider mb-0.5">% Aplicado</p>
+                <p className="font-semibold text-zinc-600">{pctAplicado.toFixed(1)}%</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -194,10 +211,14 @@ type FinanceiroClientAppProps = {
 
 export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = false }: FinanceiroClientAppProps) {
   const [lojaFiltro, setLojaFiltro] = useState('Todas')
-  const [dataFiltro, setDataFiltro] = useState('') // '' = mais recente
+  const [dataInicio, setDataInicio] = useState('') // '' = sem comparação de período
+  const [dataFim, setDataFim] = useState('')       // '' = mais recente
   const [expandido, setExpandido] = useState<string | null>(null)
 
-  const { data, loading, erro } = useFinanceiro(dataFiltro || undefined) as { data: Payload | null; loading: boolean; erro: string | null }
+  const periodoAtivo = !!dataInicio
+
+  const { data, loading, erro } = useFinanceiro(dataFim || undefined, true) as { data: Payload | null; loading: boolean; erro: string | null }
+  const { data: dataInicioPayload, loading: loadingInicio } = useFinanceiro(dataInicio || undefined, periodoAtivo) as { data: Payload | null; loading: boolean; erro: string | null }
 
   function unidadeVisivel(id: string): boolean {
     if (allowedLojas === '*') return true
@@ -221,6 +242,13 @@ export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = fals
     [lojasVisiveis]
   )
 
+  // Mapa unidade -> total no início do período, pra calcular a variação por loja
+  const totaisInicio = useMemo(() => {
+    const mapa: Record<string, number> = {}
+    ;(dataInicioPayload?.por_loja ?? []).forEach((l) => { mapa[l.unidade] = l.total })
+    return mapa
+  }, [dataInicioPayload])
+
   const opcoesLoja = ['Todas', ...lojasOrdenadas.map((l) => nomeLoja(l))]
 
   const linhasFiltradas = lojaFiltro === 'Todas'
@@ -236,6 +264,13 @@ export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = fals
     }),
     { banco: 0, aplicacoes: 0, recebiveis: 0, total: 0 }
   )
+
+  const kpiInicio = periodoAtivo
+    ? linhasFiltradas.reduce((acc, l) => acc + (totaisInicio[l.unidade] ?? 0), 0)
+    : null
+
+  const variacaoPeriodo = kpiInicio != null ? kpi.total - kpiInicio : null
+  const variacaoPeriodoPct = kpiInicio != null && kpiInicio !== 0 ? (variacaoPeriodo! / kpiInicio) * 100 : null
 
   const datasDisponiveis = data?.datas_disponiveis ?? []
   const minData = datasDisponiveis.length ? [...datasDisponiveis].sort()[0] : undefined
@@ -263,7 +298,7 @@ export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = fals
           <h1 style={{ fontSize: 19, fontWeight: 700, color: '#1a1a1a', margin: 0, lineHeight: 1.2 }}>
             Fluxo de Caixa
           </h1>
-          {data?.ultima_data && !dataFiltro && (
+          {data?.ultima_data && !dataFim && (
             <div style={{ fontSize: 12, color: '#999', marginTop: 2 }}>
               Última atualização: {formatarData(data.ultima_data)}
             </div>
@@ -271,21 +306,31 @@ export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = fals
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          {/* Data */}
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+          {/* Período: Início -> Fim */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#F7F7F7', borderRadius: 99, padding: '2px 10px' }}>
+            <span style={{ fontSize: 11.5, color: '#888', whiteSpace: 'nowrap' }}>Período:</span>
             <input
               type="date"
-              value={dataFiltro}
+              value={dataInicio}
               min={minData}
-              max={maxData}
-              onChange={(e) => setDataFiltro(e.target.value)}
-              style={{ ...selectStyle(!!dataFiltro), paddingRight: dataFiltro ? 28 : 12 }}
+              max={dataFim || maxData}
+              onChange={(e) => setDataInicio(e.target.value)}
+              style={dateInputStyle(!!dataInicio)}
             />
-            {dataFiltro && (
+            <span style={{ fontSize: 11, color: '#BBB' }}>→</span>
+            <input
+              type="date"
+              value={dataFim}
+              min={dataInicio || minData}
+              max={maxData}
+              onChange={(e) => setDataFim(e.target.value)}
+              style={dateInputStyle(!!dataFim)}
+            />
+            {(dataInicio || dataFim) && (
               <button
-                onClick={() => setDataFiltro('')}
-                title="Voltar pra data mais recente"
-                style={{ position: 'absolute', right: 8, background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}
+                onClick={() => { setDataInicio(''); setDataFim('') }}
+                title="Limpar período"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', padding: 2 }}
               >
                 <X size={13} color="#999" />
               </button>
@@ -317,7 +362,7 @@ export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = fals
         <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
           {/* CARDS PRINCIPAIS */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
-            <KpiCard label="Saldo Atual (Total)" valor={formatarMoeda(kpi.total)} />
+            <KpiCard label={dataFim ? `Saldo em ${formatarData(dataFim)}` : 'Saldo Atual (Total)'} valor={formatarMoeda(kpi.total)} />
             <KpiCard label="Saldo em Banco" valor={formatarMoeda(kpi.banco)} />
             <KpiCard label="Aplicações" valor={formatarMoeda(kpi.aplicacoes)} />
             <KpiCard label="Recebíveis em Aberto" valor={formatarMoeda(kpi.recebiveis)} />
@@ -325,7 +370,20 @@ export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = fals
 
           {/* VARIAÇÕES */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
-            {data.vs_mes_anterior && lojaFiltro === 'Todas' ? (
+            {periodoAtivo ? (
+              loadingInicio ? (
+                <CardIndisponivel label="Variação no Período" motivo="Calculando..." />
+              ) : variacaoPeriodo != null ? (
+                <KpiCard
+                  label="Variação no Período"
+                  valor={`${variacaoPeriodo >= 0 ? '+' : ''}${formatarMoeda(variacaoPeriodo)}`}
+                  subtitulo={`${variacaoPeriodoPct != null ? variacaoPeriodoPct.toFixed(1) + '%' : '—'} de ${formatarData(dataInicio)} até ${formatarData(dataFim || data.ultima_data)}`}
+                  subtituloColor={variacaoPeriodo >= 0 ? '#4F8A10' : '#C0392B'}
+                />
+              ) : (
+                <CardIndisponivel label="Variação no Período" motivo="Sem dado suficiente" />
+              )
+            ) : data.vs_mes_anterior && lojaFiltro === 'Todas' ? (
               <KpiCard
                 label="vs Mês Anterior"
                 valor={`${data.vs_mes_anterior.variacao_absoluta >= 0 ? '+' : ''}${formatarMoeda(data.vs_mes_anterior.variacao_absoluta)}`}
@@ -353,6 +411,7 @@ export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = fals
                 cor={corParaUnidade(loja.unidade)}
                 expandido={expandido === loja.unidade}
                 onToggle={() => setExpandido(expandido === loja.unidade ? null : loja.unidade)}
+                delta={periodoAtivo && totaisInicio[loja.unidade] != null ? loja.total - totaisInicio[loja.unidade] : null}
               />
             ))}
           </div>
