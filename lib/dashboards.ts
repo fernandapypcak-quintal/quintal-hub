@@ -16,6 +16,7 @@ export const DASHBOARDS: Dashboard[] = [
   { id: 'comercial', name: 'Comercial & Eventos', description: 'Funil de eventos B2B, calendário e deals', url: '', internalPath: '/hub/comercial', color: '#0ea5e9', icon: '🤝' },
   { id: 'relatorios', name: 'Relatório de Descontos', description: 'Descontos, estornos, contas em aberto e bônus', url: '', internalPath: '/hub/relatorios', color: '#EA580C', icon: '🧾' },
   { id: 'financeiro', name: 'Financeiro — Fluxo de Caixa', description: 'Saldo bancário, aplicações e recebíveis por unidade', url: '', internalPath: '/hub/financeiro', color: '#0369A1', icon: '🏦' },
+  { id: 'promocoes', name: 'Promoções', description: 'Dashboard mensal de promoções/pacotes + simulador de CMV', url: '', internalPath: '/hub/promocoes', color: '#9A3412', icon: '🔥' },
 ]
 
 export const USER_PERMISSIONS: Record<string, string[] | '*'> = {
