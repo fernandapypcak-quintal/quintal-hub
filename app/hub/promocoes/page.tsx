@@ -7,5 +7,5 @@ export default async function PromocoesPage() {
   if (!access) redirect('/login')
   if (!hasDashboardAccess(access, 'promocoes')) redirect('/hub')
 
-  return <PromocoesClientApp allowedLojas={access.lojas} />
+ return <PromocoesClientApp allowedLojas={access.lojas as any} />
 }
