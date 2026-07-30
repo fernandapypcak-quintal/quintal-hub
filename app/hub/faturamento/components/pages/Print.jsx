@@ -106,42 +106,42 @@ export default function PrintReport({ onClose }) {
 <title>Relatório ${data.label} — Quintal do Espeto</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: Arial, sans-serif; font-size: 13px; color: #1a1a1a;
-         background: white; padding: 16px; }
+  body { font-family: Arial, sans-serif; font-size: 14px; color: #1a1a1a;
+         background: white; padding: 14px; line-height:1.25; }
 
   .header { display:flex; justify-content:space-between; align-items:center;
-    border-bottom: 3px solid #1F3D2E; padding-bottom: 10px; margin-bottom: 14px; }
+    border-bottom: 3px solid #1F3D2E; padding-bottom: 7px; margin-bottom: 10px; }
   .header h1 { font-size: 22px; font-weight: 800; color: #1F3D2E; }
-  .header .sub { font-size: 12px; color: #666; margin-top: 2px; }
-  .header .badge { background:#1F3D2E; color:white; padding:5px 12px;
+  .header .sub { font-size: 12px; color: #666; margin-top: 1px; }
+  .header .badge { background:#1F3D2E; color:white; padding:4px 11px;
     border-radius:6px; font-size:13px; font-weight:700; }
 
   .info-bar { background:#fffbeb; border:1px solid #fde68a; border-radius:6px;
-    padding:6px 12px; font-size:12px; color:#92400e; margin-bottom:12px; }
+    padding:4px 12px; font-size:12px; color:#92400e; margin-bottom:9px; }
 
   .section-title { font-size:15px; font-weight:700; color:#1F3D2E;
-    border-left:4px solid #97A624; padding-left:8px; margin:16px 0 8px; }
+    border-left:4px solid #97A624; padding-left:8px; margin:11px 0 6px; }
 
-  .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:12px; }
-  .kpi { border:1px solid #e5e5e5; border-radius:8px; padding:11px 13px; }
+  .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:7px; margin-bottom:9px; }
+  .kpi { border:1px solid #e5e5e5; border-radius:7px; padding:7px 11px; }
   .kpi-label { font-size:10px; font-weight:700; color:#888; text-transform:uppercase;
-    letter-spacing:0.5px; margin-bottom:4px; }
-  .kpi-value { font-size:22px; font-weight:800; }
-  .kpi-sub { font-size:10px; color:#888; margin-top:2px; }
-  .kpi-var { font-size:12px; font-weight:700; margin-top:3px; }
+    letter-spacing:0.5px; margin-bottom:2px; }
+  .kpi-value { font-size:21px; font-weight:800; }
+  .kpi-sub { font-size:10px; color:#888; margin-top:1px; }
+  .kpi-var { font-size:12px; font-weight:700; margin-top:2px; }
 
-  table { width:100%; border-collapse:collapse; font-size:13px; margin-bottom:14px; }
-  th { background:#1F3D2E; color:white; font-weight:700; padding:6px 9px;
+  table { width:100%; border-collapse:collapse; font-size:14px; margin-bottom:10px; }
+  th { background:#1F3D2E; color:white; font-weight:700; padding:4px 8px;
     text-align:right; font-size:10px; text-transform:uppercase; }
   th:first-child { text-align:left; }
-  td { padding:5px 9px; text-align:right; border-bottom:1px solid #f0f0f0; }
+  td { padding:3px 8px; text-align:right; border-bottom:1px solid #f0f0f0; }
   td:first-child { text-align:left; font-weight:600; }
   tr:nth-child(even) td { background:#fafafa; }
   .tfoot td { background:#f0f4ec !important; font-weight:700;
     border-top:2px solid #1F3D2E; }
 
-  .subrow td { background:#fcfcfc !important; text-align:left; font-size:10px;
-    color:#666; padding:2px 9px 6px 24px; border-bottom:1px solid #f0f0f0; }
+  .subrow td { background:#fcfcfc !important; text-align:left; font-size:11px;
+    color:#666; padding:1px 8px 4px 24px; border-bottom:1px solid #f0f0f0; }
   .subrow b { color:#444; }
 
   .pos { color:#16a34a; } .neg { color:#dc2626; }
@@ -277,7 +277,8 @@ export default function PrintReport({ onClose }) {
   <thead>
     <tr>
       <th style="text-align:left"># Loja</th>
-      <th>Realizado</th>
+      <th>Salão</th>
+      <th>Delivery</th>
       <th>${data.ano-1} (dia ${data.lastDay})</th>
       <th>YoY (dia ${data.lastDay})</th>
       <th>Meta</th>
@@ -290,7 +291,8 @@ export default function PrintReport({ onClose }) {
     ${data.porLoja.map((l,i) => `
     <tr>
       <td>#${i+1} ${l.loja}</td>
-      <td style="font-weight:700">${fmt(l.real)}</td>
+      <td style="font-weight:700">${fmt(l.casa)}</td>
+      <td style="font-weight:700">${fmt(l.delivery)}</td>
       <td style="color:#999">${l.realAA>0?fmt(l.realAA):'—'}</td>
       <td class="${l.yoy>=0?'pos':'neg'}">${pct(l.yoy)}</td>
       <td>${l.meta > 0 ? fmt(l.meta) : '—'}</td>
@@ -299,17 +301,13 @@ export default function PrintReport({ onClose }) {
       </td>
       <td style="font-weight:700">${fmt(l.tend)}</td>
       <td class="${l.tendVsAA>=0?'pos':'neg'}">${pct(l.tendVsAA)}</td>
-    </tr>
-    <tr class="subrow">
-      <td colspan="8">
-        Salão: <b>${fmt(l.casa)}</b> &nbsp;·&nbsp; Delivery: <b>${fmt(l.delivery)}</b>
-      </td>
     </tr>`).join('')}
   </tbody>
   <tfoot>
     <tr class="tfoot">
       <td>TOTAL</td>
-      <td>${fmt(data.total)}</td>
+      <td>${fmt(data.casa)}</td>
+      <td>${fmt(data.delivery)}</td>
       <td style="color:#666">${fmt(data.totalAA)}</td>
       <td class="${data.yoy>=0?'pos':'neg'}">${pct(data.yoy)}</td>
       <td>${totalMeta > 0 ? fmt(totalMeta) : '—'}</td>
@@ -318,11 +316,6 @@ export default function PrintReport({ onClose }) {
       </td>
       <td style="font-weight:700">${fmt(data.tendFat)}</td>
       <td class="${data.tendVsAA>=0?'pos':'neg'}">${pct(data.tendVsAA)}</td>
-    </tr>
-    <tr class="subrow" style="background:#f0f4ec !important;">
-      <td colspan="8" style="background:#f0f4ec !important;">
-        Salão: <b>${fmt(data.casa)}</b> &nbsp;·&nbsp; Delivery: <b>${fmt(data.delivery)}</b>
-      </td>
     </tr>
   </tfoot>
 </table>
