@@ -15,10 +15,15 @@ const URL_FATURAMENTO = 'https://script.google.com/macros/s/AKfycbyEoeYAWVUGc8n-
 const CATEGORIAS = ['All Inclusive', 'C&C', 'Clássicos', 'Pacotes dias Promo', 'Pacotes']
 
 function mesLabelToAnoMes(mesLabel) {
-  // "07/2026" -> "2026-07"
-  const [mm, yyyy] = String(mesLabel || '').split('/')
-  if (!mm || !yyyy) return null
-  return `${yyyy}-${mm.padStart(2, '0')}`
+  const s = String(mesLabel || '').trim()
+  // formato esperado: "MM/AAAA"
+  let m = s.match(/^(\d{2})\/(\d{4})$/)
+  if (m) return `${m[2]}-${m[1]}`
+  // o Google Sheets às vezes converte "MM/AAAA" sozinho pra uma Date, e o
+  // Apps Script devolve isso como "AAAA-MM-DD" — trata esse caso também.
+  m = s.match(/^(\d{4})-(\d{2})/)
+  if (m) return `${m[1]}-${m[2]}`
+  return null
 }
 
 function dataToAnoMes(dataStr) {
