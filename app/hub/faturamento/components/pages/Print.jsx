@@ -415,16 +415,31 @@ export function PrintWeekend({ onClose }) {
     const dAA    = new Date(d); dAA.setFullYear(d.getFullYear() - 1);
     const dataAA = dAA.getFullYear() + '-' + String(dAA.getMonth()+1).padStart(2,'0') + '-' + String(dAA.getDate()).padStart(2,'0');
     const recsAA = rawData.filter(r => r.Data === dataAA);
-    const porLoja = lojas.map(loja => ({
-      loja,
-      v26: sum(recs.filter(r => r.Loja === loja)),
-      v25: sum(recsAA.filter(r => r.Loja === loja)),
-    })).filter(l => l.v26 > 0 || l.v25 > 0);
-    porLoja.forEach(l => { l.yoy = variation(l.v26, l.v25); });
+    const porLoja = lojas.map(loja => {
+      const lr   = recs.filter(r => r.Loja === loja);
+      const lrAA = recsAA.filter(r => r.Loja === loja);
+      const v26 = sum(lr), v25 = sum(lrAA);
+      const casa26 = sum(lr.filter(r => r.Canal === 'CASA'));
+      const del26  = sum(lr.filter(r => r.Canal === 'DELIVERY'));
+      const casa25 = sum(lrAA.filter(r => r.Canal === 'CASA'));
+      const del25  = sum(lrAA.filter(r => r.Canal === 'DELIVERY'));
+      return { loja, v26, v25, casa26, del26, casa25, del25 };
+    }).filter(l => l.v26 > 0 || l.v25 > 0);
+    porLoja.forEach(l => {
+      l.yoy = variation(l.v26, l.v25);
+      l.yoyCasa = variation(l.casa26, l.casa25);
+      l.yoyDel  = variation(l.del26, l.del25);
+    });
     const total26 = sum(recs), total25 = sum(recsAA);
+    const casaTot26 = sum(recs.filter(r => r.Canal === 'CASA'));
+    const delTot26  = sum(recs.filter(r => r.Canal === 'DELIVERY'));
+    const casaTot25 = sum(recsAA.filter(r => r.Canal === 'CASA'));
+    const delTot25  = sum(recsAA.filter(r => r.Canal === 'DELIVERY'));
     return { data, dow, label: DOW_NAMES[dow],
       dataFmt: d.toLocaleDateString('pt-BR',{day:'numeric',month:'short',year:'numeric'}),
-      ano: d.getFullYear(), porLoja, total26, total25, yoy: variation(total26, total25) };
+      ano: d.getFullYear(), porLoja, total26, total25, yoy: variation(total26, total25),
+      casaTot26, delTot26, casaTot25, delTot25,
+      yoyCasaTot: variation(casaTot26, casaTot25), yoyDelTot: variation(delTot26, delTot25) };
   });
 
   const geradoEm = new Date().toLocaleString('pt-BR');
@@ -435,7 +450,7 @@ export function PrintWeekend({ onClose }) {
     return (v >= 0 ? '+' : '') + v.toFixed(1).replace('.', ',') + '%';
   }
 
-  const css = '* { margin:0; padding:0; box-sizing:border-box; } body { font-family: Arial, sans-serif; font-size: 10px; color: #1a1a1a; background: white; padding: 16px; } .header { display:flex; justify-content:space-between; align-items:center; border-bottom: 3px solid #1F3D2E; padding-bottom: 10px; margin-bottom: 14px; } .header h1 { font-size: 17px; font-weight: 800; color: #1F3D2E; } .header .sub { font-size: 9px; color: #666; margin-top: 2px; } .kpi-row { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; } .kpi { border:1px solid #e5e5e5; border-radius:8px; padding:9px 11px; } .kpi-label { font-size:8px; font-weight:700; color:#888; text-transform:uppercase; margin-bottom:3px; } .kpi-value { font-size:20px; font-weight:800; } .kpi-var { font-size:9px; font-weight:700; margin-top:3px; } .section-title { font-size:12px; font-weight:700; color:#1F3D2E; border-left:4px solid #97A624; padding-left:8px; margin:14px 0 8px; } table { width:100%; border-collapse:collapse; font-size:10px; margin-bottom:16px; } th { background:#1F3D2E; color:white; font-weight:700; padding:5px 8px; text-align:right; font-size:8px; text-transform:uppercase; } th:first-child { text-align:left; } td { padding:4px 8px; text-align:right; border-bottom:1px solid #f0f0f0; } td:first-child { text-align:left; font-weight:600; } tr:nth-child(even) td { background:#fafafa; } .tfoot td { background:#f0f4ec !important; font-weight:700; border-top:2px solid #1F3D2E; } .pos { color:#16a34a; } .neg { color:#dc2626; } .no-print { margin-bottom:14px; display:flex; gap:8px; } .footer { margin-top:14px; padding-top:8px; border-top:1px solid #e5e5e5; font-size:8px; color:#999; display:flex; justify-content:space-between; } @media print { body { padding:8mm; } .no-print { display:none !important; } @page { size: A4 landscape; margin:8mm; } }';
+  const css = '* { margin:0; padding:0; box-sizing:border-box; } body { font-family: Arial, sans-serif; font-size: 11px; color: #1a1a1a; background: white; padding: 14px; line-height:1.25; } .header { display:flex; justify-content:space-between; align-items:center; border-bottom: 3px solid #1F3D2E; padding-bottom: 7px; margin-bottom: 10px; } .header h1 { font-size: 17px; font-weight: 800; color: #1F3D2E; } .header .sub { font-size: 9px; color: #666; margin-top: 2px; } .kpi-row { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; margin-bottom:9px; } .kpi { border:1px solid #e5e5e5; border-radius:7px; padding:7px 11px; } .kpi-label { font-size:8px; font-weight:700; color:#888; text-transform:uppercase; margin-bottom:2px; } .kpi-value { font-size:19px; font-weight:800; } .kpi-var { font-size:9px; font-weight:700; margin-top:2px; } .section-title { font-size:12px; font-weight:700; color:#1F3D2E; border-left:4px solid #97A624; padding-left:8px; margin:11px 0 6px; page-break-after: avoid; break-after: avoid-page; page-break-inside: avoid; break-inside: avoid; } table { width:100%; border-collapse:collapse; font-size:11px; margin-bottom:10px; } thead { display: table-header-group; } tr { page-break-inside: avoid; break-inside: avoid; } th { background:#1F3D2E; color:white; font-weight:700; padding:4px 7px; text-align:right; font-size:8px; text-transform:uppercase; } th:first-child { text-align:left; } td { padding:3px 7px; text-align:right; border-bottom:1px solid #f0f0f0; } td:first-child { text-align:left; font-weight:600; } tr:nth-child(even) td { background:#fafafa; } .tfoot td { background:#f0f4ec !important; font-weight:700; border-top:2px solid #1F3D2E; } .pos { color:#16a34a; } .neg { color:#dc2626; } .no-print { margin-bottom:14px; display:flex; gap:8px; } .footer { margin-top:14px; padding-top:8px; border-top:1px solid #e5e5e5; font-size:8px; color:#999; display:flex; justify-content:space-between; } @media print { body { padding:8mm; } .no-print { display:none !important; } @page { size: A4 landscape; margin:8mm; } }';
 
   const kpiCards = dias.map(function(d) {
     return '<div class="kpi">' +
@@ -448,6 +463,12 @@ export function PrintWeekend({ onClose }) {
   const tables = dias.map(function(d) {
     const rows = d.porLoja.map(function(l) {
       return '<tr><td>' + l.loja + '</td>' +
+        '<td>' + fmt(l.casa26) + '</td>' +
+        '<td style="color:#999">' + (l.casa25>0?fmt(l.casa25):'—') + '</td>' +
+        '<td class="' + (l.yoyCasa>=0?'pos':'neg') + '">' + (l.casa25>0?pct(l.yoyCasa):'—') + '</td>' +
+        '<td>' + fmt(l.del26) + '</td>' +
+        '<td style="color:#999">' + (l.del25>0?fmt(l.del25):'—') + '</td>' +
+        '<td class="' + (l.yoyDel>=0?'pos':'neg') + '">' + (l.del25>0?pct(l.yoyDel):'—') + '</td>' +
         '<td style="font-weight:700">' + fmt(l.v26) + '</td>' +
         '<td style="color:#999">' + (l.v25>0?fmt(l.v25):'—') + '</td>' +
         '<td class="' + (l.yoy>=0?'pos':'neg') + '">' + (l.v25>0?pct(l.yoy):'—') + '</td>' +
@@ -455,10 +476,20 @@ export function PrintWeekend({ onClose }) {
     }).join('');
     return '<div class="section-title">' + d.label + ' — ' + d.dataFmt + '</div>' +
       '<table><thead><tr>' +
-      '<th style="text-align:left">Loja</th><th>' + d.ano + '</th><th>' + (d.ano-1) + '</th><th>Var. YoY</th><th>Share</th>' +
+      '<th style="text-align:left">Loja</th>' +
+      '<th>Salão ' + d.ano + '</th><th>Salão ' + (d.ano-1) + '</th><th>YoY Salão</th>' +
+      '<th>Delivery ' + d.ano + '</th><th>Delivery ' + (d.ano-1) + '</th><th>YoY Delivery</th>' +
+      '<th>Total ' + d.ano + '</th><th>Total ' + (d.ano-1) + '</th><th>YoY Total</th><th>Share</th>' +
       '</tr></thead><tbody>' + rows + '</tbody>' +
       '<tfoot><tr class="tfoot">' +
-      '<td>TOTAL</td><td>' + fmt(d.total26) + '</td>' +
+      '<td>TOTAL</td>' +
+      '<td>' + fmt(d.casaTot26) + '</td>' +
+      '<td style="color:#666">' + (d.casaTot25>0?fmt(d.casaTot25):'—') + '</td>' +
+      '<td class="' + (d.yoyCasaTot>=0?'pos':'neg') + '">' + pct(d.yoyCasaTot) + '</td>' +
+      '<td>' + fmt(d.delTot26) + '</td>' +
+      '<td style="color:#666">' + (d.delTot25>0?fmt(d.delTot25):'—') + '</td>' +
+      '<td class="' + (d.yoyDelTot>=0?'pos':'neg') + '">' + pct(d.yoyDelTot) + '</td>' +
+      '<td>' + fmt(d.total26) + '</td>' +
       '<td style="color:#666">' + (d.total25>0?fmt(d.total25):'—') + '</td>' +
       '<td class="' + (d.yoy>=0?'pos':'neg') + '">' + pct(d.yoy) + '</td>' +
       '<td>100%</td></tr></tfoot></table>';
