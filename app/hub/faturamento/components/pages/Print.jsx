@@ -278,12 +278,12 @@ export default function PrintReport({ onClose }) {
     <tr>
       <th style="text-align:left"># Loja</th>
       <th>Realizado</th>
+      <th>${data.ano-1} (dia ${data.lastDay})</th>
       <th>YoY (dia ${data.lastDay})</th>
       <th>Meta</th>
       <th>% Ating.</th>
       <th>Tend Fat</th>
       <th>Tend vs AA</th>
-      <th>Peso</th>
     </tr>
   </thead>
   <tbody>
@@ -291,6 +291,7 @@ export default function PrintReport({ onClose }) {
     <tr>
       <td>#${i+1} ${l.loja}</td>
       <td style="font-weight:700">${fmt(l.real)}</td>
+      <td style="color:#999">${l.realAA>0?fmt(l.realAA):'—'}</td>
       <td class="${l.yoy>=0?'pos':'neg'}">${pct(l.yoy)}</td>
       <td>${l.meta > 0 ? fmt(l.meta) : '—'}</td>
       <td style="font-weight:800;color:${l.ating===null?'#999':l.ating>=100?'#16a34a':l.ating>=80?'#d97706':'#dc2626'}">
@@ -298,12 +299,10 @@ export default function PrintReport({ onClose }) {
       </td>
       <td style="font-weight:700">${fmt(l.tend)}</td>
       <td class="${l.tendVsAA>=0?'pos':'neg'}">${pct(l.tendVsAA)}</td>
-      <td>${l.share.toFixed(1).replace('.',',')}%</td>
     </tr>
     <tr class="subrow">
       <td colspan="8">
         Salão: <b>${fmt(l.casa)}</b> &nbsp;·&nbsp; Delivery: <b>${fmt(l.delivery)}</b>
-        &nbsp;·&nbsp; ${data.ano-1} (até dia ${data.lastDay}): <b>${l.realAA>0?fmt(l.realAA):'—'}</b>
       </td>
     </tr>`).join('')}
   </tbody>
@@ -311,6 +310,7 @@ export default function PrintReport({ onClose }) {
     <tr class="tfoot">
       <td>TOTAL</td>
       <td>${fmt(data.total)}</td>
+      <td style="color:#666">${fmt(data.totalAA)}</td>
       <td class="${data.yoy>=0?'pos':'neg'}">${pct(data.yoy)}</td>
       <td>${totalMeta > 0 ? fmt(totalMeta) : '—'}</td>
       <td style="font-weight:800;color:${totalMeta>0&&data.total/totalMeta>=1?'#16a34a':totalMeta>0&&data.total/totalMeta>=0.8?'#d97706':'#dc2626'}">
@@ -318,12 +318,10 @@ export default function PrintReport({ onClose }) {
       </td>
       <td style="font-weight:700">${fmt(data.tendFat)}</td>
       <td class="${data.tendVsAA>=0?'pos':'neg'}">${pct(data.tendVsAA)}</td>
-      <td>100%</td>
     </tr>
     <tr class="subrow" style="background:#f0f4ec !important;">
       <td colspan="8" style="background:#f0f4ec !important;">
         Salão: <b>${fmt(data.casa)}</b> &nbsp;·&nbsp; Delivery: <b>${fmt(data.delivery)}</b>
-        &nbsp;·&nbsp; ${data.ano-1} (até dia ${data.lastDay}): <b>${fmt(data.totalAA)}</b>
       </td>
     </tr>
   </tfoot>
