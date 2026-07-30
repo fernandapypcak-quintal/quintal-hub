@@ -36,6 +36,8 @@ export default function PrintReport({ onClose }) {
     const casa     = sum(recs.filter(r => r.Canal === 'CASA'));
     const delivery = sum(recs.filter(r => r.Canal === 'DELIVERY'));
     const totalAA  = sum(recsAA);
+    const casaAA     = sum(recsAA.filter(r => r.Canal === 'CASA'));
+    const deliveryAA = sum(recsAA.filter(r => r.Canal === 'DELIVERY'));
     const yoy      = variation(total, totalAA);
     const tendFat  = calcTendFat(recs, lastDay, totalDays, ano, mes);
     const tendVsAA = variation(tendFat, sum(recsAAFull));
@@ -50,11 +52,14 @@ export default function PrintReport({ onClose }) {
       const casaLoja     = sum(lr.filter(r => r.Canal === 'CASA'));
       const deliveryLoja = sum(lr.filter(r => r.Canal === 'DELIVERY'));
       const realAA       = sum(lrAA);
+      const casaAALoja     = sum(lrAA.filter(r => r.Canal === 'CASA'));
+      const deliveryAALoja = sum(lrAA.filter(r => r.Canal === 'DELIVERY'));
       const tend = calcTendFat(lr, lastDay, totalDays, ano, mes);
       const meta = getMeta(key, loja);
       return {
         loja, real, tend, meta,
         casa: casaLoja, delivery: deliveryLoja, realAA,
+        casaAA: casaAALoja, deliveryAA: deliveryAALoja,
         yoy:      variation(real, realAA),
         tendVsAA: variation(tend, sum(lrAAFull)),
         ating:    meta > 0 ? real/meta*100 : null,
@@ -71,28 +76,34 @@ export default function PrintReport({ onClose }) {
     const anoO    = ontemDate.getFullYear();
     const recsO   = rawData.filter(r => r.Ano === anoO   && r.Mes === mesO && r.Dia === diaO);
     const recsOAA = rawData.filter(r => r.Ano === anoO-1 && r.Mes === mesO && r.Dia === diaO);
-    const totalO  = sum(recsO);
-    const casaO   = sum(recsO.filter(r => r.Canal === 'CASA'));
-    const delO    = sum(recsO.filter(r => r.Canal === 'DELIVERY'));
-    const yoyO    = variation(totalO, sum(recsOAA));
+    const totalO   = sum(recsO);
+    const casaO    = sum(recsO.filter(r => r.Canal === 'CASA'));
+    const delO     = sum(recsO.filter(r => r.Canal === 'DELIVERY'));
+    const totalOAA = sum(recsOAA);
+    const casaOAA  = sum(recsOAA.filter(r => r.Canal === 'CASA'));
+    const delOAA   = sum(recsOAA.filter(r => r.Canal === 'DELIVERY'));
+    const yoyO    = variation(totalO, totalOAA);
     const porLojaO = lojas.map(loja => {
       const lrO   = recsO.filter(r => r.Loja === loja);
+      const lrOAA = recsOAA.filter(r => r.Loja === loja);
       const v26   = sum(lrO);
       const casa26 = sum(lrO.filter(r => r.Canal === 'CASA'));
       const del26  = sum(lrO.filter(r => r.Canal === 'DELIVERY'));
-      const v25   = sum(recsOAA.filter(r => r.Loja === loja));
-      return { loja, v26, casa26, del26, v25, var: variation(v26, v25) };
+      const v25   = sum(lrOAA);
+      const casa25 = sum(lrOAA.filter(r => r.Canal === 'CASA'));
+      const del25  = sum(lrOAA.filter(r => r.Canal === 'DELIVERY'));
+      return { loja, v26, casa26, del26, v25, casa25, del25, var: variation(v26, v25) };
     }).filter(l => l.v26 > 0).sort((a,b) => b.v26 - a.v26);
 
     return { ano, mes, lastDay, totalDays, key,
       label: `${MESES[mes]}/${ano}`,
-      total, casa, delivery, totalAA, yoy, tendFat, tendVsAA,
+      total, casa, delivery, totalAA, casaAA, deliveryAA, yoy, tendFat, tendVsAA,
       pctCasa: total>0?casa/total*100:0,
       pctDel:  total>0?delivery/total*100:0,
       porLoja,
       ontem: { dow: DOW_NAMES[ontemDate.getDay()], dia:diaO, mes:mesO, ano:anoO,
-               total:totalO, totalAA:sum(recsOAA), yoy:yoyO,
-               casa:casaO, delivery:delO, porLoja:porLojaO } };
+               total:totalO, totalAA:totalOAA, yoy:yoyO,
+               casa:casaO, delivery:delO, casaAA:casaOAA, deliveryAA:delOAA, porLoja:porLojaO } };
   }, [rawData, getMeta]);
 
   if (!data) return null;
@@ -238,10 +249,12 @@ export default function PrintReport({ onClose }) {
   <thead>
     <tr>
       <th style="text-align:left">Loja</th>
-      <th>Salão</th>
-      <th>Delivery</th>
-      <th>${data.ontem.ano}</th>
-      <th>${data.ontem.ano-1}</th>
+      <th>Salão ${data.ontem.ano}</th>
+      <th>Delivery ${data.ontem.ano}</th>
+      <th>Total ${data.ontem.ano}</th>
+      <th>Salão ${data.ontem.ano-1}</th>
+      <th>Delivery ${data.ontem.ano-1}</th>
+      <th>Total ${data.ontem.ano-1}</th>
       <th>Variação YoY</th>
       <th>Share</th>
     </tr>
@@ -253,6 +266,8 @@ export default function PrintReport({ onClose }) {
       <td>${fmt(l.casa26)}</td>
       <td>${fmt(l.del26)}</td>
       <td style="font-weight:700">${fmt(l.v26)}</td>
+      <td style="color:#999">${l.casa25>0?fmt(l.casa25):'—'}</td>
+      <td style="color:#999">${l.del25>0?fmt(l.del25):'—'}</td>
       <td style="color:#999">${l.v25>0?fmt(l.v25):'—'}</td>
       <td class="${l.var>=0?'pos':'neg'}">${l.v25>0?pct(l.var):'—'}</td>
       <td>${data.ontem.total>0?(l.v26/data.ontem.total*100).toFixed(1).replace('.',',')+'%':'—'}</td>
@@ -264,6 +279,8 @@ export default function PrintReport({ onClose }) {
       <td>${fmt(data.ontem.casa)}</td>
       <td>${fmt(data.ontem.delivery)}</td>
       <td>${fmt(data.ontem.total)}</td>
+      <td style="color:#666">${fmt(data.ontem.casaAA)}</td>
+      <td style="color:#666">${fmt(data.ontem.deliveryAA)}</td>
       <td style="color:#666">${fmt(data.ontem.totalAA)}</td>
       <td class="${data.ontem.yoy>=0?'pos':'neg'}">${pct(data.ontem.yoy)}</td>
       <td>100%</td>
@@ -277,9 +294,12 @@ export default function PrintReport({ onClose }) {
   <thead>
     <tr>
       <th style="text-align:left"># Loja</th>
-      <th>Salão</th>
-      <th>Delivery</th>
-      <th>${data.ano-1} (dia ${data.lastDay})</th>
+      <th>Salão ${data.ano}</th>
+      <th>Delivery ${data.ano}</th>
+      <th>Total ${data.ano}</th>
+      <th>Salão ${data.ano-1}</th>
+      <th>Delivery ${data.ano-1}</th>
+      <th>Total ${data.ano-1}</th>
       <th>YoY (dia ${data.lastDay})</th>
       <th>Meta</th>
       <th>% Ating.</th>
@@ -291,8 +311,11 @@ export default function PrintReport({ onClose }) {
     ${data.porLoja.map((l,i) => `
     <tr>
       <td>#${i+1} ${l.loja}</td>
-      <td style="font-weight:700">${fmt(l.casa)}</td>
-      <td style="font-weight:700">${fmt(l.delivery)}</td>
+      <td>${fmt(l.casa)}</td>
+      <td>${fmt(l.delivery)}</td>
+      <td style="font-weight:700">${fmt(l.real)}</td>
+      <td style="color:#999">${l.casaAA>0?fmt(l.casaAA):'—'}</td>
+      <td style="color:#999">${l.deliveryAA>0?fmt(l.deliveryAA):'—'}</td>
       <td style="color:#999">${l.realAA>0?fmt(l.realAA):'—'}</td>
       <td class="${l.yoy>=0?'pos':'neg'}">${pct(l.yoy)}</td>
       <td>${l.meta > 0 ? fmt(l.meta) : '—'}</td>
@@ -308,6 +331,9 @@ export default function PrintReport({ onClose }) {
       <td>TOTAL</td>
       <td>${fmt(data.casa)}</td>
       <td>${fmt(data.delivery)}</td>
+      <td>${fmt(data.total)}</td>
+      <td style="color:#666">${fmt(data.casaAA)}</td>
+      <td style="color:#666">${fmt(data.deliveryAA)}</td>
       <td style="color:#666">${fmt(data.totalAA)}</td>
       <td class="${data.yoy>=0?'pos':'neg'}">${pct(data.yoy)}</td>
       <td>${totalMeta > 0 ? fmt(totalMeta) : '—'}</td>
