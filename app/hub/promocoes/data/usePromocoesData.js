@@ -116,7 +116,7 @@ function montarEstrutura(pacotes, promocoes, faturamentoPorMes) {
     if (!CATEGORIAS.includes(categoria)) continue
 
     const slot = getSlot(unitId, anoMes)
-    slot.faturamento[categoria] += parseFloat(r.faturamento_r) || 0
+    slot.faturamento[categoria] += (parseFloat(r.faturamento_r) || 0) + (parseFloat(r.emitido_nf_r) || 0)
     slot.pessoas[categoria] += parseFloat(r.confirmados) || 0
   }
 
