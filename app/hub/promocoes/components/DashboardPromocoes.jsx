@@ -3,34 +3,42 @@
 
 import { useMemo, useState } from 'react'
 import { usePromocoesData } from '../data/usePromocoesData'
-import { RefreshCw, AlertTriangle } from 'lucide-react'
 
-function formatR$(v) {
-  if (!isFinite(v)) return '—'
-  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 1, maximumFractionDigits: 1 })
-}
-function formatPct(v) {
-  if (!isFinite(v)) return '—'
-  return (v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%'
-}
-function formatNum(v) {
-  if (!isFinite(v)) return '—'
-  return Math.round(v).toLocaleString('pt-BR')
-}
+const brlK = (v) => { const n = v || 0; return Math.abs(n) >= 1000 ? `R$ ${(n / 1000).toFixed(1)}k` : `R$ ${n.toFixed(1)}` }
+const brl = (v) => (v ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 1, maximumFractionDigits: 1 })
+const pct = (v) => (isFinite(v) ? (v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%' : '—')
+const num = (v) => (isFinite(v) ? Math.round(v).toLocaleString('pt-BR') : '—')
 
 function corDelta(v, invertido) {
-  if (!isFinite(v) || v === 0) return '#71717a'
+  if (!isFinite(v) || v === 0) return 'text-zinc-400'
   const positivo = invertido ? v < 0 : v > 0
-  return positivo ? '#97A624' : '#8C1414'
+  return positivo ? 'text-brand-olive' : 'text-brand-crimson'
 }
 
-const CATEGORIAS_LINHA = ['All Inclusive', 'C&C', 'Clássicos', 'Pacotes dias Promo', 'Pacotes', 'Pacotes (total)', 'Sem Promos']
+export const CATEGORIAS_LINHA = ['All Inclusive', 'C&C', 'Clássicos', 'Pacotes dias Promo', 'Pacotes', 'Pacotes (total)', 'Sem Promos']
+export const CATEGORIAS_BASE = ['All Inclusive', 'C&C', 'Clássicos', 'Pacotes dias Promo', 'Pacotes']
 
-export default function DashboardPromocoes() {
+function KpiCard({ label, value, sub, ok, icon }) {
+  return (
+    <div className="bg-white border border-surface-border rounded-xl p-4">
+      <div className="flex items-start justify-between mb-2">
+        <p className="text-[10.5px] font-semibold text-zinc-400 uppercase tracking-wide">{label}</p>
+        {icon && <span className="text-base">{icon}</span>}
+      </div>
+      <p className="text-[26px] font-bold text-brand-black leading-none tracking-tight">{value}</p>
+      {sub && (
+        <p className={`text-[12px] mt-1.5 font-medium ${ok === true ? 'text-brand-olive' : ok === false ? 'text-brand-crimson' : 'text-zinc-400'}`}>
+          {sub}
+        </p>
+      )}
+    </div>
+  )
+}
+
+// Hook compartilhado (Dashboard + Resumo das Casas usam a mesma agregação)
+export function useResumoMensal() {
   const { dados, loading, erro, ALL_UNIT_IDS, labelForUnit } = usePromocoesData()
-  const [unidadeSelecionada, setUnidadeSelecionada] = useState('rede')
 
-  // Todos os meses disponíveis (união de todas as unidades), ordenados
   const meses = useMemo(() => {
     if (!dados) return []
     const set = new Set()
@@ -38,77 +46,103 @@ export default function DashboardPromocoes() {
     return Array.from(set).sort()
   }, [dados])
 
-  // Últimos 3 meses disponíveis (ou menos, se não tiver histórico suficiente)
-  const mesesExibidos = meses.slice(-3)
-
-  // Agrega tudo em "rede" (soma de todas as unidades) ou filtra pra 1 unidade
-  const dadosAgregados = useMemo(() => {
-    if (!dados) return {}
+  function agregarPorUnidades(unitIds, mesesAlvo) {
     const resultado = {}
-    for (const mes of mesesExibidos) {
+    for (const mes of mesesAlvo) {
       const acc = {
         faturamento: Object.fromEntries(CATEGORIAS_LINHA.map(c => [c, 0])),
         pessoas: Object.fromEntries(CATEGORIAS_LINHA.map(c => [c, 0])),
         custoTotal: Object.fromEntries(CATEGORIAS_LINHA.map(c => [c, 0])),
         faturamentoTotal: 0,
       }
-      const unidadesParaSomar = unidadeSelecionada === 'rede' ? ALL_UNIT_IDS : [unidadeSelecionada]
-
-      for (const unitId of unidadesParaSomar) {
-        const slot = dados[unitId]?.[mes]
+      for (const unitId of unitIds) {
+        const slot = dados?.[unitId]?.[mes]
         if (!slot) continue
         acc.faturamentoTotal += slot.faturamentoTotal || 0
-        for (const cat of ['All Inclusive', 'C&C', 'Clássicos', 'Pacotes dias Promo', 'Pacotes']) {
+        for (const cat of CATEGORIAS_BASE) {
           acc.faturamento[cat] += slot.faturamento[cat] || 0
           acc.pessoas[cat] += slot.pessoas[cat] || 0
           acc.custoTotal[cat] += slot.custoTotal[cat] || 0
         }
       }
-
-      const totalPacotes = ['All Inclusive', 'C&C', 'Clássicos', 'Pacotes dias Promo', 'Pacotes']
-        .reduce((s, c) => s + acc.faturamento[c], 0)
+      const totalPacotes = CATEGORIAS_BASE.reduce((s, c) => s + acc.faturamento[c], 0)
       acc.faturamento['Pacotes (total)'] = totalPacotes
       acc.faturamento['Sem Promos'] = Math.max(0, acc.faturamentoTotal - totalPacotes)
-
       resultado[mes] = acc
     }
     return resultado
-  }, [dados, mesesExibidos, unidadeSelecionada, ALL_UNIT_IDS])
+  }
+
+  return { dados, loading, erro, ALL_UNIT_IDS, labelForUnit, meses, agregarPorUnidades }
+}
+
+export default function DashboardPromocoes() {
+  const { loading, erro, ALL_UNIT_IDS, labelForUnit, meses, agregarPorUnidades } = useResumoMensal()
+  const [unidadeSelecionada, setUnidadeSelecionada] = useState('rede')
+
+  const mesesExibidos = meses.slice(-3)
+  const unidadesParaSomar = unidadeSelecionada === 'rede' ? ALL_UNIT_IDS : [unidadeSelecionada]
+  const dadosAgregados = useMemo(
+    () => agregarPorUnidades(unidadesParaSomar, mesesExibidos),
+    [unidadesParaSomar.join(','), mesesExibidos.join(',')]
+  )
 
   if (loading) {
     return (
-      <div style={{ padding: 40, textAlign: 'center', color: '#71717a', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-        <RefreshCw size={16} className="animate-spin" /> Carregando dados de promoções...
+      <div className="flex items-center justify-center h-full py-24">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-brand-olive border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-sm text-zinc-400">Carregando dados de promoções...</p>
+        </div>
       </div>
     )
   }
 
   if (erro) {
     return (
-      <div style={{ padding: 24, color: '#8C1414', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <AlertTriangle size={16} /> Erro ao carregar: {erro}
+      <div className="flex items-center justify-center h-full p-12 text-center">
+        <div>
+          <p className="text-4xl mb-4">⚠️</p>
+          <p className="font-semibold text-brand-black mb-2">Erro ao carregar dados</p>
+          <p className="text-sm text-zinc-400 max-w-md">{erro}</p>
+        </div>
       </div>
     )
   }
 
   if (!mesesExibidos.length) {
-    return <div style={{ padding: 24, color: '#71717a' }}>Nenhum dado disponível ainda.</div>
+    return <div className="p-6 text-sm text-zinc-400">Nenhum dado disponível ainda.</div>
   }
+
+  const mesAtual = mesesExibidos[mesesExibidos.length - 1]
+  const mesAnterior = mesesExibidos.length > 1 ? mesesExibidos[mesesExibidos.length - 2] : null
+  const dAtual = dadosAgregados[mesAtual]
+  const dAnterior = mesAnterior ? dadosAgregados[mesAnterior] : null
+
+  const totalPacotesAtual = dAtual.faturamento['Pacotes (total)']
+  const pesoAtual = dAtual.faturamentoTotal ? totalPacotesAtual / dAtual.faturamentoTotal : 0
+  const pesoAnterior = dAnterior?.faturamentoTotal ? dAnterior.faturamento['Pacotes (total)'] / dAnterior.faturamentoTotal : null
+  const deltaPeso = pesoAnterior != null ? pesoAtual - pesoAnterior : null
+
+  const custoTotalAtual = CATEGORIAS_BASE.reduce((s, c) => s + dAtual.custoTotal[c], 0)
+  const cmvMedioAtual = totalPacotesAtual ? custoTotalAtual / totalPacotesAtual : 0
+
+  const pessoasAtual = CATEGORIAS_BASE.reduce((s, c) => s + dAtual.pessoas[c], 0)
 
   function linhaMetrica(label, getValor, formatador, invertido) {
     return (
-      <tr style={{ borderTop: '1px solid #F0F0F0' }}>
-        <td style={{ padding: '7px 10px', fontWeight: 500 }}>{label}</td>
+      <tr key={label} className="border-t border-zinc-100">
+        <td className="py-1.5 px-3 font-medium text-brand-black">{label}</td>
         {mesesExibidos.map((mes, idx) => {
           const valor = getValor(dadosAgregados[mes])
           const anterior = idx > 0 ? getValor(dadosAgregados[mesesExibidos[idx - 1]]) : null
           const delta = anterior != null && anterior !== 0 ? (valor - anterior) / anterior : null
           return (
-            <td key={mes} className="font-mono" style={{ padding: '7px 10px', textAlign: 'right' }}>
+            <td key={mes} className="py-1.5 px-3 text-right font-mono tabular-nums">
               {formatador(valor)}
               {delta != null && (
-                <div style={{ fontSize: 10.5, color: corDelta(delta, invertido) }}>
-                  {delta > 0 ? '+' : ''}{formatPct(delta)}
+                <div className={`text-[10.5px] ${corDelta(delta, invertido)}`}>
+                  {delta > 0 ? '+' : ''}{pct(delta)}
                 </div>
               )}
             </td>
@@ -120,8 +154,8 @@ export default function DashboardPromocoes() {
 
   function secao(titulo) {
     return (
-      <tr>
-        <td colSpan={mesesExibidos.length + 1} style={{ padding: '12px 10px 4px', fontSize: 11, fontWeight: 700, letterSpacing: 0.4, color: '#9ca3af', textTransform: 'uppercase' }}>
+      <tr key={titulo}>
+        <td colSpan={mesesExibidos.length + 1} className="pt-4 pb-1 px-3 text-[11px] font-bold tracking-wide text-zinc-400 uppercase">
           {titulo}
         </td>
       </tr>
@@ -129,16 +163,16 @@ export default function DashboardPromocoes() {
   }
 
   return (
-    <div style={{ padding: 20 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+    <div className="p-4 lg:p-6 space-y-5">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <div style={{ fontSize: 18, fontWeight: 800 }}>Resumo Mensal — Promoções</div>
-          <div style={{ fontSize: 12.5, color: '#71717a' }}>Comparativo dos últimos {mesesExibidos.length} meses fechados</div>
+          <h1 className="text-lg font-bold text-brand-black">Resumo Mensal — Promoções</h1>
+          <p className="text-xs text-zinc-400">Comparativo dos últimos {mesesExibidos.length} meses fechados</p>
         </div>
         <select
           value={unidadeSelecionada}
           onChange={(e) => setUnidadeSelecionada(e.target.value)}
-          style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #E8E8E2', fontSize: 13 }}
+          className="px-3 py-2 rounded-lg border border-surface-border text-sm bg-white"
         >
           <option value="rede">Rede (todas as unidades)</option>
           {ALL_UNIT_IDS.map(id => (
@@ -147,46 +181,55 @@ export default function DashboardPromocoes() {
         </select>
       </div>
 
-      <div style={{ overflowX: 'auto', background: '#fff', border: '1px solid #E8E8E2', borderRadius: 14 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiCard label="Faturamento em Promoções" value={brlK(totalPacotesAtual)} icon="🎟️"
+          sub={deltaPeso != null ? `${deltaPeso > 0 ? '+' : ''}${pct(deltaPeso)} peso vs mês anterior` : null}
+          ok={deltaPeso != null ? deltaPeso <= 0 : null}
+        />
+        <KpiCard label="Peso sobre Faturamento Total" value={pct(pesoAtual)} icon="⚖️" />
+        <KpiCard label="CMV Médio das Promoções" value={pct(cmvMedioAtual)} icon="🥩"
+          sub={cmvMedioAtual >= 0.8 ? 'Crítico' : cmvMedioAtual >= 0.35 ? 'Atenção' : 'Dentro da meta'}
+          ok={cmvMedioAtual < 0.35 ? true : cmvMedioAtual >= 0.8 ? false : null}
+        />
+        <KpiCard label="Pessoas Atendidas" value={num(pessoasAtual)} icon="👥" />
+      </div>
+
+      <div className="overflow-x-auto bg-white border border-surface-border rounded-xl">
+        <table className="w-full text-[13px]">
           <thead>
-            <tr style={{ textAlign: 'right', color: '#9ca3af', fontSize: 11, textTransform: 'uppercase' }}>
-              <th style={{ padding: '10px', textAlign: 'left' }}>Categoria</th>
-              {mesesExibidos.map(mes => <th key={mes} style={{ padding: '10px' }}>{mes}</th>)}
+            <tr className="text-right text-[11px] text-zinc-400 uppercase">
+              <th className="py-2.5 px-3 text-left">Categoria</th>
+              {mesesExibidos.map(mes => <th key={mes} className="py-2.5 px-3">{mes}</th>)}
             </tr>
           </thead>
           <tbody>
             {secao('Faturamento')}
-            {CATEGORIAS_LINHA.map(cat =>
-              linhaMetrica(cat, (d) => d?.faturamento[cat] ?? 0, formatR$, false)
-            )}
+            {CATEGORIAS_LINHA.map(cat => linhaMetrica(cat, (d) => d?.faturamento[cat] ?? 0, brl, false))}
 
             {secao('CMV (estimado)')}
-            {['All Inclusive', 'C&C', 'Clássicos', 'Pacotes dias Promo', 'Pacotes'].map(cat =>
-              linhaMetrica(cat, (d) => (d?.faturamento[cat] ? (d.custoTotal[cat] || 0) / d.faturamento[cat] : 0), formatPct, true)
+            {CATEGORIAS_BASE.map(cat =>
+              linhaMetrica(cat, (d) => (d?.faturamento[cat] ? (d.custoTotal[cat] || 0) / d.faturamento[cat] : 0), pct, true)
             )}
 
             {secao('Peso das Promoções (% do faturamento total)')}
-            {['All Inclusive', 'C&C', 'Clássicos', 'Pacotes dias Promo', 'Pacotes', 'Pacotes (total)'].map(cat =>
-              linhaMetrica(cat, (d) => (d?.faturamentoTotal ? d.faturamento[cat] / d.faturamentoTotal : 0), formatPct, false)
+            {[...CATEGORIAS_BASE, 'Pacotes (total)'].map(cat =>
+              linhaMetrica(cat, (d) => (d?.faturamentoTotal ? d.faturamento[cat] / d.faturamentoTotal : 0), pct, false)
             )}
 
             {secao('Nº de Pessoas')}
-            {['All Inclusive', 'C&C', 'Clássicos', 'Pacotes dias Promo', 'Pacotes'].map(cat =>
-              linhaMetrica(cat, (d) => d?.pessoas[cat] ?? 0, formatNum, false)
-            )}
+            {CATEGORIAS_BASE.map(cat => linhaMetrica(cat, (d) => d?.pessoas[cat] ?? 0, num, false))}
 
             {secao('Ticket Médio')}
-            {['All Inclusive', 'C&C', 'Clássicos', 'Pacotes dias Promo', 'Pacotes'].map(cat =>
-              linhaMetrica(cat, (d) => (d?.pessoas[cat] ? d.faturamento[cat] / d.pessoas[cat] : 0), formatR$, false)
+            {CATEGORIAS_BASE.map(cat =>
+              linhaMetrica(cat, (d) => (d?.pessoas[cat] ? d.faturamento[cat] / d.pessoas[cat] : 0), brl, false)
             )}
           </tbody>
         </table>
       </div>
 
-      <div style={{ marginTop: 10, fontSize: 11.5, color: '#9ca3af' }}>
-        CMV estimado cruza o produto consumido (relatório de Promoções Utilizadas) com o custo unitário do catálogo de rede — pode variar um pouco do CMV real por loja.
-      </div>
+      <p className="text-[11px] text-zinc-400">
+        CMV estimado cruza o produto consumido (Promoções Utilizadas) com o custo unitário do catálogo de rede, e o faturamento soma vendas de caixa + notas emitidas — pode variar um pouco do CMV real por loja.
+      </p>
     </div>
   )
 }
