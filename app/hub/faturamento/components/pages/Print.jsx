@@ -131,7 +131,9 @@ export default function PrintReport({ onClose }) {
     padding:4px 12px; font-size:12px; color:#92400e; margin-bottom:9px; }
 
   .section-title { font-size:15px; font-weight:700; color:#1F3D2E;
-    border-left:4px solid #97A624; padding-left:8px; margin:11px 0 6px; }
+    border-left:4px solid #97A624; padding-left:8px; margin:11px 0 6px;
+    page-break-after: avoid; break-after: avoid-page;
+    page-break-inside: avoid; break-inside: avoid; }
 
   .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:7px; margin-bottom:9px; }
   .kpi { border:1px solid #e5e5e5; border-radius:7px; padding:7px 11px; }
@@ -142,6 +144,8 @@ export default function PrintReport({ onClose }) {
   .kpi-var { font-size:12px; font-weight:700; margin-top:2px; }
 
   table { width:100%; border-collapse:collapse; font-size:14px; margin-bottom:10px; }
+  thead { display: table-header-group; }
+  tr { page-break-inside: avoid; break-inside: avoid; }
   th { background:#1F3D2E; color:white; font-weight:700; padding:4px 8px;
     text-align:right; font-size:10px; text-transform:uppercase; }
   th:first-child { text-align:left; }
