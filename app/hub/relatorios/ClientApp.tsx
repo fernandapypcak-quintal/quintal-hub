@@ -11,6 +11,7 @@ import Desperdicio from './components/pages/Desperdicio'
 import ContasAberto from './components/pages/ContasAberto'
 import BonusConcedido from './components/pages/BonusConcedido'
 import BonusUtilizado from './components/pages/BonusUtilizado'
+import Impressao from './components/pages/Impressao'
 import Link from 'next/link'
 
 const PAGES: Record<string, React.ComponentType<any>> = {
@@ -21,6 +22,7 @@ const PAGES: Record<string, React.ComponentType<any>> = {
   contasAberto: ContasAberto,
   bonusConcedido: BonusConcedido,
   bonusUtilizado: BonusUtilizado,
+  impressao: Impressao,
 }
 
 function LoadingScreen() {
