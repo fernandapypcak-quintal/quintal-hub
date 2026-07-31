@@ -4,6 +4,10 @@ export function formatarReais(valor) {
   return (valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 1 })
 }
 
+export function formatarPercentual(valor) {
+  return (valor || 0).toLocaleString('pt-BR', { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 })
+}
+
 export function formatarData(iso) {
   if (!iso) return ''
   const [ano, mes, dia] = String(iso).split('-')
