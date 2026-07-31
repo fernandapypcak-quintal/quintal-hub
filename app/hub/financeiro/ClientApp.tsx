@@ -396,7 +396,6 @@ export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = fals
                 motivo={lojaFiltro !== 'Todas' ? 'Disponível só na visão "Todas as lojas"' : 'Aguardando 2 meses completos de histórico'}
               />
             )}
-            <CardIndisponivel label="vs Ano Anterior" motivo="Aguardando histórico de 2025" />
             <CardIndisponivel label="Caixa Projetado" motivo="Ainda não implementado" />
           </div>
 
