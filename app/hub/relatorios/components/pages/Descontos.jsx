@@ -4,7 +4,7 @@ import KpiCard from '../ui/KpiCard.jsx'
 import Tabela, { formatarReais, formatarData } from '../ui/Tabela.jsx'
 import TabelaExpansivel from '../ui/TabelaExpansivel.jsx'
 import GraficoBarraUnidade, { Card } from '../ui/GraficoBarraUnidade.jsx'
-import ParetoBloco from '../ui/ParetoBloco.jsx'
+import PainelPareto from '../ui/PainelPareto.jsx'
 import { useRelatorios, agruparPorChave, agruparPorUnidade, paretoPorChave, contarDistintos, somar } from '../../hooks/useRelatorios.jsx'
 import { Percent, Users, Receipt, TrendingDown } from 'lucide-react'
 
@@ -41,24 +41,21 @@ export default function Descontos() {
           <KpiCard label="Funcionários Envolvidos" valor={qtdFuncionarios} icon={Users} />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          <Card titulo="Descontos por Unidade">
-            <GraficoBarraUnidade dados={porUnidade} cor="#EA580C" />
-          </Card>
+        <PainelPareto
+          titulo="Onde Atuar"
+          subtitulo="Quem mais deu desconto e quais motivos concentram o valor — os destacados somam 80% do total"
+          paretoResponsavel={paretoFuncionarios}
+          labelResponsavel="Funcionário"
+          corResponsavel="#EA580C"
+          paretoMotivo={paretoMotivos}
+          labelMotivo="Motivo (Justificativa + Categoria)"
+          corMotivo="#B45309"
+          limite={10}
+        />
 
-          <Card titulo="Ranking de Funcionários">
-            <Tabela
-              colunas={[
-                { chave: 'chave', titulo: 'Funcionário' },
-                { chave: 'qtd', titulo: 'Qtd', alinhamento: 'right' },
-                { chave: 'valor', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valor) },
-              ]}
-              linhas={porFuncionario}
-              chaveLinha={l => l.chave}
-              limite={8}
-            />
-          </Card>
-        </div>
+        <Card titulo="Descontos por Unidade">
+          <GraficoBarraUnidade dados={porUnidade} cor="#EA580C" />
+        </Card>
 
         <Card titulo="Detalhe por Funcionário">
           <p style={{ fontSize: 12, color: '#999', margin: '0 0 12px' }}>Clica num funcionário pra ver os lançamentos individuais</p>
@@ -83,20 +80,6 @@ export default function Descontos() {
             ]}
           />
         </Card>
-
-        <ParetoBloco
-          titulo="Pareto de Funcionários (quem mais deu desconto)"
-          dados={paretoFuncionarios}
-          tituloItem="Funcionário"
-          cor="#EA580C"
-        />
-
-        <ParetoBloco
-          titulo="Pareto de Motivos (Justificativa + Categoria)"
-          dados={paretoMotivos}
-          tituloItem="Motivo"
-          cor="#B45309"
-        />
 
         <Card titulo="Últimos Descontos Lançados">
           <Tabela

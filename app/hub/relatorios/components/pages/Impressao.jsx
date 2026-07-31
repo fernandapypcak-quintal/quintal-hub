@@ -2,8 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { Printer } from 'lucide-react'
 import { useRelatorios, paretoPorChave, contarDistintos, somar } from '../../hooks/useRelatorios.jsx'
 import { formatarReais, formatarData } from '../ui/Tabela.jsx'
-import ParetoTabela from '../ui/ParetoTabela.jsx'
-import ParetoChart from '../ui/ParetoChart.jsx'
+import PainelPareto from '../ui/PainelPareto.jsx'
 
 // Configuração de cada tipo de relatório que pode ser impresso: de onde vem
 // o valor, quem é o "responsável" (funcionário) e qual o "motivo" (já
@@ -36,11 +35,6 @@ const CONFIG = {
     corResponsavel: '#B45309',
     corMotivo: '#8C1414',
   },
-}
-
-const sectionTitle = {
-  fontSize: 13, fontWeight: 700, color: '#1a1a1a', margin: '0 0 10px',
-  textTransform: 'uppercase', letterSpacing: '0.03em',
 }
 
 function KpiImpressao({ label, valor }) {
@@ -88,6 +82,61 @@ function FiltrosResumo() {
   )
 }
 
+// Agrupa as linhas cruas por unidade (sem calcular nada ainda) -- usado só
+// quando "Todas as unidades" está selecionado, pra montar um bloco por loja.
+function agruparPorUnidadeRaw(linhas) {
+  const mapa = {}
+  linhas.forEach(l => {
+    const u = l.unidade || '(sem unidade)'
+    if (!mapa[u]) mapa[u] = []
+    mapa[u].push(l)
+  })
+  return mapa
+}
+
+// Um bloco = cabeçalho da unidade (nome + total) + painel de Pareto
+// (funcionário/motivo lado a lado). É o mesmo formato usado tanto pro
+// resumo geral (Rede) quanto pra cada unidade quando "Todas" é selecionado
+// -- no espírito das antigas abas "RESUMO X" da planilha, uma por loja.
+function BlocoUnidade({ nome, linhas, cfg, limite, destaque, quebrarPagina }) {
+  const totalValor = useMemo(() => somar(linhas, cfg.campoValor), [linhas])
+  const totalQtd = linhas.length
+  const paretoResponsavel = useMemo(() => paretoPorChave(linhas, cfg.campoResponsavel, cfg.campoValor), [linhas])
+  const paretoMotivo = useMemo(() => paretoPorChave(linhas, cfg.campoMotivo, cfg.campoValor), [linhas])
+
+  return (
+    <div
+      className="bloco-impressao"
+      style={{
+        breakInside: 'avoid',
+        breakBefore: quebrarPagina ? 'page' : 'auto',
+        border: destaque ? '1px solid #1a1a1a' : '1px solid #EBEBEB',
+        borderRadius: 10,
+        padding: 16,
+        background: destaque ? '#FAFAFA' : '#fff',
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#1a1a1a', margin: 0 }}>{nome}</h3>
+        <div style={{ fontSize: 12, color: '#666' }}>
+          {totalQtd.toLocaleString('pt-BR')} lançamentos · <strong>{formatarReais(totalValor)}</strong>
+        </div>
+      </div>
+      <PainelPareto
+        titulo={null}
+        semCard
+        paretoResponsavel={paretoResponsavel}
+        labelResponsavel={cfg.labelResponsavel}
+        corResponsavel={cfg.corResponsavel}
+        paretoMotivo={paretoMotivo}
+        labelMotivo="Motivo / Categoria"
+        corMotivo={cfg.corMotivo}
+        limite={limite}
+      />
+    </div>
+  )
+}
+
 export default function Impressao() {
   const { descontos, estornos, desperdicio, unidadeFiltro, dataInicio, dataFim } = useRelatorios()
   const [tipo, setTipo] = useState('descontos')
@@ -101,14 +150,12 @@ export default function Impressao() {
   const qtdResponsaveis = useMemo(() => contarDistintos(linhas, cfg.campoResponsavel), [linhas, tipo])
   const ticketMedio = totalQtd > 0 ? totalValor / totalQtd : 0
 
-  const paretoResponsaveis = useMemo(
-    () => paretoPorChave(linhas, cfg.campoResponsavel, cfg.campoValor),
-    [linhas, tipo]
-  )
-  const paretoMotivos = useMemo(
-    () => paretoPorChave(linhas, cfg.campoMotivo, cfg.campoValor),
-    [linhas, tipo]
-  )
+  const todasAsUnidades = unidadeFiltro === 'Todas'
+  const blocosPorUnidade = useMemo(() => {
+    if (!todasAsUnidades) return []
+    const mapa = agruparPorUnidadeRaw(linhas)
+    return Object.keys(mapa).sort().map(u => ({ nome: u, linhas: mapa[u] }))
+  }, [linhas, todasAsUnidades])
 
   const periodoTexto = (dataInicio || dataFim)
     ? `${dataInicio ? formatarData(dataInicio) : '...'} até ${dataFim ? formatarData(dataFim) : '...'}`
@@ -153,10 +200,15 @@ export default function Impressao() {
       {/* Filtros de data/unidade -- some na impressão */}
       <div className="no-print" style={{ padding: '10px 28px', borderBottom: '1px solid #F7F7F7' }}>
         <FiltrosResumo />
+        {todasAsUnidades && (
+          <p style={{ fontSize: 11.5, color: '#B45309', margin: '8px 0 0' }}>
+            "Todas as unidades" selecionado: vai imprimir um resumo da rede + um bloco por loja (uma página por loja).
+          </p>
+        )}
       </div>
 
       {/* Área que efetivamente vai pra impressão */}
-      <div id="area-impressao" style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div id="area-impressao" style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '2px solid #1a1a1a', paddingBottom: 10 }}>
           <div>
             <div style={{ fontSize: 11, color: '#999', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Quintal do Espeto</div>
@@ -176,25 +228,27 @@ export default function Impressao() {
           <KpiImpressao label="Responsáveis Envolvidos" valor={qtdResponsaveis} />
         </div>
 
-        <section style={{ breakInside: 'avoid' }}>
-          <h3 style={sectionTitle}>{cfg.labelResponsavel}</h3>
-          <ParetoTabela dados={paretoResponsaveis} tituloItem="Funcionário" limite={30} />
-        </section>
+        {/* Bloco geral -- rede (se "Todas") ou a própria unidade selecionada */}
+        <BlocoUnidade
+          nome={todasAsUnidades ? 'Rede (todas as unidades)' : unidadeFiltro}
+          linhas={linhas}
+          cfg={cfg}
+          limite={15}
+          destaque
+        />
 
-        <section style={{ breakInside: 'avoid' }}>
-          <h3 style={sectionTitle}>Por Categoria / Justificativa</h3>
-          <ParetoTabela dados={paretoMotivos} tituloItem="Motivo" limite={30} />
-        </section>
-
-        <section style={{ breakInside: 'avoid' }}>
-          <h3 style={sectionTitle}>Gráfico de Pareto — Motivos</h3>
-          <ParetoChart dados={paretoMotivos} cor={cfg.corMotivo} altura={280} limite={10} />
-        </section>
-
-        <section style={{ breakInside: 'avoid' }}>
-          <h3 style={sectionTitle}>Gráfico de Pareto — {cfg.labelResponsavel}</h3>
-          <ParetoChart dados={paretoResponsaveis} cor={cfg.corResponsavel} altura={280} limite={10} />
-        </section>
+        {/* Um bloco por loja, só quando "Todas as unidades" está selecionado
+            -- pra bater o olho e ver onde atuar em cada loja */}
+        {todasAsUnidades && blocosPorUnidade.map((b, idx) => (
+          <BlocoUnidade
+            key={b.nome}
+            nome={b.nome}
+            linhas={b.linhas}
+            cfg={cfg}
+            limite={8}
+            quebrarPagina={idx === 0}
+          />
+        ))}
       </div>
 
       <style>{`
@@ -203,7 +257,7 @@ export default function Impressao() {
           #area-impressao, #area-impressao * { visibility: visible; }
           #area-impressao { position: absolute; left: 0; top: 0; width: 100%; padding: 0 !important; }
           .no-print { display: none !important; }
-          @page { size: A4 landscape; margin: 14mm; }
+          @page { size: A4 landscape; margin: 12mm; }
         }
       `}</style>
     </>

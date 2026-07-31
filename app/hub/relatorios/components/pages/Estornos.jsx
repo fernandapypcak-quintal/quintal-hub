@@ -4,7 +4,7 @@ import KpiCard from '../ui/KpiCard.jsx'
 import Tabela, { formatarReais, formatarData } from '../ui/Tabela.jsx'
 import TabelaExpansivel from '../ui/TabelaExpansivel.jsx'
 import GraficoBarraUnidade, { Card } from '../ui/GraficoBarraUnidade.jsx'
-import ParetoBloco from '../ui/ParetoBloco.jsx'
+import PainelPareto from '../ui/PainelPareto.jsx'
 import { useRelatorios, agruparPorChave, agruparPorUnidade, paretoPorChave, contarDistintos, somar } from '../../hooks/useRelatorios.jsx'
 import { RotateCcw, Users, XCircle, TrendingDown } from 'lucide-react'
 
@@ -51,6 +51,18 @@ export default function Estornos() {
           <KpiCard label="Funcionários Envolvidos" valor={qtdFuncionarios} icon={Users} />
         </div>
 
+        <PainelPareto
+          titulo="Onde Atuar"
+          subtitulo="Quem mais estornou e quais motivos concentram o valor — os destacados somam 80% do total"
+          paretoResponsavel={paretoFuncionarios}
+          labelResponsavel="Funcionário"
+          corResponsavel="#8C1414"
+          paretoMotivo={paretoMotivos}
+          labelMotivo="Motivo (Motivo + Categoria)"
+          corMotivo="#B45309"
+          limite={10}
+        />
+
         <Card titulo="Estornos por Unidade">
           <GraficoBarraUnidade dados={porUnidade} cor="#8C1414" />
         </Card>
@@ -77,20 +89,6 @@ export default function Estornos() {
             ]}
           />
         </Card>
-
-        <ParetoBloco
-          titulo="Pareto de Funcionários (quem mais estornou)"
-          dados={paretoFuncionarios}
-          tituloItem="Funcionário"
-          cor="#8C1414"
-        />
-
-        <ParetoBloco
-          titulo="Pareto de Motivos (Motivo + Categoria do Produto)"
-          dados={paretoMotivos}
-          tituloItem="Motivo"
-          cor="#B45309"
-        />
 
         <Card titulo="Últimos Estornos Lançados">
           <Tabela

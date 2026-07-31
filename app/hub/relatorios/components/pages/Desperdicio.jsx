@@ -4,7 +4,7 @@ import KpiCard from '../ui/KpiCard.jsx'
 import Tabela, { formatarReais, formatarData } from '../ui/Tabela.jsx'
 import TabelaExpansivel from '../ui/TabelaExpansivel.jsx'
 import GraficoBarraUnidade, { Card } from '../ui/GraficoBarraUnidade.jsx'
-import ParetoBloco from '../ui/ParetoBloco.jsx'
+import PainelPareto from '../ui/PainelPareto.jsx'
 import { useRelatorios, agruparPorChave, agruparPorUnidade, paretoPorChave, contarDistintos, somar } from '../../hooks/useRelatorios.jsx'
 import { Trash2, Users, Receipt, TrendingDown } from 'lucide-react'
 
@@ -50,6 +50,18 @@ export default function Desperdicio() {
           <KpiCard label="Funcionários Envolvidos" valor={qtdFuncionarios} icon={Users} />
         </div>
 
+        <PainelPareto
+          titulo="Onde Atuar"
+          subtitulo="Quem mais lançou desperdício e quais motivos concentram o valor — os destacados somam 80% do total"
+          paretoResponsavel={paretoFuncionarios}
+          labelResponsavel="Funcionário"
+          corResponsavel="#B45309"
+          paretoMotivo={paretoMotivos}
+          labelMotivo="Motivo (Motivo + Categoria)"
+          corMotivo="#8C1414"
+          limite={10}
+        />
+
         <Card titulo="Desperdício por Unidade">
           <GraficoBarraUnidade dados={porUnidade} cor="#B45309" />
         </Card>
@@ -77,20 +89,6 @@ export default function Desperdicio() {
             ]}
           />
         </Card>
-
-        <ParetoBloco
-          titulo="Pareto de Funcionários (quem mais lançou desperdício)"
-          dados={paretoFuncionarios}
-          tituloItem="Funcionário"
-          cor="#B45309"
-        />
-
-        <ParetoBloco
-          titulo="Pareto de Motivos (Motivo + Categoria)"
-          dados={paretoMotivos}
-          tituloItem="Motivo"
-          cor="#8C1414"
-        />
 
         <Card titulo="Últimos Lançamentos de Desperdício">
           <Tabela
