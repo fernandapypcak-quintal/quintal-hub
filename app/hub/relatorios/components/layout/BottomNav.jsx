@@ -1,4 +1,4 @@
-import { LayoutDashboard, Percent, RotateCcw, Wallet, Gift, Award, Trash2 } from 'lucide-react'
+import { LayoutDashboard, Percent, RotateCcw, Wallet, Gift, Award, Trash2, Printer } from 'lucide-react'
 
 const NAV = [
   { id: 'home',           label: 'Geral',     icon: LayoutDashboard },
@@ -8,6 +8,7 @@ const NAV = [
   { id: 'contasAberto',   label: 'Contas',    icon: Wallet },
   { id: 'bonusConcedido', label: 'B. Conc.',  icon: Gift },
   { id: 'bonusUtilizado', label: 'B. Util.',  icon: Award },
+  { id: 'impressao',      label: 'Imprimir',  icon: Printer },
 ]
 
 export default function BottomNav({ activePage, onPageChange }) {

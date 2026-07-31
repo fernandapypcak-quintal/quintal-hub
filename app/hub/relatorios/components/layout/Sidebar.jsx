@@ -1,5 +1,5 @@
 import React from 'react'
-import { LayoutDashboard, Percent, RotateCcw, Wallet, Gift, Award, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { LayoutDashboard, Percent, RotateCcw, Wallet, Gift, Award, Trash2, Printer, ChevronLeft, ChevronRight } from 'lucide-react'
 
 const NAV = [
   { id: 'home',           label: 'Visão Geral',      icon: LayoutDashboard },
@@ -9,6 +9,7 @@ const NAV = [
   { id: 'contasAberto',   label: 'Contas em Aberto', icon: Wallet },
   { id: 'bonusConcedido', label: 'Bônus Concedido',  icon: Gift },
   { id: 'bonusUtilizado', label: 'Bônus Utilizado',  icon: Award },
+  { id: 'impressao',      label: 'Imprimir Resumo',  icon: Printer },
 ]
 
 export default function Sidebar({ page, setPage, collapsed, setCollapsed }) {
