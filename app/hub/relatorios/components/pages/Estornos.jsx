@@ -5,6 +5,7 @@ import Tabela, { formatarReais, formatarData } from '../ui/Tabela.jsx'
 import TabelaExpansivel from '../ui/TabelaExpansivel.jsx'
 import GraficoBarraUnidade, { Card } from '../ui/GraficoBarraUnidade.jsx'
 import PainelPareto from '../ui/PainelPareto.jsx'
+import ParetoChart from '../ui/ParetoChart.jsx'
 import { useRelatorios, agruparPorChave, agruparPorUnidade, paretoPorChave, contarDistintos, somar } from '../../hooks/useRelatorios.jsx'
 import { RotateCcw, Users, XCircle, TrendingDown } from 'lucide-react'
 
@@ -62,6 +63,10 @@ export default function Estornos() {
           corMotivo="#B45309"
           limite={10}
         />
+
+        <Card titulo="Gráfico de Pareto — Motivos do Estorno">
+          <ParetoChart dados={paretoMotivos} cor="#4472C4" corLinha="#C00000" limite={10} />
+        </Card>
 
         <Card titulo="Estornos por Unidade">
           <GraficoBarraUnidade dados={porUnidade} cor="#8C1414" />

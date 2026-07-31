@@ -5,6 +5,7 @@ import Tabela, { formatarReais, formatarData } from '../ui/Tabela.jsx'
 import TabelaExpansivel from '../ui/TabelaExpansivel.jsx'
 import GraficoBarraUnidade, { Card } from '../ui/GraficoBarraUnidade.jsx'
 import PainelPareto from '../ui/PainelPareto.jsx'
+import ParetoChart from '../ui/ParetoChart.jsx'
 import { useRelatorios, agruparPorChave, agruparPorUnidade, paretoPorChave, contarDistintos, somar } from '../../hooks/useRelatorios.jsx'
 import { Trash2, Users, Receipt, TrendingDown } from 'lucide-react'
 
@@ -61,6 +62,10 @@ export default function Desperdicio() {
           corMotivo="#8C1414"
           limite={10}
         />
+
+        <Card titulo="Gráfico de Pareto — Motivos do Desperdício">
+          <ParetoChart dados={paretoMotivos} cor="#4472C4" corLinha="#C00000" limite={10} />
+        </Card>
 
         <Card titulo="Desperdício por Unidade">
           <GraficoBarraUnidade dados={porUnidade} cor="#B45309" />

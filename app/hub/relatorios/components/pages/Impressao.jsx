@@ -3,6 +3,7 @@ import { Printer } from 'lucide-react'
 import { useRelatorios, paretoPorChave, contarDistintos, somar } from '../../hooks/useRelatorios.jsx'
 import { formatarReais, formatarData } from '../ui/Tabela.jsx'
 import PainelPareto from '../ui/PainelPareto.jsx'
+import ParetoChart from '../ui/ParetoChart.jsx'
 
 // Configuração de cada tipo de relatório que pode ser impresso: de onde vem
 // o valor, quem é o "responsável" (funcionário) e qual o "motivo" (já
@@ -98,7 +99,7 @@ function agruparPorUnidadeRaw(linhas) {
 // (funcionário/motivo lado a lado). É o mesmo formato usado tanto pro
 // resumo geral (Rede) quanto pra cada unidade quando "Todas" é selecionado
 // -- no espírito das antigas abas "RESUMO X" da planilha, uma por loja.
-function BlocoUnidade({ nome, linhas, cfg, limite, destaque, quebrarPagina }) {
+function BlocoUnidade({ nome, linhas, cfg, limite, destaque, quebrarPagina, comGrafico }) {
   const totalValor = useMemo(() => somar(linhas, cfg.campoValor), [linhas])
   const totalQtd = linhas.length
   const paretoResponsavel = useMemo(() => paretoPorChave(linhas, cfg.campoResponsavel, cfg.campoValor), [linhas])
@@ -133,6 +134,11 @@ function BlocoUnidade({ nome, linhas, cfg, limite, destaque, quebrarPagina }) {
         corMotivo={cfg.corMotivo}
         limite={limite}
       />
+      {comGrafico && (
+        <div style={{ marginTop: 16 }}>
+          <ParetoChart dados={paretoMotivo} titulo="Gráfico de Pareto — Motivos" cor="#4472C4" corLinha="#C00000" limite={10} />
+        </div>
+      )}
     </div>
   )
 }
@@ -243,6 +249,7 @@ export default function Impressao() {
           cfg={cfg}
           limite={limiteGeral}
           destaque
+          comGrafico
         />
 
         {/* Um bloco por loja, só quando "Todas as unidades" está selecionado
