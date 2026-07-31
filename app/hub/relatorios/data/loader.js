@@ -84,7 +84,10 @@ const parseEstornos = rows => rows.map(r => ({
   estornadoPor: r.estornado_por || '',
   vendidoPor: r.vendido_por || '',
   motivo: r.motivo || '',
-  motivoCompleto: concatMotivo(r.motivo_completo, r.motivo, r.categoria),
+  // Estorno não tem "categoria do motivo" -- só o motivo (texto livre) e a
+  // categoria do PRODUTO estornado, que são coisas diferentes. Por isso
+  // aqui não concatena com categoria (diferente de Descontos).
+  motivoCompleto: r.motivo_completo || r.motivo || '(sem motivo)',
   clientes: r.clientes || '',
   operacao: r.operacao || '',
   quantidade: num(r.quantidade) || 1,
