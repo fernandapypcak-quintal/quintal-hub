@@ -4,7 +4,8 @@ import KpiCard from '../ui/KpiCard.jsx'
 import Tabela, { formatarReais, formatarData } from '../ui/Tabela.jsx'
 import TabelaExpansivel from '../ui/TabelaExpansivel.jsx'
 import GraficoBarraUnidade, { Card } from '../ui/GraficoBarraUnidade.jsx'
-import { useRelatorios, agruparPorChave, agruparPorUnidade, crossTab, contarDistintos, somar } from '../../hooks/useRelatorios.jsx'
+import ParetoBloco from '../ui/ParetoBloco.jsx'
+import { useRelatorios, agruparPorChave, agruparPorUnidade, paretoPorChave, contarDistintos, somar } from '../../hooks/useRelatorios.jsx'
 import { Percent, Users, Receipt, TrendingDown } from 'lucide-react'
 
 export default function Descontos() {
@@ -17,8 +18,9 @@ export default function Descontos() {
 
   const porUnidade = useMemo(() => agruparPorUnidade(descontos, d => d.valor), [descontos])
   const porFuncionario = useMemo(() => agruparPorChave(descontos, d => d.funcionario, d => d.valor), [descontos])
-  const motivoXCategoria = useMemo(
-    () => crossTab(descontos, d => d.justificativa || '(sem justificativa)', d => d.categoria || '(sem categoria)', d => d.valor),
+  const paretoFuncionarios = useMemo(() => paretoPorChave(descontos, d => d.funcionario, d => d.valor), [descontos])
+  const paretoMotivos = useMemo(
+    () => paretoPorChave(descontos, d => d.motivoCompleto || '(sem motivo)', d => d.valor),
     [descontos]
   )
 
@@ -75,27 +77,26 @@ export default function Descontos() {
               { chave: 'data', titulo: 'Data', render: l => formatarData(l.data) },
               { chave: 'unidade', titulo: 'Unidade' },
               { chave: 'cliente', titulo: 'Cliente' },
-              { chave: 'justificativa', titulo: 'Justificativa' },
-              { chave: 'categoria', titulo: 'Categoria' },
+              { chave: 'motivoCompleto', titulo: 'Motivo' },
               { chave: 'produtos', titulo: 'Produtos' },
               { chave: 'valor', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valor) },
             ]}
           />
         </Card>
 
-        <Card titulo="Motivo dos Descontos (Justificativa × Categoria)">
-          <Tabela
-            colunas={[
-              { chave: 'dimensao1', titulo: 'Justificativa' },
-              { chave: 'dimensao2', titulo: 'Categoria' },
-              { chave: 'qtd', titulo: 'Qtd', alinhamento: 'right' },
-              { chave: 'valor', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valor) },
-            ]}
-            linhas={motivoXCategoria}
-            chaveLinha={l => `${l.dimensao1}||${l.dimensao2}`}
-            limite={20}
-          />
-        </Card>
+        <ParetoBloco
+          titulo="Pareto de Funcionários (quem mais deu desconto)"
+          dados={paretoFuncionarios}
+          tituloItem="Funcionário"
+          cor="#EA580C"
+        />
+
+        <ParetoBloco
+          titulo="Pareto de Motivos (Justificativa + Categoria)"
+          dados={paretoMotivos}
+          tituloItem="Motivo"
+          cor="#B45309"
+        />
 
         <Card titulo="Últimos Descontos Lançados">
           <Tabela
@@ -104,8 +105,7 @@ export default function Descontos() {
               { chave: 'unidade', titulo: 'Unidade' },
               { chave: 'funcionario', titulo: 'Funcionário' },
               { chave: 'cliente', titulo: 'Cliente' },
-              { chave: 'justificativa', titulo: 'Justificativa' },
-              { chave: 'categoria', titulo: 'Categoria' },
+              { chave: 'motivoCompleto', titulo: 'Motivo' },
               { chave: 'produtos', titulo: 'Produtos' },
               { chave: 'valor', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valor) },
             ]}

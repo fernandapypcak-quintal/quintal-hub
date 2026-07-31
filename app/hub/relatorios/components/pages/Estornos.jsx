@@ -4,7 +4,8 @@ import KpiCard from '../ui/KpiCard.jsx'
 import Tabela, { formatarReais, formatarData } from '../ui/Tabela.jsx'
 import TabelaExpansivel from '../ui/TabelaExpansivel.jsx'
 import GraficoBarraUnidade, { Card } from '../ui/GraficoBarraUnidade.jsx'
-import { useRelatorios, agruparPorChave, agruparPorUnidade, crossTab, contarDistintos, somar } from '../../hooks/useRelatorios.jsx'
+import ParetoBloco from '../ui/ParetoBloco.jsx'
+import { useRelatorios, agruparPorChave, agruparPorUnidade, paretoPorChave, contarDistintos, somar } from '../../hooks/useRelatorios.jsx'
 import { RotateCcw, Users, XCircle, TrendingDown } from 'lucide-react'
 
 export default function Estornos() {
@@ -20,8 +21,9 @@ export default function Estornos() {
 
   const porUnidade = useMemo(() => agruparPorUnidade(estornos, valorLinha), [estornos])
   const porFuncionario = useMemo(() => agruparPorChave(estornos, e => e.estornadoPor, valorLinha), [estornos])
-  const motivoXCategoria = useMemo(
-    () => crossTab(estornos, e => e.motivo || '(sem motivo)', e => e.categoria || '(sem categoria)', valorLinha),
+  const paretoFuncionarios = useMemo(() => paretoPorChave(estornos, e => e.estornadoPor, valorLinha), [estornos])
+  const paretoMotivos = useMemo(
+    () => paretoPorChave(estornos, e => e.motivoCompleto || '(sem motivo)', valorLinha),
     [estornos]
   )
 
@@ -70,25 +72,25 @@ export default function Estornos() {
               { chave: 'unidade', titulo: 'Unidade' },
               { chave: 'produto', titulo: 'Produto' },
               { chave: 'tipo', titulo: 'Tipo' },
-              { chave: 'motivo', titulo: 'Motivo' },
+              { chave: 'motivoCompleto', titulo: 'Motivo' },
               { chave: 'valorTotal', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valorTotal) },
             ]}
           />
         </Card>
 
-        <Card titulo="Motivo dos Estornos (Motivo × Categoria do Produto)">
-          <Tabela
-            colunas={[
-              { chave: 'dimensao1', titulo: 'Motivo' },
-              { chave: 'dimensao2', titulo: 'Categoria do Produto' },
-              { chave: 'qtd', titulo: 'Qtd', alinhamento: 'right' },
-              { chave: 'valor', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valor) },
-            ]}
-            linhas={motivoXCategoria}
-            chaveLinha={l => `${l.dimensao1}||${l.dimensao2}`}
-            limite={20}
-          />
-        </Card>
+        <ParetoBloco
+          titulo="Pareto de Funcionários (quem mais estornou)"
+          dados={paretoFuncionarios}
+          tituloItem="Funcionário"
+          cor="#8C1414"
+        />
+
+        <ParetoBloco
+          titulo="Pareto de Motivos (Motivo + Categoria do Produto)"
+          dados={paretoMotivos}
+          tituloItem="Motivo"
+          cor="#B45309"
+        />
 
         <Card titulo="Últimos Estornos Lançados">
           <Tabela
@@ -98,7 +100,7 @@ export default function Estornos() {
               { chave: 'produto', titulo: 'Produto' },
               { chave: 'tipo', titulo: 'Tipo' },
               { chave: 'estornadoPor', titulo: 'Estornado Por' },
-              { chave: 'motivo', titulo: 'Motivo' },
+              { chave: 'motivoCompleto', titulo: 'Motivo' },
               { chave: 'valorTotal', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valorTotal) },
             ]}
             linhas={[...estornosComValor].sort((a, b) => b.data.localeCompare(a.data))}

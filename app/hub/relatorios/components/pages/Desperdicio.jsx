@@ -4,7 +4,8 @@ import KpiCard from '../ui/KpiCard.jsx'
 import Tabela, { formatarReais, formatarData } from '../ui/Tabela.jsx'
 import TabelaExpansivel from '../ui/TabelaExpansivel.jsx'
 import GraficoBarraUnidade, { Card } from '../ui/GraficoBarraUnidade.jsx'
-import { useRelatorios, agruparPorChave, agruparPorUnidade, crossTab, contarDistintos, somar } from '../../hooks/useRelatorios.jsx'
+import ParetoBloco from '../ui/ParetoBloco.jsx'
+import { useRelatorios, agruparPorChave, agruparPorUnidade, paretoPorChave, contarDistintos, somar } from '../../hooks/useRelatorios.jsx'
 import { Trash2, Users, Receipt, TrendingDown } from 'lucide-react'
 
 export default function Desperdicio() {
@@ -23,8 +24,12 @@ export default function Desperdicio() {
     () => agruparPorChave(desperdicio, d => d.responsavel, d => d.valor),
     [desperdicio]
   )
-  const motivoXCategoria = useMemo(
-    () => crossTab(desperdicio, d => d.motivo || '(sem motivo)', d => d.categoria || '(sem categoria)', d => d.valor),
+  const paretoFuncionarios = useMemo(
+    () => paretoPorChave(desperdicio, d => d.responsavel, d => d.valor),
+    [desperdicio]
+  )
+  const paretoMotivos = useMemo(
+    () => paretoPorChave(desperdicio, d => d.motivoCompleto || d.motivo || '(sem motivo)', d => d.valor),
     [desperdicio]
   )
 
@@ -67,26 +72,25 @@ export default function Desperdicio() {
               { chave: 'origem', titulo: 'Origem' },
               { chave: 'cliente', titulo: 'Comanda/Cliente' },
               { chave: 'produto', titulo: 'Produto' },
-              { chave: 'motivo', titulo: 'Motivo' },
-              { chave: 'categoria', titulo: 'Categoria' },
+              { chave: 'motivoCompleto', titulo: 'Motivo', render: l => l.motivoCompleto || l.motivo },
               { chave: 'valor', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valor) },
             ]}
           />
         </Card>
 
-        <Card titulo="Motivo do Desperdício (Motivo × Categoria)">
-          <Tabela
-            colunas={[
-              { chave: 'dimensao1', titulo: 'Motivo' },
-              { chave: 'dimensao2', titulo: 'Categoria' },
-              { chave: 'qtd', titulo: 'Qtd', alinhamento: 'right' },
-              { chave: 'valor', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valor) },
-            ]}
-            linhas={motivoXCategoria}
-            chaveLinha={l => `${l.dimensao1}||${l.dimensao2}`}
-            limite={20}
-          />
-        </Card>
+        <ParetoBloco
+          titulo="Pareto de Funcionários (quem mais lançou desperdício)"
+          dados={paretoFuncionarios}
+          tituloItem="Funcionário"
+          cor="#B45309"
+        />
+
+        <ParetoBloco
+          titulo="Pareto de Motivos (Motivo + Categoria)"
+          dados={paretoMotivos}
+          tituloItem="Motivo"
+          cor="#8C1414"
+        />
 
         <Card titulo="Últimos Lançamentos de Desperdício">
           <Tabela
@@ -97,7 +101,7 @@ export default function Desperdicio() {
               { chave: 'responsavel', titulo: 'Funcionário' },
               { chave: 'cliente', titulo: 'Comanda/Cliente' },
               { chave: 'produto', titulo: 'Produto' },
-              { chave: 'motivo', titulo: 'Motivo' },
+              { chave: 'motivoCompleto', titulo: 'Motivo', render: l => l.motivoCompleto || l.motivo },
               { chave: 'valor', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valor) },
             ]}
             linhas={[...desperdicio].sort((a, b) => b.data.localeCompare(a.data))}
