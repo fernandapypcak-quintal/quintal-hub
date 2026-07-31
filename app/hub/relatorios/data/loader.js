@@ -42,6 +42,19 @@ async function fetchObjeto(tipo) {
 
 const num = (v) => Number(v || 0)
 
+// Junta motivo/justificativa + categoria numa dimensão só, pra análises de
+// pareto e rankings de "motivo de desconto/estorno/desperdício". Usa o campo
+// "motivo_completo" já vindo pronto do Apps Script quando disponível
+// (versões novas do Code.gs); se não vier (planilha ainda não regenerada),
+// monta na hora a partir dos dois campos separados.
+const concatMotivo = (motivoCompletoApi, motivo, categoria) => {
+  if (motivoCompletoApi) return motivoCompletoApi
+  const m = String(motivo || '').trim()
+  const c = String(categoria || '').trim()
+  if (m && c) return `${m} - ${c}`
+  return m || c || '(sem motivo)'
+}
+
 // ── Parsers — convertem as chaves snake_case que vêm do Apps Script
 // pra camelCase, e garantem tipos numéricos ──────────────────────
 
@@ -54,6 +67,7 @@ const parseDescontos = rows => rows.map(r => ({
   cliente: r.cliente_s || '',
   justificativa: r.justificativa || '',
   categoria: r.categoria || '',
+  motivoCompleto: concatMotivo(r.motivo_completo, r.justificativa, r.categoria),
   produtos: r.produtos || '',
   percentual: num(r.percentual),
   valor: num(r.valor_r),
@@ -70,6 +84,7 @@ const parseEstornos = rows => rows.map(r => ({
   estornadoPor: r.estornado_por || '',
   vendidoPor: r.vendido_por || '',
   motivo: r.motivo || '',
+  motivoCompleto: concatMotivo(r.motivo_completo, r.motivo, r.categoria),
   clientes: r.clientes || '',
   operacao: r.operacao || '',
   quantidade: num(r.quantidade) || 1,
@@ -99,6 +114,7 @@ const parseBonusConcedido = rows => rows.map(r => ({
   concedidoPor: r.concedido_por || '',
   motivo: r.motivo || '',
   categoria: r.categoria || '',
+  motivoCompleto: concatMotivo(r.motivo_completo, r.motivo, r.categoria),
   valorRecebido: num(r.valor_recebido_r),
   valorGastoNoPeriodo: num(r.valor_gasto_no_periodo_r),
   valorGastoEmOutroPeriodo: num(r.valor_gasto_em_outro_periodo_r),
