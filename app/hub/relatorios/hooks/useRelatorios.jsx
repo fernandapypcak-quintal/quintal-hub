@@ -37,6 +37,23 @@ export function crossTab(linhas, extrairDim1, extrairDim2, extrairValor, extrair
   return Object.values(mapa).sort((a, b) => b.valor - a.valor)
 }
 
+// Agrupa por chave (igual agruparPorChave) e devolve já ordenado por valor
+// desc, com % do total e % acumulado — no mesmo formato da análise de
+// Pareto (tabela dinâmica "Rótulos de Linha / Soma / % Acumulado / %").
+export function paretoPorChave(linhas, extrairChave, extrairValor, extrairQtd) {
+  const base = agruparPorChave(linhas, extrairChave, extrairValor, extrairQtd)
+  const total = base.reduce((acc, l) => acc + l.valor, 0)
+  let acumulado = 0
+  return base.map(l => {
+    acumulado += l.valor
+    return {
+      ...l,
+      percentual: total > 0 ? l.valor / total : 0,
+      percentualAcumulado: total > 0 ? acumulado / total : 0,
+    }
+  })
+}
+
 export function contarDistintos(linhas, extrairChave) {
   return new Set(linhas.map(l => extrairChave(l) || '(não informado)')).size
 }
@@ -167,6 +184,7 @@ export function RelatoriosProvider({ children, allowedLojas = '*' }) {
           cliente: d.cliente,
           motivo: d.justificativa,
           categoria: d.categoria,
+          motivoCompleto: d.motivoCompleto,
           produto: d.produtos,
           valor: d.valor,
         })
@@ -192,6 +210,7 @@ export function RelatoriosProvider({ children, allowedLojas = '*' }) {
           cliente: e.clientes,
           motivo: e.motivo,
           categoria: e.categoria,
+          motivoCompleto: e.motivoCompleto,
           produto: e.produto,
           valor: valorTotal,
         })
