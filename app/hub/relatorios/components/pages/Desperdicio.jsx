@@ -57,7 +57,7 @@ export default function Desperdicio() {
           labelResponsavel="Funcionário"
           corResponsavel="#B45309"
           paretoMotivo={paretoMotivos}
-          labelMotivo="Motivo (Motivo + Categoria)"
+          labelMotivo="Motivo"
           corMotivo="#8C1414"
           limite={10}
         />

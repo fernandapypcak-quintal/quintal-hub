@@ -58,7 +58,7 @@ export default function Estornos() {
           labelResponsavel="Funcionário"
           corResponsavel="#8C1414"
           paretoMotivo={paretoMotivos}
-          labelMotivo="Motivo (Motivo + Categoria)"
+          labelMotivo="Motivo"
           corMotivo="#B45309"
           limite={10}
         />

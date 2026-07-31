@@ -129,7 +129,7 @@ function BlocoUnidade({ nome, linhas, cfg, limite, destaque, quebrarPagina }) {
         labelResponsavel={cfg.labelResponsavel}
         corResponsavel={cfg.corResponsavel}
         paretoMotivo={paretoMotivo}
-        labelMotivo="Motivo / Categoria"
+        labelMotivo="Motivo"
         corMotivo={cfg.corMotivo}
         limite={limite}
       />
@@ -140,6 +140,7 @@ function BlocoUnidade({ nome, linhas, cfg, limite, destaque, quebrarPagina }) {
 export default function Impressao() {
   const { descontos, estornos, desperdicio, unidadeFiltro, dataInicio, dataFim } = useRelatorios()
   const [tipo, setTipo] = useState('descontos')
+  const [mostrarTodos, setMostrarTodos] = useState(false)
 
   const dadosPorTipo = { descontos, estornos, desperdicio }
   const cfg = CONFIG[tipo]
@@ -156,6 +157,9 @@ export default function Impressao() {
     const mapa = agruparPorUnidadeRaw(linhas)
     return Object.keys(mapa).sort().map(u => ({ nome: u, linhas: mapa[u] }))
   }, [linhas, todasAsUnidades])
+
+  const limiteGeral = mostrarTodos ? null : 15
+  const limitePorUnidade = mostrarTodos ? null : 8
 
   const periodoTexto = (dataInicio || dataFim)
     ? `${dataInicio ? formatarData(dataInicio) : '...'} até ${dataFim ? formatarData(dataFim) : '...'}`
@@ -198,10 +202,14 @@ export default function Impressao() {
       </div>
 
       {/* Filtros de data/unidade -- some na impressão */}
-      <div className="no-print" style={{ padding: '10px 28px', borderBottom: '1px solid #F7F7F7' }}>
+      <div className="no-print" style={{ padding: '10px 28px', borderBottom: '1px solid #F7F7F7', display: 'flex', flexDirection: 'column', gap: 8 }}>
         <FiltrosResumo />
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#333', cursor: 'pointer' }}>
+          <input type="checkbox" checked={mostrarTodos} onChange={e => setMostrarTodos(e.target.checked)} />
+          Mostrar todos os itens (sem limite de top 8/15)
+        </label>
         {todasAsUnidades && (
-          <p style={{ fontSize: 11.5, color: '#B45309', margin: '8px 0 0' }}>
+          <p style={{ fontSize: 11.5, color: '#B45309', margin: 0 }}>
             "Todas as unidades" selecionado: vai imprimir um resumo da rede + um bloco por loja (uma página por loja).
           </p>
         )}
@@ -233,7 +241,7 @@ export default function Impressao() {
           nome={todasAsUnidades ? 'Rede (todas as unidades)' : unidadeFiltro}
           linhas={linhas}
           cfg={cfg}
-          limite={15}
+          limite={limiteGeral}
           destaque
         />
 
@@ -245,7 +253,7 @@ export default function Impressao() {
             nome={b.nome}
             linhas={b.linhas}
             cfg={cfg}
-            limite={8}
+            limite={limitePorUnidade}
             quebrarPagina={idx === 0}
           />
         ))}
