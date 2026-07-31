@@ -39,23 +39,22 @@ export default function ParetoTabelaCompacta({ dados, tituloItem = 'Item', limit
           const vital = l.percentualAcumulado <= 0.8
           return (
             <div key={l.chave + idx} style={{
-              display: 'flex', alignItems: 'center', padding: '7px 0',
+              display: 'flex', alignItems: 'flex-start', padding: '7px 0',
               borderBottom: '1px solid #F7F7F7',
               background: `linear-gradient(90deg, ${cor}26 ${larguraBarra}%, transparent ${larguraBarra}%)`,
             }}>
               <div style={{
-                flex: 1, fontSize: 12.5, color: '#1a1a1a', paddingLeft: 6,
-                fontWeight: vital ? 700 : 400, display: 'flex', alignItems: 'center', gap: 6,
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                flex: 1, minWidth: 0, fontSize: 12.5, color: '#1a1a1a', paddingLeft: 6,
+                fontWeight: vital ? 700 : 400, display: 'flex', alignItems: 'flex-start', gap: 6,
               }}>
-                {vital && <span style={{ flexShrink: 0, width: 6, height: 6, borderRadius: '50%', background: cor }} />}
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.chave}</span>
+                {vital && <span style={{ flexShrink: 0, width: 6, height: 6, borderRadius: '50%', background: cor, marginTop: 5 }} />}
+                <span style={{ overflowWrap: 'break-word', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.35 }}>{l.chave}</span>
               </div>
-              <div style={{ width: 88, textAlign: 'right', fontSize: 12.5, fontVariantNumeric: 'tabular-nums', color: '#333' }}>
+              <div style={{ flexShrink: 0, width: 88, textAlign: 'right', fontSize: 12.5, fontVariantNumeric: 'tabular-nums', color: '#333' }}>
                 {formatarReais(l.valor)}
               </div>
               <div style={{
-                width: 56, textAlign: 'right', fontSize: 11.5, fontVariantNumeric: 'tabular-nums',
+                flexShrink: 0, width: 56, textAlign: 'right', fontSize: 11.5, fontVariantNumeric: 'tabular-nums',
                 color: vital ? cor : '#999', fontWeight: vital ? 700 : 400,
               }}>
                 {formatarPercentual(l.percentualAcumulado)}
