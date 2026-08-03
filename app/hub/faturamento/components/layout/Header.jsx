@@ -36,6 +36,13 @@ export default function Header({ activePage }) {
     ? MESES.find(m => m.num === mesesAtivos[0])?.nome
     : mesesAtivos.length > 1 ? `${mesesAtivos.length} meses` : null;
 
+  // Mês/ano selecionado no filtro do topo (ex: "2026-07"). Se não houver
+  // um mês único + ano específico selecionados, fica undefined e o
+  // PrintReport cai no comportamento padrão (último mês com dados).
+  const mesAnoParaImpressao = (mesesAtivos.length === 1 && filters.ano !== 'Todos')
+    ? `${filters.ano}-${String(mesesAtivos[0]).padStart(2, '0')}`
+    : undefined;
+
   return (
     <>
       <header className="bg-surface-card border-b border-surface-border px-4 py-3 flex items-center justify-between gap-3 flex-shrink-0">
@@ -322,7 +329,7 @@ export default function Header({ activePage }) {
         </div>
       )}
       {/* Print trigger */}
-      {printing && <PrintReport onClose={() => setPrinting(false)} />}
+      {printing && <PrintReport onClose={() => setPrinting(false)} mesAno={mesAnoParaImpressao} />}
       {printingWeekend && <PrintWeekend onClose={() => setPrintingWeekend(false)} />}
       {typeof printingAnual === 'number' && <PrintAnual ano={printingAnual} onClose={() => setPrintingAnual(null)} />}
     </>
