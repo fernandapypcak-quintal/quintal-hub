@@ -62,6 +62,70 @@ export function somar(linhas, extrair) {
   return linhas.reduce((acc, l) => acc + (extrair(l) || 0), 0)
 }
 
+// ── Comparativo mês atual (até hoje) x mesmo intervalo de dias do mês
+// anterior, por unidade. Usa SEMPRE o dataset completo (não respeita o
+// filtro de data do cabeçalho, senão não teria como comparar dois meses
+// diferentes ao mesmo tempo) -- só respeita a permissão de lojas do usuário.
+function _pad2(n) { return String(n).padStart(2, '0') }
+
+export function compararMesAtualVsAnterior(linhas, campoData, extrairValor) {
+  const hoje = new Date()
+  const ano = hoje.getFullYear()
+  const mes = hoje.getMonth() // 0-indexed
+  const dia = hoje.getDate()
+
+  const anteriorRef = new Date(ano, mes - 1, 1)
+  const anoAnt = anteriorRef.getFullYear()
+  const mesAnt = anteriorRef.getMonth()
+  const diasNoMesAnt = new Date(anoAnt, mesAnt + 1, 0).getDate()
+  const diaFimAnt = Math.min(dia, diasNoMesAnt)
+
+  const inicioAtual = `${ano}-${_pad2(mes + 1)}-01`
+  const fimAtual = `${ano}-${_pad2(mes + 1)}-${_pad2(dia)}`
+  const inicioAnterior = `${anoAnt}-${_pad2(mesAnt + 1)}-01`
+  const fimAnterior = `${anoAnt}-${_pad2(mesAnt + 1)}-${_pad2(diaFimAnt)}`
+
+  const porUnidade = {}
+  linhas.forEach(l => {
+    const data = l[campoData]
+    if (!data) return
+    const unidade = l.unidade || '(sem unidade)'
+    if (!porUnidade[unidade]) {
+      porUnidade[unidade] = { unidade, atual: 0, qtdAtual: 0, anterior: 0, qtdAnterior: 0 }
+    }
+    const valor = extrairValor(l) || 0
+    if (data >= inicioAtual && data <= fimAtual) {
+      porUnidade[unidade].atual += valor
+      porUnidade[unidade].qtdAtual += 1
+    } else if (data >= inicioAnterior && data <= fimAnterior) {
+      porUnidade[unidade].anterior += valor
+      porUnidade[unidade].qtdAnterior += 1
+    }
+  })
+
+  const calcVariacao = (atual, anterior) => {
+    if (anterior > 0) return (atual - anterior) / anterior
+    if (atual > 0) return 1
+    return 0
+  }
+
+  const linhasResultado = Object.values(porUnidade)
+    .map(l => ({ ...l, variacao: calcVariacao(l.atual, l.anterior) }))
+    .sort((a, b) => b.atual - a.atual)
+
+  const totalAtual = linhasResultado.reduce((acc, l) => acc + l.atual, 0)
+  const totalAnterior = linhasResultado.reduce((acc, l) => acc + l.anterior, 0)
+
+  return {
+    linhas: linhasResultado,
+    totalAtual,
+    totalAnterior,
+    variacaoTotal: calcVariacao(totalAtual, totalAnterior),
+    periodoAtual: { inicio: inicioAtual, fim: fimAtual },
+    periodoAnterior: { inicio: inicioAnterior, fim: fimAnterior },
+  }
+}
+
 // ── Detecção de "Desperdício" ──────────────────────────────────────
 function _normalizarTexto(s) {
   return String(s || '')
@@ -226,6 +290,42 @@ export function RelatoriosProvider({ children, allowedLojas = '*' }) {
     [desperdicioDeDescontos, desperdicioDeEstornos]
   )
 
+  // ── Versões "brutas": mesmo split de desperdício, mas aplicado ao
+  // dataset completo (sem o filtro de data do cabeçalho) -- é o que
+  // alimenta o comparativo de mês atual x mês anterior em cada página,
+  // já que ele precisa enxergar os dois meses ao mesmo tempo.
+  const { descontosSemDesperdicioBruto, desperdicioDeDescontosBruto } = useMemo(() => {
+    const normal = []
+    const desperdicio = []
+    descontos.forEach(d => {
+      if (_ehDesperdicio([d.cliente, d.justificativa, d.categoria])) {
+        desperdicio.push({ ...d, origem: 'Desconto', responsavel: d.funcionario, valor: d.valor })
+      } else {
+        normal.push(d)
+      }
+    })
+    return { descontosSemDesperdicioBruto: normal, desperdicioDeDescontosBruto: desperdicio }
+  }, [descontos])
+
+  const { estornosSemDesperdicioBruto, desperdicioDeEstornosBruto } = useMemo(() => {
+    const normal = []
+    const desperdicio = []
+    estornos.forEach(e => {
+      const valorTotal = e.valorUnitario * (e.quantidade || 1)
+      if (_ehDesperdicio([e.clientes, e.motivo, e.categoria])) {
+        desperdicio.push({ ...e, origem: 'Estorno', responsavel: e.estornadoPor, valor: valorTotal })
+      } else {
+        normal.push({ ...e, valor: valorTotal })
+      }
+    })
+    return { estornosSemDesperdicioBruto: normal, desperdicioDeEstornosBruto: desperdicio }
+  }, [estornos])
+
+  const desperdicioBruto = useMemo(
+    () => [...desperdicioDeDescontosBruto, ...desperdicioDeEstornosBruto],
+    [desperdicioDeDescontosBruto, desperdicioDeEstornosBruto]
+  )
+
   return (
     <RelatoriosCtx.Provider value={{
       loading, error,
@@ -237,6 +337,13 @@ export function RelatoriosProvider({ children, allowedLojas = '*' }) {
       bonusConcedido: bonusConcedidoFiltrado,
       bonusUtilizado: bonusUtilizadoFiltrado,
       desperdicio,
+      // Datasets brutos (sem filtro de data do cabeçalho) -- só pro
+      // comparativo mensal, que precisa ver mês atual + mês anterior juntos.
+      descontosBruto: descontosSemDesperdicioBruto,
+      estornosBruto: estornosSemDesperdicioBruto,
+      desperdicioBruto,
+      bonusConcedidoBruto: bonusConcedido,
+      bonusUtilizadoBruto: bonusUtilizado,
     }}>
       {children}
     </RelatoriosCtx.Provider>
