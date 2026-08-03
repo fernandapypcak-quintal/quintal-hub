@@ -15,7 +15,7 @@ function pct(v) {
 }
 function clr(v) { return v >= 0 ? '#16a34a' : '#dc2626'; }
 
-export default function PrintReport({ onClose }) {
+export default function PrintReport({ onClose, mesAno }) {
   const { rawData } = useFilters();
   const { getMeta } = useMetas();
 
@@ -23,7 +23,7 @@ export default function PrintReport({ onClose }) {
     if (!rawData.length) return null;
 
     const keys = [...new Set(rawData.map(r => r.Ano_Mes))].sort();
-    const key  = keys[keys.length - 1];
+    const key  = (mesAno && keys.includes(mesAno)) ? mesAno : keys[keys.length - 1];
     const [anoS, mesS] = key.split('-');
     const ano = Number(anoS), mes = Number(mesS);
     const recs      = rawData.filter(r => r.Ano_Mes === key);
@@ -114,7 +114,7 @@ export default function PrintReport({ onClose }) {
                total:totalO, totalAA:totalOAA, yoy:yoyO,
                casa:casaO, delivery:delO, casaAA:casaOAA, deliveryAA:delOAA,
                yoyCasa:yoyCasaO, yoyDelivery:yoyDelO, porLoja:porLojaO } };
-  }, [rawData, getMeta]);
+  }, [rawData, getMeta, mesAno]);
 
   if (!data) return null;
 
