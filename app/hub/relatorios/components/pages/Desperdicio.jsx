@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import Header from '../layout/Header.jsx'
 import KpiCard from '../ui/KpiCard.jsx'
 import Tabela, { formatarReais, formatarData } from '../ui/Tabela.jsx'
@@ -6,11 +6,13 @@ import TabelaExpansivel from '../ui/TabelaExpansivel.jsx'
 import GraficoBarraUnidade, { Card } from '../ui/GraficoBarraUnidade.jsx'
 import PainelPareto from '../ui/PainelPareto.jsx'
 import ParetoChart from '../ui/ParetoChart.jsx'
+import ImpressaoDetalhe from '../ui/ImpressaoDetalhe.jsx'
 import { useRelatorios, agruparPorChave, agruparPorUnidade, paretoPorChave, contarDistintos, somar } from '../../hooks/useRelatorios.jsx'
-import { Trash2, Users, Receipt, TrendingDown } from 'lucide-react'
+import { Trash2, Users, Receipt, TrendingDown, Printer } from 'lucide-react'
 
 export default function Desperdicio() {
   const { desperdicio } = useRelatorios()
+  const [mostrarImpressao, setMostrarImpressao] = useState(false)
 
   const totalValor = useMemo(() => somar(desperdicio, d => d.valor), [desperdicio])
   const totalQtd = desperdicio.length
@@ -71,28 +73,65 @@ export default function Desperdicio() {
           <GraficoBarraUnidade dados={porUnidade} cor="#B45309" />
         </Card>
 
-        <Card titulo="Detalhe por Funcionário (quem lançou)">
-          <p style={{ fontSize: 12, color: '#999', margin: '0 0 12px' }}>Clica num funcionário pra ver os lançamentos individuais</p>
-          <TabelaExpansivel
-            linhasResumo={porFuncionario}
-            colunasResumo={[
-              { chave: 'chave', titulo: 'Funcionário' },
-              { chave: 'qtd', titulo: 'Qtd', alinhamento: 'right' },
-              { chave: 'valor', titulo: 'Valor Total', alinhamento: 'right', render: l => formatarReais(l.valor) },
-            ]}
-            dadosDetalhe={desperdicio}
-            campoAgrupador="responsavel"
-            ordenarDetalhePor="data"
-            colunasDetalhe={[
-              { chave: 'data', titulo: 'Data', render: l => formatarData(l.data) },
-              { chave: 'unidade', titulo: 'Unidade' },
-              { chave: 'origem', titulo: 'Origem' },
-              { chave: 'cliente', titulo: 'Comanda/Cliente' },
-              { chave: 'produto', titulo: 'Produto' },
-              { chave: 'motivoCompleto', titulo: 'Motivo', render: l => l.motivoCompleto || l.motivo },
-              { chave: 'valor', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valor) },
-            ]}
-          />
+        <Card titulo={null}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+            <h2 style={{ fontSize: 13, fontWeight: 600, color: '#333', margin: 0 }}>Detalhe por Funcionário (quem lançou)</h2>
+            <button
+              onClick={() => setMostrarImpressao(v => !v)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, height: 30, padding: '0 14px',
+                borderRadius: 99, border: mostrarImpressao ? '1px solid #1a1a1a' : '1px solid #E8E8E8',
+                background: mostrarImpressao ? '#1a1a1a' : '#fff', color: mostrarImpressao ? '#fff' : '#666',
+                fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              <Printer size={13} /> {mostrarImpressao ? 'Fechar impressão' : 'Imprimir Detalhe'}
+            </button>
+          </div>
+
+          {mostrarImpressao ? (
+            <div style={{ marginTop: 12 }}>
+              <ImpressaoDetalhe
+                titulo="Resumo de Desperdício — Detalhe por Funcionário"
+                dadosDetalhe={desperdicio}
+                campoAgrupador="responsavel"
+                campoValor={d => d.valor}
+                colunasDetalhe={[
+                  { chave: 'data', titulo: 'Data', render: l => formatarData(l.data) },
+                  { chave: 'unidade', titulo: 'Unidade' },
+                  { chave: 'origem', titulo: 'Origem' },
+                  { chave: 'cliente', titulo: 'Comanda/Cliente' },
+                  { chave: 'produto', titulo: 'Produto' },
+                  { chave: 'motivoCompleto', titulo: 'Motivo', render: l => l.motivoCompleto || l.motivo },
+                  { chave: 'valor', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valor) },
+                ]}
+              />
+            </div>
+          ) : (
+            <>
+              <p style={{ fontSize: 12, color: '#999', margin: '12px 0 12px' }}>Clica num funcionário pra ver os lançamentos individuais</p>
+              <TabelaExpansivel
+                linhasResumo={porFuncionario}
+                colunasResumo={[
+                  { chave: 'chave', titulo: 'Funcionário' },
+                  { chave: 'qtd', titulo: 'Qtd', alinhamento: 'right' },
+                  { chave: 'valor', titulo: 'Valor Total', alinhamento: 'right', render: l => formatarReais(l.valor) },
+                ]}
+                dadosDetalhe={desperdicio}
+                campoAgrupador="responsavel"
+                ordenarDetalhePor="data"
+                colunasDetalhe={[
+                  { chave: 'data', titulo: 'Data', render: l => formatarData(l.data) },
+                  { chave: 'unidade', titulo: 'Unidade' },
+                  { chave: 'origem', titulo: 'Origem' },
+                  { chave: 'cliente', titulo: 'Comanda/Cliente' },
+                  { chave: 'produto', titulo: 'Produto' },
+                  { chave: 'motivoCompleto', titulo: 'Motivo', render: l => l.motivoCompleto || l.motivo },
+                  { chave: 'valor', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valor) },
+                ]}
+              />
+            </>
+          )}
         </Card>
 
         <Card titulo="Últimos Lançamentos de Desperdício">

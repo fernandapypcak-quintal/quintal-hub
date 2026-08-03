@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import Header from '../layout/Header.jsx'
 import KpiCard from '../ui/KpiCard.jsx'
 import Tabela, { formatarReais, formatarData } from '../ui/Tabela.jsx'
@@ -6,11 +6,13 @@ import TabelaExpansivel from '../ui/TabelaExpansivel.jsx'
 import GraficoBarraUnidade, { Card } from '../ui/GraficoBarraUnidade.jsx'
 import PainelPareto from '../ui/PainelPareto.jsx'
 import ParetoChart from '../ui/ParetoChart.jsx'
+import ImpressaoDetalhe from '../ui/ImpressaoDetalhe.jsx'
 import { useRelatorios, agruparPorChave, agruparPorUnidade, paretoPorChave, contarDistintos, somar } from '../../hooks/useRelatorios.jsx'
-import { RotateCcw, Users, XCircle, TrendingDown } from 'lucide-react'
+import { RotateCcw, Users, XCircle, TrendingDown, Printer } from 'lucide-react'
 
 export default function Estornos() {
   const { estornos } = useRelatorios()
+  const [mostrarImpressao, setMostrarImpressao] = useState(false)
 
   const valorLinha = e => e.valorUnitario * (e.quantidade || 1)
 
@@ -72,27 +74,63 @@ export default function Estornos() {
           <GraficoBarraUnidade dados={porUnidade} cor="#8C1414" />
         </Card>
 
-        <Card titulo="Detalhe por Funcionário (quem estornou)">
-          <p style={{ fontSize: 12, color: '#999', margin: '0 0 12px' }}>Clica num funcionário pra ver os estornos individuais</p>
-          <TabelaExpansivel
-            linhasResumo={porFuncionario}
-            colunasResumo={[
-              { chave: 'chave', titulo: 'Funcionário' },
-              { chave: 'qtd', titulo: 'Qtd Estornos', alinhamento: 'right' },
-              { chave: 'valor', titulo: 'Valor Total', alinhamento: 'right', render: l => formatarReais(l.valor) },
-            ]}
-            dadosDetalhe={estornosComValor}
-            campoAgrupador="estornadoPor"
-            ordenarDetalhePor="data"
-            colunasDetalhe={[
-              { chave: 'data', titulo: 'Data', render: l => formatarData(l.data) },
-              { chave: 'unidade', titulo: 'Unidade' },
-              { chave: 'produto', titulo: 'Produto' },
-              { chave: 'tipo', titulo: 'Tipo' },
-              { chave: 'motivoCompleto', titulo: 'Motivo' },
-              { chave: 'valorTotal', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valorTotal) },
-            ]}
-          />
+        <Card titulo={null}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+            <h2 style={{ fontSize: 13, fontWeight: 600, color: '#333', margin: 0 }}>Detalhe por Funcionário (quem estornou)</h2>
+            <button
+              onClick={() => setMostrarImpressao(v => !v)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, height: 30, padding: '0 14px',
+                borderRadius: 99, border: mostrarImpressao ? '1px solid #1a1a1a' : '1px solid #E8E8E8',
+                background: mostrarImpressao ? '#1a1a1a' : '#fff', color: mostrarImpressao ? '#fff' : '#666',
+                fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              <Printer size={13} /> {mostrarImpressao ? 'Fechar impressão' : 'Imprimir Detalhe'}
+            </button>
+          </div>
+
+          {mostrarImpressao ? (
+            <div style={{ marginTop: 12 }}>
+              <ImpressaoDetalhe
+                titulo="Resumo de Estornos — Detalhe por Funcionário"
+                dadosDetalhe={estornosComValor}
+                campoAgrupador="estornadoPor"
+                campoValor={l => l.valorTotal}
+                colunasDetalhe={[
+                  { chave: 'data', titulo: 'Data', render: l => formatarData(l.data) },
+                  { chave: 'unidade', titulo: 'Unidade' },
+                  { chave: 'produto', titulo: 'Produto' },
+                  { chave: 'tipo', titulo: 'Tipo' },
+                  { chave: 'motivoCompleto', titulo: 'Motivo' },
+                  { chave: 'valorTotal', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valorTotal) },
+                ]}
+              />
+            </div>
+          ) : (
+            <>
+              <p style={{ fontSize: 12, color: '#999', margin: '12px 0 12px' }}>Clica num funcionário pra ver os estornos individuais</p>
+              <TabelaExpansivel
+                linhasResumo={porFuncionario}
+                colunasResumo={[
+                  { chave: 'chave', titulo: 'Funcionário' },
+                  { chave: 'qtd', titulo: 'Qtd Estornos', alinhamento: 'right' },
+                  { chave: 'valor', titulo: 'Valor Total', alinhamento: 'right', render: l => formatarReais(l.valor) },
+                ]}
+                dadosDetalhe={estornosComValor}
+                campoAgrupador="estornadoPor"
+                ordenarDetalhePor="data"
+                colunasDetalhe={[
+                  { chave: 'data', titulo: 'Data', render: l => formatarData(l.data) },
+                  { chave: 'unidade', titulo: 'Unidade' },
+                  { chave: 'produto', titulo: 'Produto' },
+                  { chave: 'tipo', titulo: 'Tipo' },
+                  { chave: 'motivoCompleto', titulo: 'Motivo' },
+                  { chave: 'valorTotal', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valorTotal) },
+                ]}
+              />
+            </>
+          )}
         </Card>
 
         <Card titulo="Últimos Estornos Lançados">
