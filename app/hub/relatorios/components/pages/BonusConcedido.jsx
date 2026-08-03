@@ -4,11 +4,17 @@ import KpiCard from '../ui/KpiCard.jsx'
 import Tabela, { formatarReais, formatarData } from '../ui/Tabela.jsx'
 import TabelaExpansivel from '../ui/TabelaExpansivel.jsx'
 import GraficoBarraUnidade, { Card } from '../ui/GraficoBarraUnidade.jsx'
-import { useRelatorios, agruparPorChave, agruparPorUnidade, crossTab, somar } from '../../hooks/useRelatorios.jsx'
+import ComparativoMensal from '../ui/ComparativoMensal.jsx'
+import { useRelatorios, agruparPorChave, agruparPorUnidade, crossTab, somar, compararMesAtualVsAnterior } from '../../hooks/useRelatorios.jsx'
 import { Gift, Receipt, Wallet2, PiggyBank } from 'lucide-react'
 
 export default function BonusConcedido() {
-  const { bonusConcedido } = useRelatorios()
+  const { bonusConcedido, bonusConcedidoBruto } = useRelatorios()
+
+  const comparativoMensal = useMemo(
+    () => compararMesAtualVsAnterior(bonusConcedidoBruto, 'dataConcessao', b => b.valorRecebido),
+    [bonusConcedidoBruto]
+  )
 
   const totalConcedido = useMemo(() => somar(bonusConcedido, b => b.valorRecebido), [bonusConcedido])
   const totalJaGasto = useMemo(
@@ -44,6 +50,8 @@ export default function BonusConcedido() {
           <KpiCard label="Já Utilizado (Total)" valor={formatarReais(totalJaGasto)} icon={Wallet2} />
           <KpiCard label="Saldo Ainda Não Usado" valor={formatarReais(saldoNaoUsado)} icon={PiggyBank} />
         </div>
+
+        <ComparativoMensal titulo="Bônus Concedido — Mês Atual x Mês Anterior" dadosComparativo={comparativoMensal} />
 
         <Card titulo="Bônus Concedido por Unidade">
           <GraficoBarraUnidade dados={porUnidade} cor="#97A624" />

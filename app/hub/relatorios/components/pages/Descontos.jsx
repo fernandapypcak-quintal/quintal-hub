@@ -7,12 +7,18 @@ import GraficoBarraUnidade, { Card } from '../ui/GraficoBarraUnidade.jsx'
 import PainelPareto from '../ui/PainelPareto.jsx'
 import ParetoChart from '../ui/ParetoChart.jsx'
 import ImpressaoDetalhe from '../ui/ImpressaoDetalhe.jsx'
-import { useRelatorios, agruparPorChave, agruparPorUnidade, paretoPorChave, contarDistintos, somar } from '../../hooks/useRelatorios.jsx'
+import ComparativoMensal from '../ui/ComparativoMensal.jsx'
+import { useRelatorios, agruparPorChave, agruparPorUnidade, paretoPorChave, contarDistintos, somar, compararMesAtualVsAnterior } from '../../hooks/useRelatorios.jsx'
 import { Percent, Users, Receipt, TrendingDown, Printer } from 'lucide-react'
 
 export default function Descontos() {
-  const { descontos } = useRelatorios()
+  const { descontos, descontosBruto } = useRelatorios()
   const [mostrarImpressao, setMostrarImpressao] = useState(false)
+
+  const comparativoMensal = useMemo(
+    () => compararMesAtualVsAnterior(descontosBruto, 'data', d => d.valor),
+    [descontosBruto]
+  )
 
   const totalValor = useMemo(() => somar(descontos, d => d.valor), [descontos])
   const totalQtd = descontos.length
@@ -43,6 +49,8 @@ export default function Descontos() {
           <KpiCard label="Ticket Médio" valor={formatarReais(ticketMedio)} icon={Percent} />
           <KpiCard label="Funcionários Envolvidos" valor={qtdFuncionarios} icon={Users} />
         </div>
+
+        <ComparativoMensal titulo="Descontos — Mês Atual x Mês Anterior" dadosComparativo={comparativoMensal} />
 
         <PainelPareto
           titulo="Onde Atuar"

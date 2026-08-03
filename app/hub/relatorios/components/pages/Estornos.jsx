@@ -7,12 +7,18 @@ import GraficoBarraUnidade, { Card } from '../ui/GraficoBarraUnidade.jsx'
 import PainelPareto from '../ui/PainelPareto.jsx'
 import ParetoChart from '../ui/ParetoChart.jsx'
 import ImpressaoDetalhe from '../ui/ImpressaoDetalhe.jsx'
-import { useRelatorios, agruparPorChave, agruparPorUnidade, paretoPorChave, contarDistintos, somar } from '../../hooks/useRelatorios.jsx'
+import ComparativoMensal from '../ui/ComparativoMensal.jsx'
+import { useRelatorios, agruparPorChave, agruparPorUnidade, paretoPorChave, contarDistintos, somar, compararMesAtualVsAnterior } from '../../hooks/useRelatorios.jsx'
 import { RotateCcw, Users, XCircle, TrendingDown, Printer } from 'lucide-react'
 
 export default function Estornos() {
-  const { estornos } = useRelatorios()
+  const { estornos, estornosBruto } = useRelatorios()
   const [mostrarImpressao, setMostrarImpressao] = useState(false)
+
+  const comparativoMensal = useMemo(
+    () => compararMesAtualVsAnterior(estornosBruto, 'data', e => e.valor),
+    [estornosBruto]
+  )
 
   const valorLinha = e => e.valorUnitario * (e.quantidade || 1)
 
@@ -53,6 +59,8 @@ export default function Estornos() {
           <KpiCard label="Cancelados × Estornados" valor={`${qtdCancelados} / ${qtdEstornados}`} icon={XCircle} />
           <KpiCard label="Funcionários Envolvidos" valor={qtdFuncionarios} icon={Users} />
         </div>
+
+        <ComparativoMensal titulo="Estornos — Mês Atual x Mês Anterior" dadosComparativo={comparativoMensal} />
 
         <PainelPareto
           titulo="Onde Atuar"

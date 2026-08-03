@@ -4,7 +4,8 @@ import KpiCard from '../ui/KpiCard.jsx'
 import Tabela, { formatarReais, formatarData } from '../ui/Tabela.jsx'
 import TabelaExpansivel from '../ui/TabelaExpansivel.jsx'
 import GraficoBarraUnidade, { Card } from '../ui/GraficoBarraUnidade.jsx'
-import { useRelatorios, agruparPorChave, agruparPorUnidade, somar } from '../../hooks/useRelatorios.jsx'
+import ComparativoMensal from '../ui/ComparativoMensal.jsx'
+import { useRelatorios, agruparPorChave, agruparPorUnidade, somar, compararMesAtualVsAnterior } from '../../hooks/useRelatorios.jsx'
 import { Award, Receipt, Clock, Ticket } from 'lucide-react'
 
 function diasEntre(dataIni, dataFim) {
@@ -15,7 +16,12 @@ function diasEntre(dataIni, dataFim) {
 }
 
 export default function BonusUtilizado() {
-  const { bonusUtilizado } = useRelatorios()
+  const { bonusUtilizado, bonusUtilizadoBruto } = useRelatorios()
+
+  const comparativoMensal = useMemo(
+    () => compararMesAtualVsAnterior(bonusUtilizadoBruto, 'utilizadoEm', b => b.valorUtilizado),
+    [bonusUtilizadoBruto]
+  )
 
   const totalUtilizado = useMemo(() => somar(bonusUtilizado, b => b.valorUtilizado), [bonusUtilizado])
   const totalQtd = bonusUtilizado.length
@@ -54,6 +60,8 @@ export default function BonusUtilizado() {
           />
           <KpiCard label="Ticket Médio por Uso" valor={formatarReais(totalQtd > 0 ? totalUtilizado / totalQtd : 0)} icon={Ticket} />
         </div>
+
+        <ComparativoMensal titulo="Bônus Utilizado — Mês Atual x Mês Anterior" dadosComparativo={comparativoMensal} />
 
         <Card titulo="Bônus Utilizado por Unidade">
           <GraficoBarraUnidade dados={porUnidade} cor="#6366f1" />
