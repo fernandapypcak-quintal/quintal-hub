@@ -110,6 +110,8 @@ export default function Estornos() {
                   { chave: 'unidade', titulo: 'Unidade' },
                   { chave: 'produto', titulo: 'Produto' },
                   { chave: 'tipo', titulo: 'Tipo' },
+                  { chave: 'vendidoPor', titulo: 'Vendido Por' },
+                  { chave: 'clientes', titulo: 'Cliente' },
                   { chave: 'motivoCompleto', titulo: 'Motivo' },
                   { chave: 'valorTotal', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valorTotal) },
                 ]}
@@ -133,6 +135,8 @@ export default function Estornos() {
                   { chave: 'unidade', titulo: 'Unidade' },
                   { chave: 'produto', titulo: 'Produto' },
                   { chave: 'tipo', titulo: 'Tipo' },
+                  { chave: 'vendidoPor', titulo: 'Vendido Por' },
+                  { chave: 'clientes', titulo: 'Cliente' },
                   { chave: 'motivoCompleto', titulo: 'Motivo' },
                   { chave: 'valorTotal', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valorTotal) },
                 ]}
@@ -149,6 +153,8 @@ export default function Estornos() {
               { chave: 'produto', titulo: 'Produto' },
               { chave: 'tipo', titulo: 'Tipo' },
               { chave: 'estornadoPor', titulo: 'Estornado Por' },
+              { chave: 'vendidoPor', titulo: 'Vendido Por' },
+              { chave: 'clientes', titulo: 'Cliente' },
               { chave: 'motivoCompleto', titulo: 'Motivo' },
               { chave: 'valorTotal', titulo: 'Valor', alinhamento: 'right', render: l => formatarReais(l.valorTotal) },
             ]}
