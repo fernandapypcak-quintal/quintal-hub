@@ -58,6 +58,14 @@ export function KidsProvider({ children, allowedLojas = '*' }) {
         if (allowedLojas !== '*' && unicas.size === 1) {
           setUnidadeFiltro([...unicas][0])
         }
+
+        console.log('[Kids] OK —', {
+          shows: showsF.length,
+          criancas: criancasF.length,
+          inflaveis: inflaveisF.length,
+          combo: comboF.length,
+          faturamentoDomShow: faturamentoF.length,
+        })
       })
       .catch(e => { console.error('[Kids] Erro:', e); setError(e.message) })
       .finally(() => setLoading(false))
@@ -78,7 +86,11 @@ export function KidsProvider({ children, allowedLojas = '*' }) {
     if (campoData && (dataInicio || dataFim)) {
       r = r.filter(l => {
         const d = l[campoData]
-        if (!d) return true
+        // Antes, um registro sem data preenchida "passava direto" pelo
+        // filtro (ficava sempre incluído) -- isso inflava os totais quando
+        // algum dado vinha sem "data" válida. Agora, com o filtro ativo,
+        // um registro sem data é excluído em vez de incluído por padrão.
+        if (!d) return false
         if (dataInicio && d < dataInicio) return false
         if (dataFim && d > dataFim) return false
         return true
