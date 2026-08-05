@@ -17,6 +17,7 @@ export const DASHBOARDS: Dashboard[] = [
   { id: 'relatorios', name: 'Relatório de Descontos', description: 'Descontos, estornos, contas em aberto e bônus', url: '', internalPath: '/hub/relatorios', color: '#EA580C', icon: '🧾' },
   { id: 'financeiro', name: 'Financeiro — Fluxo de Caixa', description: 'Saldo bancário, aplicações e recebíveis por unidade', url: '', internalPath: '/hub/financeiro', color: '#0369A1', icon: '🏦' },
   { id: 'promocoes', name: 'Promoções', description: 'Dashboard mensal de promoções/pacotes + simulador de CMV', url: '', internalPath: '/hub/promocoes', color: '#9A3412', icon: '🔥' },
+  { id: 'kids', name: 'Kids', description: 'Crianças, Combo Quintal Feliz, shows e infláveis', url: '', internalPath: '/hub/kids', color: '#DB2777', icon: '🎈' },
 ]
 
 export const USER_PERMISSIONS: Record<string, string[] | '*'> = {
@@ -31,7 +32,7 @@ export const USER_PERMISSIONS: Record<string, string[] | '*'> = {
   'rayara.mundario@quintaldoespeto.com.br':    ['faturamento', 'custos', 'cmv'],
   'rogerio.palermo@quintaldoespeto.com.br':    '*',
   'isabella.coury@quintaldoespeto.com.br':     '*',
-  'raiani.kids@quintaldoespeto.com.br':        ['faturamento', 'custos'],
+  'raiani.kids@quintaldoespeto.com.br':        ['faturamento', 'custos', 'kids'],
   'carlos.chinen@quintaldoespeto.com.br':      ['faturamento', 'custos'],
   'leandro.melo@quintaldoespeto.com.br':       ['faturamento', 'custos'],
 }
