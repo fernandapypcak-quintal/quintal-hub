@@ -1,0 +1,116 @@
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { loadTudo } from '../data/loader.js'
+import { filterRowsByUnit } from '@/lib/units'
+
+const KidsCtx = createContext(null)
+
+// ── Helpers de agregação ──────────────────────────────────────────
+export function agruparPorUnidade(linhas, extrairValor) {
+  const mapa = {}
+  linhas.forEach(l => {
+    const chave = l.unidade || '(não informado)'
+    const valor = extrairValor(l) || 0
+    if (!mapa[chave]) mapa[chave] = { chave, valor: 0 }
+    mapa[chave].valor += valor
+  })
+  return Object.values(mapa).sort((a, b) => b.valor - a.valor)
+}
+
+export function somar(linhas, extrair) {
+  return linhas.reduce((acc, l) => acc + (extrair(l) || 0), 0)
+}
+
+// ── Provider ──────────────────────────────────────────────────────
+export function KidsProvider({ children, allowedLojas = '*' }) {
+  const [shows, setShows] = useState([])
+  const [criancas, setCriancas] = useState([])
+  const [inflaveis, setInflaveis] = useState([])
+  const [combo, setCombo] = useState([])
+  const [faturamentoDomShow, setFaturamentoDomShow] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  const [unidadeFiltro, setUnidadeFiltro] = useState('Todas')
+  const [dataInicio, setDataInicio] = useState('')
+  const [dataFim, setDataFim] = useState('')
+
+  useEffect(() => {
+    loadTudo()
+      .then(d => {
+        const porUnidade = arr => filterRowsByUnit(arr || [], 'unidade', allowedLojas)
+
+        const showsF = porUnidade(d.shows)
+        const criancasF = porUnidade(d.criancas)
+        const inflaveisF = porUnidade(d.inflaveis)
+        const comboF = porUnidade(d.combo)
+        const faturamentoF = porUnidade(d.faturamentoDomShow)
+
+        setShows(showsF)
+        setCriancas(criancasF)
+        setInflaveis(inflaveisF)
+        setCombo(comboF)
+        setFaturamentoDomShow(faturamentoF)
+
+        const unicas = new Set(
+          [...showsF, ...criancasF, ...inflaveisF, ...comboF, ...faturamentoF]
+            .map(l => l.unidade).filter(Boolean)
+        )
+        if (allowedLojas !== '*' && unicas.size === 1) {
+          setUnidadeFiltro([...unicas][0])
+        }
+      })
+      .catch(e => { console.error('[Kids] Erro:', e); setError(e.message) })
+      .finally(() => setLoading(false))
+  }, [])
+
+  const unidadesDisponiveis = useMemo(() => {
+    const set = new Set(
+      [...shows, ...criancas, ...inflaveis, ...combo, ...faturamentoDomShow]
+        .map(l => l.unidade)
+        .filter(Boolean)
+    )
+    return ['Todas', ...Array.from(set).sort()]
+  }, [shows, criancas, inflaveis, combo, faturamentoDomShow])
+
+  const filtra = (arr, campoData) => {
+    let r = arr
+    if (unidadeFiltro !== 'Todas') r = r.filter(l => l.unidade === unidadeFiltro)
+    if (campoData && (dataInicio || dataFim)) {
+      r = r.filter(l => {
+        const d = l[campoData]
+        if (!d) return true
+        if (dataInicio && d < dataInicio) return false
+        if (dataFim && d > dataFim) return false
+        return true
+      })
+    }
+    return r
+  }
+
+  const showsFiltrados = useMemo(() => filtra(shows, 'data'), [shows, unidadeFiltro, dataInicio, dataFim])
+  const criancasFiltradas = useMemo(() => filtra(criancas, 'data'), [criancas, unidadeFiltro, dataInicio, dataFim])
+  const inflaveisFiltrados = useMemo(() => filtra(inflaveis, 'data'), [inflaveis, unidadeFiltro, dataInicio, dataFim])
+  const comboFiltrado = useMemo(() => filtra(combo, 'data'), [combo, unidadeFiltro, dataInicio, dataFim])
+  const faturamentoFiltrado = useMemo(() => filtra(faturamentoDomShow, 'data'), [faturamentoDomShow, unidadeFiltro, dataInicio, dataFim])
+
+  return (
+    <KidsCtx.Provider value={{
+      loading, error,
+      unidadeFiltro, setUnidadeFiltro, unidadesDisponiveis,
+      dataInicio, setDataInicio, dataFim, setDataFim,
+      shows: showsFiltrados,
+      criancas: criancasFiltradas,
+      inflaveis: inflaveisFiltrados,
+      combo: comboFiltrado,
+      faturamentoDomShow: faturamentoFiltrado,
+    }}>
+      {children}
+    </KidsCtx.Provider>
+  )
+}
+
+export function useKids() {
+  const ctx = useContext(KidsCtx)
+  if (!ctx) throw new Error('useKids fora do KidsProvider')
+  return ctx
+}
