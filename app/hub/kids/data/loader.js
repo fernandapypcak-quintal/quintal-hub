@@ -1,4 +1,5 @@
 import { APPS_SCRIPT_URL } from './config.js'
+import { unitIdFromString, labelForUnit } from '@/lib/units'
 
 async function fetchObjeto(tipo) {
   const url = `${APPS_SCRIPT_URL}?tipo=${tipo}`
@@ -20,6 +21,16 @@ async function fetchObjeto(tipo) {
 
 const num = (v) => Number(v || 0)
 
+// Cada fonte de dados grava a unidade de um jeito diferente ("CARINAS" sem
+// acento vindo do ZIG, "Carinás" vindo da planilha de Shows/Infláveis,
+// "santo_andre" com underscore vindo do cadastro de crianças...). Aqui a
+// gente normaliza tudo pro label oficial de lib/units.ts, senão o filtro
+// de unidade do dashboard mostra a mesma casa duplicada várias vezes.
+function canonicalizarUnidade(raw) {
+  const id = unitIdFromString(raw)
+  return id ? labelForUnit(id) : (raw || '')
+}
+
 // A planilha de crianças usa a chave da unidade (ex: "santo_andre"), sem
 // espaço/acento — precisa virar o label "de verdade" (ex: "Santo André")
 // pra bater com os aliases de lib/units.ts na hora de filtrar por unidade.
@@ -37,7 +48,7 @@ const CRIANCAS_KEY_TO_LABEL = {
 }
 
 const parseShows = rows => rows.map(r => ({
-  unidade: r.unidade || '',
+  unidade: canonicalizarUnidade(r.unidade),
   data: r.data || '',
   diaSemana: r.dia_semana || '',
   empresa: r.empresa || '',
@@ -50,7 +61,7 @@ const parseShows = rows => rows.map(r => ({
 }))
 
 const parseCriancas = rows => rows.map(r => ({
-  unidade: CRIANCAS_KEY_TO_LABEL[r.unidade] || r.unidade || '',
+  unidade: canonicalizarUnidade(CRIANCAS_KEY_TO_LABEL[r.unidade] || r.unidade),
   data: r.data || '',
   hora: r.hora || '',
   qtdCriancas: num(r.qtd_criancas_na_submissao),
@@ -58,7 +69,7 @@ const parseCriancas = rows => rows.map(r => ({
 }))
 
 const parseInflaveis = rows => rows.map(r => ({
-  unidade: r.unidade || '',
+  unidade: canonicalizarUnidade(r.unidade),
   data: r.data || '',
   diaSemana: r.dia_semana || '',
   tamanho: r.tamanho || '',
@@ -73,7 +84,7 @@ const parseInflaveis = rows => rows.map(r => ({
 
 const parseCombo = rows => rows.map(r => ({
   data: r.data || '',
-  unidade: r.unidade || '',
+  unidade: canonicalizarUnidade(r.unidade),
   canal: r.canal || '',
   qtdVendida: num(r.qtd_vendida),
   valor: num(r.valor_total),
@@ -81,7 +92,7 @@ const parseCombo = rows => rows.map(r => ({
 
 const parseFaturamentoDomShow = rows => rows.map(r => ({
   data: r.data || '',
-  unidade: r.unidade || '',
+  unidade: canonicalizarUnidade(r.unidade),
   canal: r.canal || '',
   valor: num(r.valor_faturamento_12h_14h),
 }))
