@@ -3,20 +3,23 @@ import Header from '../layout/Header.jsx'
 import KpiCard from '../ui/KpiCard.jsx'
 import GraficoBarraUnidade, { Card } from '../ui/GraficoBarraUnidade.jsx'
 import { formatarReais, formatarData } from '../ui/formatar.js'
-import { useKids, agruparPorUnidade, somar } from '../../hooks/useKids.jsx'
-import { Baby, ShoppingBag, PartyPopper, Wallet2, PiggyBank, TrendingUp } from 'lucide-react'
+import { useKids, agruparPorUnidade, agruparPorMes, somar } from '../../hooks/useKids.jsx'
+import { Baby, ShoppingBag, PartyPopper, Wallet2, PiggyBank, TrendingUp, Ticket } from 'lucide-react'
 
 export default function Home() {
-  const { criancas, combo, faturamentoDomShow, inflaveis, shows } = useKids()
+  const { criancas, combo, faturamentoDomShow, inflaveis, shows, entradasKids } = useKids()
 
   const totalCriancas = useMemo(() => somar(criancas, c => c.qtdCriancas), [criancas])
   const totalComboQtd = useMemo(() => somar(combo, c => c.qtdVendida), [combo])
   const totalComboValor = useMemo(() => somar(combo, c => c.valor), [combo])
   const totalFaturamentoDom = useMemo(() => somar(faturamentoDomShow, f => f.valor), [faturamentoDomShow])
+  const totalEntradasKids = useMemo(() => somar(entradasKids, e => e.valor), [entradasKids])
   const totalGastoInflaveis = useMemo(() => somar(inflaveis, i => i.valor), [inflaveis])
   const totalGastoShows = useMemo(() => somar(shows, s => s.valor), [shows])
   const totalGasto = totalGastoInflaveis + totalGastoShows
-  const totalReceita = totalComboValor + totalFaturamentoDom
+  // totalEntradasKids já vem sem sobreposição com o Faturamento Dom Show
+  // (o Apps Script exclui domingo 12h-14h dessa métrica pra não duplicar)
+  const totalReceita = totalComboValor + totalFaturamentoDom + totalEntradasKids
   const resultado = totalReceita - totalGasto
 
   const criancasPorUnidade = useMemo(
@@ -46,6 +49,40 @@ export default function Home() {
     [shows]
   )
 
+  // ── Evolução Mensal ──────────────────────────────────────────────
+  const evolucaoMensal = useMemo(() => {
+    const criancasPorMes = agruparPorMes(criancas, c => c.qtdCriancas)
+    const comboPorMes = agruparPorMes(combo, c => c.valor)
+    const faturamentoPorMes = agruparPorMes(faturamentoDomShow, f => f.valor)
+    const entradasPorMes = agruparPorMes(entradasKids, e => e.valor)
+    const gastoInflaveisPorMes = agruparPorMes(inflaveis, i => i.valor)
+    const gastoShowsPorMes = agruparPorMes(shows, s => s.valor)
+
+    const todosMeses = new Set([
+      ...Object.keys(criancasPorMes), ...Object.keys(comboPorMes),
+      ...Object.keys(faturamentoPorMes), ...Object.keys(entradasPorMes),
+      ...Object.keys(gastoInflaveisPorMes), ...Object.keys(gastoShowsPorMes),
+    ])
+
+    return Array.from(todosMeses).sort().map(mes => {
+      const receita = (comboPorMes[mes] || 0) + (faturamentoPorMes[mes] || 0) + (entradasPorMes[mes] || 0)
+      const gasto = (gastoInflaveisPorMes[mes] || 0) + (gastoShowsPorMes[mes] || 0)
+      return {
+        mes,
+        criancas: criancasPorMes[mes] || 0,
+        receita,
+        gasto,
+        resultado: receita - gasto,
+      }
+    })
+  }, [criancas, combo, faturamentoDomShow, entradasKids, inflaveis, shows])
+
+  const nomeMes = (mesStr) => {
+    const [ano, mes] = mesStr.split('-')
+    const nomes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+    return `${nomes[Number(mes) - 1] || mes}/${ano.slice(2)}`
+  }
+
   return (
     <>
       <Header
@@ -63,6 +100,12 @@ export default function Home() {
             icon={ShoppingBag}
           />
           <KpiCard label="Faturamento Dom. 12h-14h" valor={formatarReais(totalFaturamentoDom)} icon={PartyPopper} />
+          <KpiCard
+            label="Entradas Kids"
+            valor={formatarReais(totalEntradasKids)}
+            subtitulo="Passaporte, infláveis, bichinho (fora do horário do show)"
+            icon={Ticket}
+          />
           <KpiCard label="Gasto Infláveis" valor={formatarReais(totalGastoInflaveis)} icon={Wallet2} />
           <KpiCard label="Gasto Shows" valor={formatarReais(totalGastoShows)} icon={PiggyBank} />
           <KpiCard
@@ -87,6 +130,39 @@ export default function Home() {
             <GraficoBarraUnidade dados={gastoPorUnidade} cor="#8C1414" />
           </Card>
         </div>
+
+        <Card titulo="Evolução Mensal">
+          {evolucaoMensal.length === 0 ? (
+            <div style={{ color: '#BBB', fontSize: 13, padding: '12px 0' }}>Sem dados suficientes pra montar a evolução mensal.</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #EBEBEB', textAlign: 'left', color: '#999' }}>
+                    <th style={{ padding: '6px 8px' }}>Mês</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>Crianças</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>Receita</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>Gasto</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>Resultado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {evolucaoMensal.map((m, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid #F5F5F5' }}>
+                      <td style={{ padding: '6px 8px', fontWeight: 600 }}>{nomeMes(m.mes)}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right' }}>{m.criancas.toLocaleString('pt-BR')}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right' }}>{formatarReais(m.receita)}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right' }}>{formatarReais(m.gasto)}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: m.resultado >= 0 ? '#97A624' : '#8C1414' }}>
+                        {formatarReais(m.resultado)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
 
         <Card titulo="Próximos Shows">
           {proximosShows.length === 0 ? (
