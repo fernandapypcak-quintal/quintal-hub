@@ -284,7 +284,7 @@ export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = fals
           ← Voltar ao HUB
         </Link>
         <span className="text-zinc-700 text-xs">|</span>
-        <span className="text-xs text-zinc-500">Financeiro — Fluxo de Caixa</span>
+        <span className="text-xs text-zinc-500">Financeiro — Saldo de Bancos</span>
       </div>
 
       {/* Header branco, no mesmo padrão dos outros dashboards */}
@@ -296,7 +296,7 @@ export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = fals
       }}>
         <div>
           <h1 style={{ fontSize: 19, fontWeight: 700, color: '#1a1a1a', margin: 0, lineHeight: 1.2 }}>
-            Fluxo de Caixa
+            Saldo de Bancos
           </h1>
           {data?.ultima_data && !dataFim && (
             <div style={{ fontSize: 12, color: '#999', marginTop: 2 }}>
@@ -362,10 +362,19 @@ export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = fals
         <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
           {/* CARDS PRINCIPAIS */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
-            <KpiCard label={dataFim ? `Saldo em ${formatarData(dataFim)}` : 'Saldo Atual (Total)'} valor={formatarMoeda(kpi.total)} />
+            <KpiCard
+              label={dataFim ? `Saldo em ${formatarData(dataFim)}` : 'Saldo Total'}
+              valor={formatarMoeda(kpi.total)}
+              subtitulo="Saldo em banco + Aplicações"
+            />
             <KpiCard label="Saldo em Banco" valor={formatarMoeda(kpi.banco)} />
             <KpiCard label="Aplicações" valor={formatarMoeda(kpi.aplicacoes)} />
             <KpiCard label="Recebíveis em Aberto" valor={formatarMoeda(kpi.recebiveis)} />
+            <KpiCard
+              label="Disponibilidade"
+              valor={formatarMoeda(kpi.total + kpi.recebiveis)}
+              subtitulo="Saldo em banco + Aplicações + Recebíveis"
+            />
           </div>
 
           {/* VARIAÇÕES */}
