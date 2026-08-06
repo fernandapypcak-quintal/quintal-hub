@@ -8,8 +8,8 @@
 import { useState, useEffect } from 'react'
 import { unitIdFromString, labelForUnit, ALL_UNIT_IDS } from '@/lib/units'
 import { custoDoProduto } from '@/lib/catalogoCustos'
+import { URL_PROMOCOES_PACOTES as URL_PROMOCOES } from '@/lib/promocoesConfig'
 
-const URL_PROMOCOES = 'https://script.google.com/macros/s/AKfycbxZv0RNOKnWHk04LDmrwtdak-ALs_GsqbeMNqBhMcNTPCTgW0DZunh1-1oHGWtObQde8g/exec'
 const URL_FATURAMENTO = 'https://script.google.com/macros/s/AKfycbyEoeYAWVUGc8n-_J61Sd91XDhkRPJOaVQnvUbk_-UcWyuaRtoyvFwtqMMcFq8_H80vwA/exec'
 
 const CATEGORIAS = ['All Inclusive', 'C&C', 'Clássicos', 'Pacotes dias Promo', 'Pacotes']
