@@ -97,20 +97,36 @@ const parseFaturamentoDomShow = rows => rows.map(r => ({
   valor: num(r.valor_faturamento_12h_14h),
 }))
 
-export async function loadTudo() {
-  const raw = await fetchObjeto('tudo')
+const parseEntradasKids = rows => rows.map(r => ({
+  data: r.data || '',
+  unidade: canonicalizarUnidade(r.unidade),
+  canal: r.canal || '',
+  produto: r.produto || '',
+  qtdVendida: num(r.qtd_vendida),
+  valor: num(r.valor_total),
+}))
 
-  if (!raw) {
-    return {
-      shows: [], criancas: [], inflaveis: [], combo: [], faturamentoDomShow: [],
-    }
-  }
+export async function loadTudo() {
+  // Busca os 6 datasets em paralelo (em vez de uma chamada só "tudo") --
+  // assim, se uma aba demorar mais (ex: cresceu muito com o histórico),
+  // as outras não ficam travadas esperando, e o total tende a ser mais
+  // rápido que uma leitura sequencial das abas numa única execução do
+  // Apps Script.
+  const [showsRaw, criancasRaw, inflaveisRaw, comboRaw, faturamentoRaw, entradasRaw] = await Promise.all([
+    fetchObjeto('shows'),
+    fetchObjeto('criancas'),
+    fetchObjeto('inflaveis'),
+    fetchObjeto('combo'),
+    fetchObjeto('faturamentoDomShow'),
+    fetchObjeto('entradasKids'),
+  ])
 
   return {
-    shows: parseShows(raw.shows || []),
-    criancas: parseCriancas(raw.criancas || []),
-    inflaveis: parseInflaveis(raw.inflaveis || []),
-    combo: parseCombo(raw.combo || []),
-    faturamentoDomShow: parseFaturamentoDomShow(raw.faturamentoDomShow || []),
+    shows: parseShows((showsRaw && showsRaw.shows) || []),
+    criancas: parseCriancas((criancasRaw && criancasRaw.criancas) || []),
+    inflaveis: parseInflaveis((inflaveisRaw && inflaveisRaw.inflaveis) || []),
+    combo: parseCombo((comboRaw && comboRaw.combo) || []),
+    faturamentoDomShow: parseFaturamentoDomShow((faturamentoRaw && faturamentoRaw.faturamentoDomShow) || []),
+    entradasKids: parseEntradasKids((entradasRaw && entradasRaw.entradasKids) || []),
   }
 }
