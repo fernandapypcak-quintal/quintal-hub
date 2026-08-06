@@ -20,6 +20,20 @@ export function somar(linhas, extrair) {
   return linhas.reduce((acc, l) => acc + (extrair(l) || 0), 0)
 }
 
+// Agrupa qualquer array por mês (YYYY-MM extraído do campo "data") e soma
+// um valor por linha. Usado na "Evolução Mensal".
+export function agruparPorMes(linhas, extrairValor) {
+  const mapa = {}
+  linhas.forEach(l => {
+    const mes = (l.data || '').slice(0, 7) // "2026-08-02" -> "2026-08"
+    if (!mes) return
+    const valor = extrairValor(l) || 0
+    if (!mapa[mes]) mapa[mes] = 0
+    mapa[mes] += valor
+  })
+  return mapa
+}
+
 // ── Provider ──────────────────────────────────────────────────────
 export function KidsProvider({ children, allowedLojas = '*' }) {
   const [shows, setShows] = useState([])
@@ -27,6 +41,7 @@ export function KidsProvider({ children, allowedLojas = '*' }) {
   const [inflaveis, setInflaveis] = useState([])
   const [combo, setCombo] = useState([])
   const [faturamentoDomShow, setFaturamentoDomShow] = useState([])
+  const [entradasKids, setEntradasKids] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -44,15 +59,17 @@ export function KidsProvider({ children, allowedLojas = '*' }) {
         const inflaveisF = porUnidade(d.inflaveis)
         const comboF = porUnidade(d.combo)
         const faturamentoF = porUnidade(d.faturamentoDomShow)
+        const entradasF = porUnidade(d.entradasKids)
 
         setShows(showsF)
         setCriancas(criancasF)
         setInflaveis(inflaveisF)
         setCombo(comboF)
         setFaturamentoDomShow(faturamentoF)
+        setEntradasKids(entradasF)
 
         const unicas = new Set(
-          [...showsF, ...criancasF, ...inflaveisF, ...comboF, ...faturamentoF]
+          [...showsF, ...criancasF, ...inflaveisF, ...comboF, ...faturamentoF, ...entradasF]
             .map(l => l.unidade).filter(Boolean)
         )
         if (allowedLojas !== '*' && unicas.size === 1) {
@@ -65,6 +82,7 @@ export function KidsProvider({ children, allowedLojas = '*' }) {
           inflaveis: inflaveisF.length,
           combo: comboF.length,
           faturamentoDomShow: faturamentoF.length,
+          entradasKids: entradasF.length,
         })
       })
       .catch(e => { console.error('[Kids] Erro:', e); setError(e.message) })
@@ -73,12 +91,12 @@ export function KidsProvider({ children, allowedLojas = '*' }) {
 
   const unidadesDisponiveis = useMemo(() => {
     const set = new Set(
-      [...shows, ...criancas, ...inflaveis, ...combo, ...faturamentoDomShow]
+      [...shows, ...criancas, ...inflaveis, ...combo, ...faturamentoDomShow, ...entradasKids]
         .map(l => l.unidade)
         .filter(Boolean)
     )
     return ['Todas', ...Array.from(set).sort()]
-  }, [shows, criancas, inflaveis, combo, faturamentoDomShow])
+  }, [shows, criancas, inflaveis, combo, faturamentoDomShow, entradasKids])
 
   const filtra = (arr, campoData) => {
     let r = arr
@@ -104,6 +122,7 @@ export function KidsProvider({ children, allowedLojas = '*' }) {
   const inflaveisFiltrados = useMemo(() => filtra(inflaveis, 'data'), [inflaveis, unidadeFiltro, dataInicio, dataFim])
   const comboFiltrado = useMemo(() => filtra(combo, 'data'), [combo, unidadeFiltro, dataInicio, dataFim])
   const faturamentoFiltrado = useMemo(() => filtra(faturamentoDomShow, 'data'), [faturamentoDomShow, unidadeFiltro, dataInicio, dataFim])
+  const entradasFiltradas = useMemo(() => filtra(entradasKids, 'data'), [entradasKids, unidadeFiltro, dataInicio, dataFim])
 
   return (
     <KidsCtx.Provider value={{
@@ -115,6 +134,7 @@ export function KidsProvider({ children, allowedLojas = '*' }) {
       inflaveis: inflaveisFiltrados,
       combo: comboFiltrado,
       faturamentoDomShow: faturamentoFiltrado,
+      entradasKids: entradasFiltradas,
     }}>
       {children}
     </KidsCtx.Provider>
