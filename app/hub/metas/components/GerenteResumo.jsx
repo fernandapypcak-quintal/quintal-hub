@@ -10,7 +10,7 @@ import { Check, X, ChevronDown, ChevronUp } from 'lucide-react'
 import { labelForUnit } from '@/lib/units'
 import { PESOS_PTS } from '@/lib/metas/scoring'
 
-const GERENTE_COLORS = { marco: '#97A624', andre: '#0284C7', keylla: '#7C3AED' }
+const GERENTE_COLORS = { marco: '#97A624', andre: '#0284C7', keylla: '#7C3AED', consolidado: '#0D0D0D' }
 
 const GRUPOS = [
   { indicador: 'cmv', label: 'CMV', tipo: 'pct' },
