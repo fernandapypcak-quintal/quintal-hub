@@ -5,7 +5,7 @@ import { useMetasData } from '../../hooks/useMetasData'
 import GerenteResumo from '../GerenteResumo'
 
 export default function Home() {
-  const { anoMes, setAnoMes, visao, setVisao, trimestreLabel, resultadosPorGerente, loading, error } = useMetasData()
+  const { anoMes, setAnoMes, visao, setVisao, trimestreLabel, resultadosPorGerente, resultadoConsolidado, loading, error } = useMetasData()
 
   return (
     <div className="p-6 md:p-8 space-y-6">
@@ -58,6 +58,10 @@ export default function Home() {
 
       {!loading && !error && resultadosPorGerente.length === 0 && (
         <p className="text-sm text-zinc-400">Nenhuma unidade encontrada pra esse período.</p>
+      )}
+
+      {!loading && !error && resultadoConsolidado && (
+        <GerenteResumo resultado={resultadoConsolidado} />
       )}
 
       {!loading && !error && resultadosPorGerente.map((r) => (
