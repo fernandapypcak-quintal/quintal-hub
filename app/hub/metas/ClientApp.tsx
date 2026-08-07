@@ -6,7 +6,7 @@ import { MetasDataProvider } from './hooks/useMetasData'
 import Home from './components/pages/Home'
 import Admin from './components/pages/Admin'
 
-function AppInner({ isAdmin }) {
+function AppInner({ isAdmin }: { isAdmin: boolean }) {
   const [pagina, setPagina] = useState('home')
 
   return (
