@@ -26,6 +26,7 @@ export default function PorBU() {
   const { historicoBUFiltrado, mesFiltro, lojaFiltro } = useFinanceiro()
   const [topMode, setTopMode] = useState('todos')
   const [modo, setModo] = useState('geral') // geral | porloja
+  const [tipoView, setTipoView] = useState('tudo') // tudo | Fixo | Variável — afeta os gráficos
   const [buSelecionada, setBuSelecionada] = useState(null)   // >>> NOVO — BU escolhida pro detalhe
   const [buFiltroLocal, setBuFiltroLocal] = useState('Todas') // >>> NOVO — filtro de BU dentro da própria página
   const [detalhe, setDetalhe] = useState([])                  // >>> NOVO
@@ -64,31 +65,45 @@ export default function PorBU() {
     return total > 0 ? (revisar / total) * 100 : 0
   }, [dadosBase, mesAtual])
 
-  // Por BU — mês atual vs anterior
+  // Por BU — mês atual vs anterior, já com o comparativo Fixo x Variável
+  // (a tabela sempre mostra os dois tipos separados, independente do
+  // seletor de tipo dos gráficos abaixo — é o comparativo que ela pediu).
   const porBU = useMemo(() => {
     const bus = [...new Set(dadosBase.map(h => h.centro_custo))]
     return bus.map(bu => {
-      const atual    = dadosBase.filter(h => h.mes === mesAtual && h.centro_custo === bu).reduce((s, h) => s + h.realizado, 0)
+      const doMesAtual = dadosBase.filter(h => h.mes === mesAtual && h.centro_custo === bu)
+      const fixoAtual     = doMesAtual.filter(h => h.tipo === 'Fixo').reduce((s, h) => s + h.realizado, 0)
+      const variavelAtual = doMesAtual.filter(h => h.tipo === 'Variável').reduce((s, h) => s + h.realizado, 0)
+      const atual    = fixoAtual + variavelAtual
       const anterior = dadosBase.filter(h => h.mes === mesAnterior && h.centro_custo === bu).reduce((s, h) => s + h.realizado, 0)
       const difR   = atual - anterior
       const difPct = anterior > 0 ? (difR / anterior) * 100 : 0
-      return { bu, atual, anterior, difR, difPct }
+      return { bu, fixoAtual, variavelAtual, atual, anterior, difR, difPct }
     }).sort((a, b) => b.atual - a.atual)
   }, [dadosBase, mesAtual, mesAnterior])
 
   // Por BU + Loja (só quando "Todas as lojas" estiver selecionado, senão não faz sentido)
   const porBULoja = useMemo(() => {
     const map = {}
-    dadosBase.forEach(({ mes, loja, centro_custo, realizado }) => {
+    dadosBase.forEach(({ mes, loja, centro_custo, tipo, realizado }) => {
       const k = `${centro_custo}||${loja}`
-      if (!map[k]) map[k] = { bu: centro_custo, loja, atual: 0, anterior: 0 }
-      if (mes === mesAtual)    map[k].atual    += realizado
+      if (!map[k]) map[k] = { bu: centro_custo, loja, fixoAtual: 0, variavelAtual: 0, atual: 0, anterior: 0 }
+      if (mes === mesAtual) {
+        map[k].atual += realizado
+        if (tipo === 'Fixo')     map[k].fixoAtual     += realizado
+        if (tipo === 'Variável') map[k].variavelAtual += realizado
+      }
       if (mes === mesAnterior) map[k].anterior += realizado
     })
     return Object.values(map).map(r => ({
       ...r, difR: r.atual - r.anterior, difPct: r.anterior > 0 ? ((r.atual - r.anterior) / r.anterior) * 100 : 0,
     }))
   }, [dadosBase, mesAtual, mesAnterior])
+
+  // Base filtrada por tipo — só pros gráficos (Tudo/Fixo/Variável)
+  const dadosBaseGrafico = useMemo(() => (
+    tipoView === 'tudo' ? dadosBase : dadosBase.filter(h => h.tipo === tipoView)
+  ), [dadosBase, tipoView])
 
   const baseItens = modo === 'geral' ? porBU.map(r => ({ ...r, loja: '— todas —' })) : porBULoja
 
@@ -98,21 +113,32 @@ export default function PorBU() {
     return sorted
   }, [baseItens, topMode])
 
-  // Evolução mensal por BU (linhas)
+  // Por BU pro gráfico de barras — respeita o toggle Tudo/Fixo/Variável
+  const porBUGrafico = useMemo(() => {
+    const bus = [...new Set(dadosBaseGrafico.map(h => h.centro_custo))]
+    return bus.map(bu => {
+      const atual    = dadosBaseGrafico.filter(h => h.mes === mesAtual && h.centro_custo === bu).reduce((s, h) => s + h.realizado, 0)
+      const anterior = dadosBaseGrafico.filter(h => h.mes === mesAnterior && h.centro_custo === bu).reduce((s, h) => s + h.realizado, 0)
+      const difPct = anterior > 0 ? ((atual - anterior) / anterior) * 100 : 0
+      return { bu, atual, anterior, difPct }
+    }).sort((a, b) => b.atual - a.atual)
+  }, [dadosBaseGrafico, mesAtual, mesAnterior])
+
+  // Evolução mensal por BU (linhas) — respeita o toggle Tudo/Fixo/Variável
   const { dadosGrafico, topBUs } = useMemo(() => {
     const totaisPorBU = {}
-    dadosBase.forEach(h => { totaisPorBU[h.centro_custo] = (totaisPorBU[h.centro_custo] || 0) + h.realizado })
+    dadosBaseGrafico.forEach(h => { totaisPorBU[h.centro_custo] = (totaisPorBU[h.centro_custo] || 0) + h.realizado })
     const top = Object.entries(totaisPorBU).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([bu]) => bu)
 
     const porMes = {}
-    dadosBase.forEach(({ mes, centro_custo, realizado }) => {
+    dadosBaseGrafico.forEach(({ mes, centro_custo, realizado }) => {
       if (!top.includes(centro_custo)) return
       if (!porMes[mes]) porMes[mes] = { mes }
       porMes[mes][centro_custo] = (porMes[mes][centro_custo] || 0) + realizado
     })
     const arr = sortMesLabel(Object.keys(porMes)).map(m => porMes[m])
     return { dadosGrafico: arr, topBUs: top }
-  }, [dadosBase])
+  }, [dadosBaseGrafico])
 
   const totalExibido = dadosExibidos.reduce((s, c) => s + c.atual, 0)
 
@@ -146,7 +172,7 @@ export default function PorBU() {
 
   return (
     <div style={{ background:'#fff', minHeight:'100vh' }}>
-      <Header title="Custos por BU" subtitle="Classificação automática por Fornecedor + Natureza"/>
+      <Header title="Custos por BU" subtitle="Fixo x Variável, comparativo mês a mês"/>
       <div style={{ padding:'16px', display:'flex', flexDirection:'column', gap:20 }}>
 
         {/* Filtro de BU da própria página */}
@@ -179,13 +205,23 @@ export default function PorBU() {
           ))}
         </div>
 
+        {/* Toggle Tudo/Fixo/Variável — afeta os dois gráficos abaixo */}
+        <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+          <span style={{ fontSize:12, fontWeight:600, color:'#999', textTransform:'uppercase', letterSpacing:'0.05em' }}>Gráficos:</span>
+          <div style={{ display:'flex', gap:6 }}>
+            <TabBtn label="Tudo"     ativo={tipoView==='tudo'}     onClick={()=>setTipoView('tudo')}/>
+            <TabBtn label="Fixo"     ativo={tipoView==='Fixo'}     onClick={()=>setTipoView('Fixo')}/>
+            <TabBtn label="Variável" ativo={tipoView==='Variável'} onClick={()=>setTipoView('Variável')}/>
+          </div>
+        </div>
+
         {/* Gráfico mês atual por BU */}
-        {porBU.length>0 && (
+        {porBUGrafico.length>0 && (
           <div style={{ border:'1px solid #F0F0F0', borderRadius:12, padding:'20px 24px 16px' }}>
-            <div style={{ fontSize:13, fontWeight:600, marginBottom:4 }}>Mês Atual vs Anterior por BU</div>
+            <div style={{ fontSize:13, fontWeight:600, marginBottom:4 }}>Mês Atual vs Anterior por BU{tipoView!=='tudo' ? ` — ${tipoView}` : ''}</div>
             <div style={{ fontSize:12, color:'#999', marginBottom:18 }}>{mesAnterior} → {mesAtual}</div>
             <ResponsiveContainer width="100%" height={230}>
-              <BarChart data={porBU} margin={{ top:4, right:4, left:0, bottom:0 }} barCategoryGap="30%">
+              <BarChart data={porBUGrafico} margin={{ top:4, right:4, left:0, bottom:0 }} barCategoryGap="30%">
                 <CartesianGrid strokeDasharray="3 3" stroke="#F5F5F5" vertical={false}/>
                 <XAxis dataKey="bu" tick={{ fontSize:10, fill:'#BBB' }} axisLine={false} tickLine={false} interval={0} angle={-25} textAnchor="end" height={70}/>
                 <YAxis tickFormatter={v=>`${(v/1000).toFixed(0)}k`} tick={{ fontSize:11, fill:'#BBB' }} axisLine={false} tickLine={false} width={44}/>
@@ -193,7 +229,7 @@ export default function PorBU() {
                 <Legend formatter={n=>n==='anterior'?mesAnterior:mesAtual} iconSize={8} wrapperStyle={{ fontSize:11 }}/>
                 <Bar dataKey="anterior" name="anterior" fill="#F0F0F0" radius={[4,4,0,0]}/>
                 <Bar dataKey="atual" name="atual" radius={[4,4,0,0]}>
-                  {porBU.map(e=><Cell key={e.bu} fill={e.bu==='Revisar'?'#D9B504':(e.difPct>10?'#dc2626':e.difPct>0?'#f59e0b':'#22c55e')}/>)}
+                  {porBUGrafico.map(e=><Cell key={e.bu} fill={e.bu==='Revisar'?'#D9B504':(e.difPct>10?'#dc2626':e.difPct>0?'#f59e0b':'#22c55e')}/>)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -203,7 +239,7 @@ export default function PorBU() {
         {/* Evolução histórica por BU */}
         {dadosGrafico.length>0 && (
           <div style={{ border:'1px solid #F0F0F0', borderRadius:12, padding:'20px 24px 16px' }}>
-            <div style={{ fontSize:13, fontWeight:600, marginBottom:4 }}>Evolução por BU</div>
+            <div style={{ fontSize:13, fontWeight:600, marginBottom:4 }}>Evolução por BU{tipoView!=='tudo' ? ` — ${tipoView}` : ''}</div>
             <div style={{ fontSize:12, color:'#999', marginBottom:18 }}>8 maiores BUs · custo realizado mês a mês</div>
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={dadosGrafico} margin={{ top:4, right:4, left:0, bottom:0 }}>
@@ -245,8 +281,10 @@ export default function PorBU() {
               <thead><tr>
                 <TH ch="Centro de Custo (BU)"/>
                 {modo==='porloja' && <TH ch="Loja"/>}
+                <TH ch="Fixo" right/>
+                <TH ch="Variável" right/>
+                <TH ch={`Total ${mesAtual||''}`} right/>
                 <TH ch={mesAnterior||'Anterior'} right/>
-                <TH ch={mesAtual||'Atual'} right/>
                 <TH ch="Var. R$" right/>
                 <TH ch="Var. %" right/>
               </tr></thead>
@@ -258,8 +296,10 @@ export default function PorBU() {
                   >
                     <TD ch={c.bu} color={c.bu==='Revisar' ? '#D9B504' : undefined}/>
                     {modo==='porloja' && <TD ch={c.loja} muted/>}
-                    <TD ch={fmt(c.anterior)} mono muted right/>
+                    <TD ch={fmt(c.fixoAtual)} mono muted right/>
+                    <TD ch={fmt(c.variavelAtual)} mono muted right/>
                     <TD ch={fmt(c.atual)} mono right/>
+                    <TD ch={fmt(c.anterior)} mono muted right/>
                     <td style={{ padding:'10px 14px', borderBottom:'1px solid #F7F7F7', fontSize:13, fontVariantNumeric:'tabular-nums', fontWeight:600, color:c.difR>0?'#dc2626':'#16a34a', textAlign:'right' }}>{c.difR>=0?'+':''}{fmt(c.difR)}</td>
                     <td style={{ padding:'10px 14px', borderBottom:'1px solid #F7F7F7', textAlign:'right' }}><VarBadge pct={c.difPct}/></td>
                   </tr>
