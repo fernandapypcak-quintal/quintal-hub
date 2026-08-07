@@ -52,7 +52,7 @@ export default function MetasClientApp({
   isAdmin?: boolean
 }) {
   return (
-    <MetasDataProvider allowedLojas={allowedLojas} isAdmin={isAdmin}>
+    <MetasDataProvider allowedLojas={allowedLojas as any} isAdmin={isAdmin}>
       <AppInner isAdmin={isAdmin} />
     </MetasDataProvider>
   )
