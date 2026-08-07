@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getUserAccess, hasDashboardAccess } from '@/lib/permissions'
 
 // TODO: cole aqui a URL /exec da implantação Web App do QuintalMetas.gs
-const GAS_URL = 'https://script.google.com/macros/s/COLE_AQUI_A_URL_DO_APPS_SCRIPT/exec'
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxEBdXl3dZK3XpAjaUs5cKeHNQIWa6QtTu5uO-dAqNsEEA87HUwyzi-LlHntawf77pgog/exec'
 
 export const maxDuration = 60
 
