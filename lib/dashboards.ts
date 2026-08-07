@@ -18,6 +18,7 @@ export const DASHBOARDS: Dashboard[] = [
   { id: 'financeiro', name: 'Financeiro — Saldo de Bancos', description: 'Saldo bancário, aplicações e recebíveis por unidade', url: '', internalPath: '/hub/financeiro', color: '#0369A1', icon: '🏦' },
   { id: 'promocoes', name: 'Promoções', description: 'Dashboard mensal de promoções/pacotes + simulador de CMV', url: '', internalPath: '/hub/promocoes', color: '#9A3412', icon: '🔥' },
   { id: 'kids', name: 'Kids', description: 'Crianças, Combo Quintal Feliz, shows e infláveis', url: '', internalPath: '/hub/kids', color: '#DB2777', icon: '🎈' },
+  { id: 'metas', name: 'Metas', description: 'Acompanhamento de metas por unidade — gerentes regionais', url: '', internalPath: '/hub/metas', color: '#7C3AED', icon: '🎯' },
 ]
 
 export const USER_PERMISSIONS: Record<string, string[] | '*'> = {
