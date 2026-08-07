@@ -17,6 +17,16 @@ const GRUPOS = [
   { indicador: 'faturamento', label: 'Faturamento', pts: PESOS_PTS.faturamento, tipo: 'moeda' },
 ]
 
+// Indicadores de custo — aqui delta negativo (real caiu abaixo da meta) é
+// BOM, e delta positivo (custo subiu) é RUIM — o oposto de NPS/Bandas/Faturamento.
+const MENOR_MELHOR = new Set(['cmv', 'custo_folha', 'custo_freela'])
+
+function corDelta(indicador, delta) {
+  if (delta == null) return ''
+  const bom = MENOR_MELHOR.has(indicador) ? delta <= 0 : delta >= 0
+  return bom ? 'text-brand-olive' : 'text-brand-crimson'
+}
+
 function fmt(tipo, valor) {
   if (valor == null) return '—'
   if (tipo === 'pct') return `${(valor * 100).toFixed(1)}%`
@@ -50,7 +60,7 @@ function LinhaUnidade({ unidade, indicadores }) {
               <div className="grid grid-cols-3 gap-1 text-xs font-mono text-right">
                 <span>{fmt('moeda', ind?.custoArtista)}</span>
                 <span>{fmt('moeda', ind?.real)}</span>
-                <span className={ind && ind.delta >= 0 ? 'text-brand-olive' : 'text-brand-crimson'}>
+                <span className={corDelta('bandas', ind?.delta)}>
                   {ind ? fmtDelta('moeda', ind.delta) : '—'}
                 </span>
               </div>
@@ -63,7 +73,7 @@ function LinhaUnidade({ unidade, indicadores }) {
             <div className="grid grid-cols-3 gap-1 text-xs font-mono text-right">
               <span>{fmt(g.tipo, ind?.meta)}</span>
               <span>{fmt(g.tipo, ind?.real)}</span>
-              <span className={ind && ind.delta >= 0 ? 'text-brand-olive' : 'text-brand-crimson'}>
+              <span className={corDelta(g.indicador, ind?.delta)}>
                 {ind ? fmtDelta(g.tipo, ind.delta) : '—'}
               </span>
             </div>
@@ -86,7 +96,7 @@ function LinhaTotal({ totalIndicadores }) {
               <div className="grid grid-cols-3 gap-1 text-xs font-mono text-right">
                 <span>{fmt('moeda', ind?.custoArtista)}</span>
                 <span>{fmt('moeda', ind?.real)}</span>
-                <span className={ind && ind.delta >= 0 ? 'text-brand-olive' : 'text-brand-crimson'}>
+                <span className={corDelta('bandas', ind?.delta)}>
                   {ind ? fmtDelta('moeda', ind.delta) : '—'}
                 </span>
               </div>
@@ -98,7 +108,7 @@ function LinhaTotal({ totalIndicadores }) {
             <div className="grid grid-cols-3 gap-1 text-xs font-mono text-right">
               <span>{fmt(g.tipo, ind?.meta)}</span>
               <span>{fmt(g.tipo, ind?.real)}</span>
-              <span className={ind && ind.delta >= 0 ? 'text-brand-olive' : 'text-brand-crimson'}>
+              <span className={corDelta(g.indicador, ind?.delta)}>
                 {ind ? fmtDelta(g.tipo, ind.delta) : '—'}
               </span>
             </div>
