@@ -14,7 +14,7 @@
 // grupos; cada gerente só vê o próprio.
 
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
-import { isUnitAllowed, unitIdFromString } from '@/lib/units'
+import { isUnitAllowed, unitIdFromString, ALL_UNIT_IDS } from '@/lib/units'
 import { GERENTES } from '@/lib/metas/gerentes'
 import {
   calcularResultadoUnidade,
@@ -210,6 +210,16 @@ export function MetasDataProvider({ children, allowedLojas = '*', isAdmin = fals
     })).filter((g) => g.unidades.length > 0)
   }, [allowedLojas])
 
+  // Visão consolidada (todas as 10 unidades, incluindo Santo André que
+  // não pertence a nenhum gerente) — só aparece pra quem tem acesso
+  // total (admin/diretor). Cada gerente comum não vê isso.
+  const unidadesHolding = useMemo(() => ALL_UNIT_IDS.filter((u) => u !== 'holding'), [])
+
+  const grupoConsolidado = useMemo(() => {
+    if (allowedLojas !== '*') return null
+    return { id: 'consolidado', nome: 'Consolidado — todas as unidades', unidades: unidadesHolding }
+  }, [allowedLojas, unidadesHolding])
+
   const resultadosPorGerente = useMemo(() => {
     return gruposVisiveis.map((g) => {
       const unidadesResultado = g.unidades.map((unidade) => {
@@ -219,6 +229,15 @@ export function MetasDataProvider({ children, allowedLojas = '*', isAdmin = fals
       return calcularResultadoGerente(g.id, g.nome, anoMes, unidadesResultado)
     })
   }, [gruposVisiveis, manuaisPorMes, faturamentoRealPorMes, faturamentoMetaPorMes, anoMes])
+
+  const resultadoConsolidado = useMemo(() => {
+    if (!grupoConsolidado) return null
+    const unidadesResultado = grupoConsolidado.unidades.map((unidade) => {
+      const inputs = montarInputsDaUnidade(unidade, manuaisPorMes, faturamentoRealPorMes, faturamentoMetaPorMes)
+      return calcularResultadoUnidade(unidade, anoMes, inputs)
+    })
+    return calcularResultadoGerente(grupoConsolidado.id, grupoConsolidado.nome, anoMes, unidadesResultado)
+  }, [grupoConsolidado, manuaisPorMes, faturamentoRealPorMes, faturamentoMetaPorMes, anoMes])
 
   const salvarIndicador = useCallback(async (row) => {
     const res = await fetch('/api/metas', {
@@ -237,6 +256,7 @@ export function MetasDataProvider({ children, allowedLojas = '*', isAdmin = fals
       visao, setVisao,
       trimestreLabel: trimestreDoMes(anoMes),
       resultadosPorGerente,
+      resultadoConsolidado,
       loading, error, isAdmin,
       salvarIndicador,
       recarregar: () => carregar(anoMes, visao),
