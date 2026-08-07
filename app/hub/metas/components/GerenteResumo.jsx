@@ -1,7 +1,7 @@
 // app/hub/metas/components/GerenteResumo.jsx
-// Resumo visual do gerente: selos por categoria (bateu/não bateu + pts),
-// barra de progresso, e a tabela detalhada por unidade escondida atrás
-// de "ver detalhe" — só abre pra quem quer investigar o porquê.
+// Resumo visual do gerente — mesmo estilo visual dos cards de loja do
+// dashboard de Faturamento: rounded-2xl, borda colorida à esquerda,
+// badges em pill, barra de progresso fina.
 
 'use client'
 
@@ -9,6 +9,8 @@ import { useState } from 'react'
 import { Check, X, ChevronDown, ChevronUp } from 'lucide-react'
 import { labelForUnit } from '@/lib/units'
 import { PESOS_PTS } from '@/lib/metas/scoring'
+
+const GERENTE_COLORS = { marco: '#97A624', andre: '#0284C7', keylla: '#7C3AED' }
 
 const GRUPOS = [
   { indicador: 'cmv', label: 'CMV', tipo: 'pct' },
@@ -38,9 +40,9 @@ function fmtDelta(tipo, valor) {
 }
 
 function corDelta(indicador, delta) {
-  if (delta == null) return ''
+  if (delta == null) return 'text-zinc-400'
   const bom = MENOR_MELHOR.has(indicador) ? delta <= 0 : delta >= 0
-  return bom ? 'text-brand-olive' : 'text-brand-crimson'
+  return bom ? 'text-emerald-700' : 'text-rose-700'
 }
 
 function achar(indicadores, key) {
@@ -53,23 +55,19 @@ function Selo({ grupo, ind }) {
   const pts = PESOS_PTS[grupo.indicador]
 
   return (
-    <div
-      className={`flex items-center gap-2 px-3 py-2.5 rounded-lg ${
-        bateu ? 'bg-brand-olive/10' : 'bg-brand-crimson/10'
-      }`}
-    >
+    <div className={`flex items-center gap-2 px-3 py-2 rounded-full ${bateu ? 'bg-emerald-50' : 'bg-rose-50'}`}>
       {bateu ? (
-        <Check size={16} className="text-brand-olive shrink-0" />
+        <Check size={14} className="text-emerald-700 shrink-0" />
       ) : (
-        <X size={16} className="text-brand-crimson shrink-0" />
+        <X size={14} className="text-rose-700 shrink-0" />
       )}
-      <div>
-        <div className={`text-sm font-medium ${bateu ? 'text-brand-olive' : 'text-brand-crimson'}`}>
+      <div className="flex items-baseline gap-1.5 min-w-0">
+        <span className={`text-xs font-semibold whitespace-nowrap ${bateu ? 'text-emerald-700' : 'text-rose-700'}`}>
           {grupo.label}
-        </div>
-        <div className={`text-xs ${bateu ? 'text-brand-olive' : 'text-brand-crimson'}`}>
-          {bateu ? `${pontos} pts` : `0 de ${pts} pts`}
-        </div>
+        </span>
+        <span className={`text-[10px] whitespace-nowrap ${bateu ? 'text-emerald-700/70' : 'text-rose-700/70'}`}>
+          {bateu ? `${pontos} pts` : `0/${pts} pts`}
+        </span>
       </div>
     </div>
   )
@@ -108,45 +106,52 @@ function LinhaDetalhe({ unidade, indicadores }) {
 export default function GerenteResumo({ resultado }) {
   const [aberto, setAberto] = useState(false)
   const pct = (resultado.pontosTotais / resultado.pontosPossiveis) * 100
+  const cor = GERENTE_COLORS[resultado.gerenteId] || '#97A624'
+  const barColor = pct >= 70 ? '#059669' : pct >= 40 ? '#D97706' : '#E11D48'
 
   return (
-    <div className="mb-8 rounded-xl border border-surface-border bg-surface-card p-5">
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="text-lg font-semibold text-brand-black">{resultado.gerenteNome}</h2>
-        <span className="text-sm font-mono text-zinc-500">
-          {resultado.pontosTotais} / {resultado.pontosPossiveis} pts
-        </span>
-      </div>
+    <div
+      className="mb-5 bg-white border border-surface-border rounded-2xl shadow-card"
+      style={{ borderLeft: `4px solid ${cor}` }}
+    >
+      <div className="p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-base font-semibold text-brand-black">{resultado.gerenteNome}</h2>
+          <div className="flex items-center gap-2">
+            <div className="hidden sm:block w-24 h-1.5 bg-surface-muted rounded-full overflow-hidden">
+              <div className="h-full rounded-full" style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: barColor }} />
+            </div>
+            <span className="text-xs font-mono font-semibold text-zinc-500 whitespace-nowrap">
+              {resultado.pontosTotais}/{resultado.pontosPossiveis} pts
+            </span>
+          </div>
+        </div>
 
-      <div className="h-1.5 rounded-full bg-surface-muted overflow-hidden mb-4">
-        <div
-          className={`h-full ${pct >= 70 ? 'bg-brand-olive' : pct >= 40 ? 'bg-brand-amber' : 'bg-brand-crimson'}`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
+        <div className="flex flex-wrap gap-2 mb-3">
+          {GRUPOS.map((g) => (
+            <Selo key={g.indicador} grupo={g} ind={achar(resultado.totalIndicadores, g.indicador)} />
+          ))}
+        </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
-        {GRUPOS.map((g) => (
-          <Selo key={g.indicador} grupo={g} ind={achar(resultado.totalIndicadores, g.indicador)} />
-        ))}
+        <button
+          onClick={() => setAberto((v) => !v)}
+          className="flex items-center gap-1 text-xs text-zinc-500 hover:text-brand-black transition-colors"
+        >
+          {aberto ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+          Ver detalhe por unidade
+        </button>
       </div>
-
-      <button
-        onClick={() => setAberto((v) => !v)}
-        className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-brand-black transition-colors"
-      >
-        {aberto ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-        Ver detalhe por unidade
-      </button>
 
       {aberto && (
-        <div className="mt-3 overflow-x-auto">
+        <div className="border-t border-surface-border px-5 py-4 overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>
-              <tr className="text-xs text-zinc-400">
-                <th className="px-3 py-1 text-left font-normal">Unidade</th>
+              <tr>
+                <th className="px-3 py-1 text-left text-[10px] text-zinc-400 uppercase tracking-wider font-normal">Unidade</th>
                 {GRUPOS.map((g) => (
-                  <th key={g.indicador} className="px-2 py-1 text-right font-normal">{g.label}</th>
+                  <th key={g.indicador} className="px-2 py-1 text-right text-[10px] text-zinc-400 uppercase tracking-wider font-normal">
+                    {g.label}
+                  </th>
                 ))}
               </tr>
             </thead>
