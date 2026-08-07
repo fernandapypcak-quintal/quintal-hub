@@ -12,7 +12,7 @@ export interface GerenteConfig {
 }
 
 export const GERENTES: GerenteConfig[] = [
-  { id: 'marco', nome: 'Marco', unidades: ['carinas', 'pavao', 'vila_madalena', 'santo_andre'] },
+  { id: 'marco', nome: 'Marco', unidades: ['carinas', 'pavao', 'vila_madalena'] },
   { id: 'andre', nome: 'André', unidades: ['vila_mariana', 'santana', 'tatuape'] },
   { id: 'keylla', nome: 'Keylla', unidades: ['lapa', 'chacara', 'perdizes'] },
 ]
