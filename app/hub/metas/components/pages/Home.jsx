@@ -2,7 +2,7 @@
 'use client'
 
 import { useMetasData } from '../../hooks/useMetasData'
-import TabelaGerente from '../TabelaGerente'
+import GerenteResumo from '../GerenteResumo'
 
 export default function Home() {
   const { anoMes, setAnoMes, visao, setVisao, trimestreLabel, resultadosPorGerente, loading, error } = useMetasData()
@@ -61,7 +61,7 @@ export default function Home() {
       )}
 
       {!loading && !error && resultadosPorGerente.map((r) => (
-        <TabelaGerente key={r.gerenteId} resultado={r} />
+        <GerenteResumo key={r.gerenteId} resultado={r} />
       ))}
     </div>
   )
