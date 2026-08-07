@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import type { UnitId } from '@/lib/units'
 import { MetasDataProvider } from './hooks/useMetasData'
 import Home from './components/pages/Home'
 import Admin from './components/pages/Admin'
@@ -43,7 +44,13 @@ function AppInner({ isAdmin }: { isAdmin: boolean }) {
   )
 }
 
-export default function MetasClientApp({ allowedLojas = '*', isAdmin = false }) {
+export default function MetasClientApp({
+  allowedLojas = '*',
+  isAdmin = false,
+}: {
+  allowedLojas?: UnitId[] | '*'
+  isAdmin?: boolean
+}) {
   return (
     <MetasDataProvider allowedLojas={allowedLojas} isAdmin={isAdmin}>
       <AppInner isAdmin={isAdmin} />
