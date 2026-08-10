@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { Printer } from 'lucide-react'
+import { Printer, RefreshCw } from 'lucide-react'
 import { useRelatorios, paretoPorChave, contarDistintos, somar } from '../../hooks/useRelatorios.jsx'
 import { formatarReais, formatarData } from '../ui/Tabela.jsx'
 import PainelPareto from '../ui/PainelPareto.jsx'
@@ -147,6 +147,25 @@ export default function Impressao() {
   const { descontos, estornos, desperdicio, unidadeFiltro, dataInicio, dataFim } = useRelatorios()
   const [tipo, setTipo] = useState('descontos')
   const [mostrarTodos, setMostrarTodos] = useState(false)
+  const [atualizando, setAtualizando] = useState(false)
+  const [mensagemAtualizacao, setMensagemAtualizacao] = useState('')
+
+  async function handleAtualizar() {
+    setAtualizando(true)
+    setMensagemAtualizacao('')
+    try {
+      const res = await fetch('/api/relatorios?tipo=atualizar')
+      const data = await res.json()
+      setMensagemAtualizacao(
+        data.mensagem || (data.ok ? 'Atualização iniciada — recarregue a página em alguns minutos.' : 'Não foi possível atualizar agora.')
+      )
+    } catch (e) {
+      setMensagemAtualizacao('Erro ao pedir atualização: ' + e.message)
+    } finally {
+      setAtualizando(false)
+      setTimeout(() => setMensagemAtualizacao(''), 10000)
+    }
+  }
 
   const dadosPorTipo = { descontos, estornos, desperdicio }
   const cfg = CONFIG[tipo]
@@ -196,6 +215,22 @@ export default function Impressao() {
               {c.titulo}
             </button>
           ))}
+          <button
+            onClick={handleAtualizar}
+            disabled={atualizando}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              height: 32, padding: '0 14px', borderRadius: 99,
+              border: '1px solid #E8E8E8', background: '#fff',
+              color: '#333', fontSize: 12.5, fontWeight: 500,
+              cursor: atualizando ? 'default' : 'pointer', fontFamily: 'inherit',
+              opacity: atualizando ? 0.6 : 1,
+            }}
+            title="Busca os dados mais recentes do ZIG (leva alguns minutos)"
+          >
+            <RefreshCw size={13} style={atualizando ? { animation: 'girar 1s linear infinite' } : undefined} />
+            {atualizando ? 'Pedindo atualização...' : 'Atualizar Dados'}
+          </button>
           <button onClick={() => window.print()} style={{
             display: 'flex', alignItems: 'center', gap: 6,
             height: 32, padding: '0 16px', borderRadius: 99, border: 'none',
@@ -206,6 +241,12 @@ export default function Impressao() {
           </button>
         </div>
       </div>
+
+      {mensagemAtualizacao && (
+        <div className="no-print" style={{ padding: '8px 28px', fontSize: 11.5, color: '#B45309', background: '#FFF7ED' }}>
+          {mensagemAtualizacao}
+        </div>
+      )}
 
       {/* Filtros de data/unidade -- some na impressão */}
       <div className="no-print" style={{ padding: '10px 28px', borderBottom: '1px solid #F7F7F7', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -267,6 +308,7 @@ export default function Impressao() {
       </div>
 
       <style>{`
+        @keyframes girar { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @media print {
           body * { visibility: hidden; }
           #area-impressao, #area-impressao * { visibility: visible; }
