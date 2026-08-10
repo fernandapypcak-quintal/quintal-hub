@@ -1,5 +1,5 @@
-import React from 'react'
-import { Download } from 'lucide-react'
+import React, { useState } from 'react'
+import { Download, RefreshCw } from 'lucide-react'
 import { useRelatorios } from '../../hooks/useRelatorios.jsx'
 import { exportarCSV } from '../ui/exportar.js'
 
@@ -8,6 +8,26 @@ export default function Header({ title, subtitle, dadosExport, nomeArquivoExport
     unidadeFiltro, setUnidadeFiltro, unidadesDisponiveis,
     dataInicio, setDataInicio, dataFim, setDataFim,
   } = useRelatorios()
+
+  const [atualizando, setAtualizando] = useState(false)
+  const [mensagemAtualizacao, setMensagemAtualizacao] = useState('')
+
+  async function handleAtualizar() {
+    setAtualizando(true)
+    setMensagemAtualizacao('')
+    try {
+      const res = await fetch('/api/relatorios?tipo=atualizar')
+      const data = await res.json()
+      setMensagemAtualizacao(
+        data.mensagem || (data.ok ? 'Atualização iniciada — recarregue a página em alguns minutos.' : 'Não foi possível atualizar agora.')
+      )
+    } catch (e) {
+      setMensagemAtualizacao('Erro ao pedir atualização: ' + e.message)
+    } finally {
+      setAtualizando(false)
+      setTimeout(() => setMensagemAtualizacao(''), 10000)
+    }
+  }
 
   const sel = (ativo) => ({
     appearance: 'none', WebkitAppearance: 'none',
@@ -93,7 +113,32 @@ export default function Header({ title, subtitle, dadosExport, nomeArquivoExport
             <Download size={13} /> Exportar
           </button>
         )}
+
+        <button
+          onClick={handleAtualizar}
+          disabled={atualizando}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            height: 32, padding: '0 14px', borderRadius: 99,
+            border: '1px solid #E8E8E8', background: '#fff',
+            color: '#333', fontSize: 12.5, fontWeight: 500,
+            cursor: atualizando ? 'default' : 'pointer', fontFamily: 'inherit',
+            opacity: atualizando ? 0.6 : 1,
+          }}
+          title="Busca os dados mais recentes do ZIG (leva alguns minutos)"
+        >
+          <RefreshCw size={13} style={atualizando ? { animation: 'girar 1s linear infinite' } : undefined} />
+          {atualizando ? 'Pedindo atualização...' : 'Atualizar Dados'}
+        </button>
+
+        {mensagemAtualizacao && (
+          <span style={{ fontSize: 11.5, color: '#B45309', maxWidth: 260 }}>{mensagemAtualizacao}</span>
+        )}
       </div>
+
+      <style>{`
+        @keyframes girar { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+      `}</style>
     </header>
   )
 }
