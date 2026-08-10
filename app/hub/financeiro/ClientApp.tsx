@@ -220,6 +220,17 @@ export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = fals
   const { data, loading, erro } = useFinanceiro(dataFim || undefined, true) as { data: Payload | null; loading: boolean; erro: string | null }
   const { data: dataInicioPayload, loading: loadingInicio } = useFinanceiro(dataInicio || undefined, periodoAtivo) as { data: Payload | null; loading: boolean; erro: string | null }
 
+  // Dia anterior ao que está sendo exibido (pra comparação da Disponibilidade)
+  const diaAnterior = useMemo(() => {
+    const datas = [...(data?.datas_disponiveis ?? [])].sort()
+    const dataAtual = data?.ultima_data_saldos || data?.ultima_data
+    if (!dataAtual) return null
+    const idx = datas.indexOf(dataAtual)
+    return idx > 0 ? datas[idx - 1] : null
+  }, [data])
+
+  const { data: dataAnteriorPayload } = useFinanceiro(diaAnterior || undefined, !!diaAnterior) as { data: Payload | null; loading: boolean; erro: string | null }
+
   function unidadeVisivel(id: string): boolean {
     if (allowedLojas === '*') return true
     if (id === 'holding' || id === 'servicos') return isAdmin
@@ -271,6 +282,22 @@ export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = fals
 
   const variacaoPeriodo = kpiInicio != null ? kpi.total - kpiInicio : null
   const variacaoPeriodoPct = kpiInicio != null && kpiInicio !== 0 ? (variacaoPeriodo! / kpiInicio) * 100 : null
+
+  // Disponibilidade (banco + aplicações + recebíveis) do dia anterior, filtrada
+  // pelas mesmas lojas selecionadas — pra comparar igual com igual.
+  const disponibilidadeAtual = kpi.total + kpi.recebiveis
+  const disponibilidadeAnterior = useMemo(() => {
+    if (!dataAnteriorPayload) return null
+    const idsVisiveis = new Set(linhasFiltradas.map((l) => l.unidade))
+    return (dataAnteriorPayload.por_loja ?? [])
+      .filter((l) => idsVisiveis.has(l.unidade))
+      .reduce((acc, l) => acc + l.total + l.recebiveis, 0)
+  }, [dataAnteriorPayload, linhasFiltradas])
+
+  const variacaoDisponibilidade = disponibilidadeAnterior != null ? disponibilidadeAtual - disponibilidadeAnterior : null
+  const variacaoDisponibilidadePct = disponibilidadeAnterior != null && disponibilidadeAnterior !== 0
+    ? (variacaoDisponibilidade! / disponibilidadeAnterior) * 100
+    : null
 
   const datasDisponiveis = data?.datas_disponiveis ?? []
   const minData = datasDisponiveis.length ? [...datasDisponiveis].sort()[0] : undefined
@@ -372,8 +399,15 @@ export default function FinanceiroClientApp({ allowedLojas = '*', isAdmin = fals
             <KpiCard label="Recebíveis em Aberto" valor={formatarMoeda(kpi.recebiveis)} />
             <KpiCard
               label="Disponibilidade"
-              valor={formatarMoeda(kpi.total + kpi.recebiveis)}
-              subtitulo="Saldo em banco + Aplicações + Recebíveis"
+              valor={formatarMoeda(disponibilidadeAtual)}
+              subtitulo={
+                diaAnterior
+                  ? disponibilidadeAnterior != null
+                    ? `${variacaoDisponibilidade! >= 0 ? '+' : ''}${formatarMoeda(variacaoDisponibilidade)} (${variacaoDisponibilidadePct != null ? variacaoDisponibilidadePct.toFixed(1) + '%' : '—'}) vs ${formatarData(diaAnterior)}`
+                    : 'Calculando vs dia anterior...'
+                  : 'Saldo em banco + Aplicações + Recebíveis'
+              }
+              subtituloColor={disponibilidadeAnterior != null ? (variacaoDisponibilidade! >= 0 ? '#4F8A10' : '#C0392B') : undefined}
             />
           </div>
 
