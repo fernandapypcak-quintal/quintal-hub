@@ -62,44 +62,75 @@ export function somar(linhas, extrair) {
   return linhas.reduce((acc, l) => acc + (extrair(l) || 0), 0)
 }
 
-// ── Comparativo mês atual (até hoje) x mesmo intervalo de dias do mês
-// anterior, por unidade. Usa SEMPRE o dataset completo (não respeita o
-// filtro de data do cabeçalho, senão não teria como comparar dois meses
-// diferentes ao mesmo tempo) -- só respeita a permissão de lojas do usuário.
+// ── Comparativo de dois períodos quaisquer, por unidade + série diária
+// (pra dar pra ver a tendência num gráfico, dia a dia). Usa SEMPRE o
+// dataset completo (não respeita o filtro de data do cabeçalho, senão não
+// teria como comparar dois períodos diferentes ao mesmo tempo) -- só
+// respeita a permissão de lojas do usuário.
 function _pad2(n) { return String(n).padStart(2, '0') }
 
-export function compararMesAtualVsAnterior(linhas, campoData, extrairValor) {
+function _formatarYMD(d) {
+  return `${d.getFullYear()}-${_pad2(d.getMonth() + 1)}-${_pad2(d.getDate())}`
+}
+
+function _diffDias(iniStr, fimStr) {
+  const ini = new Date(iniStr + 'T00:00:00')
+  const fim = new Date(fimStr + 'T00:00:00')
+  return Math.round((fim - ini) / 86400000)
+}
+
+function _somarDias(dataStr, n) {
+  const d = new Date(dataStr + 'T00:00:00')
+  d.setDate(d.getDate() + n)
+  return _formatarYMD(d)
+}
+
+// Período padrão: do dia 1 do mês atual até hoje.
+export function periodoMesAtual() {
   const hoje = new Date()
-  const ano = hoje.getFullYear()
-  const mes = hoje.getMonth() // 0-indexed
-  const dia = hoje.getDate()
+  return {
+    inicio: `${hoje.getFullYear()}-${_pad2(hoje.getMonth() + 1)}-01`,
+    fim: _formatarYMD(hoje),
+  }
+}
 
-  const anteriorRef = new Date(ano, mes - 1, 1)
-  const anoAnt = anteriorRef.getFullYear()
-  const mesAnt = anteriorRef.getMonth()
-  const diasNoMesAnt = new Date(anoAnt, mesAnt + 1, 0).getDate()
-  const diaFimAnt = Math.min(dia, diasNoMesAnt)
+// Período padrão: mesmo intervalo de dias do mês anterior (ex: se hoje é
+// dia 10, pega do dia 1 ao dia 10 do mês anterior).
+export function periodoMesAnterior() {
+  const hoje = new Date()
+  const ref = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1)
+  const diasNoMes = new Date(ref.getFullYear(), ref.getMonth() + 1, 0).getDate()
+  const diaFim = Math.min(hoje.getDate(), diasNoMes)
+  return {
+    inicio: `${ref.getFullYear()}-${_pad2(ref.getMonth() + 1)}-01`,
+    fim: `${ref.getFullYear()}-${_pad2(ref.getMonth() + 1)}-${_pad2(diaFim)}`,
+  }
+}
 
-  const inicioAtual = `${ano}-${_pad2(mes + 1)}-01`
-  const fimAtual = `${ano}-${_pad2(mes + 1)}-${_pad2(dia)}`
-  const inicioAnterior = `${anoAnt}-${_pad2(mesAnt + 1)}-01`
-  const fimAnterior = `${anoAnt}-${_pad2(mesAnt + 1)}-${_pad2(diaFimAnt)}`
-
+// periodoAtual / periodoAnterior: { inicio: 'yyyy-MM-dd', fim: 'yyyy-MM-dd' }
+export function compararPeriodos(linhas, campoData, extrairValor, periodoAtual, periodoAnterior) {
   const porUnidade = {}
+  const porDiaAtual = {}
+  const porDiaAnterior = {}
+
   linhas.forEach(l => {
     const data = l[campoData]
     if (!data) return
     const unidade = l.unidade || '(sem unidade)'
-    if (!porUnidade[unidade]) {
-      porUnidade[unidade] = { unidade, atual: 0, qtdAtual: 0, anterior: 0, qtdAnterior: 0 }
-    }
     const valor = extrairValor(l) || 0
-    if (data >= inicioAtual && data <= fimAtual) {
+
+    if (data >= periodoAtual.inicio && data <= periodoAtual.fim) {
+      if (!porUnidade[unidade]) porUnidade[unidade] = { unidade, atual: 0, qtdAtual: 0, anterior: 0, qtdAnterior: 0 }
       porUnidade[unidade].atual += valor
       porUnidade[unidade].qtdAtual += 1
-    } else if (data >= inicioAnterior && data <= fimAnterior) {
+      const offset = _diffDias(periodoAtual.inicio, data)
+      porDiaAtual[offset] = (porDiaAtual[offset] || 0) + valor
+    } else if (data >= periodoAnterior.inicio && data <= periodoAnterior.fim) {
+      if (!porUnidade[unidade]) porUnidade[unidade] = { unidade, atual: 0, qtdAtual: 0, anterior: 0, qtdAnterior: 0 }
       porUnidade[unidade].anterior += valor
       porUnidade[unidade].qtdAnterior += 1
+      const offset = _diffDias(periodoAnterior.inicio, data)
+      porDiaAnterior[offset] = (porDiaAnterior[offset] || 0) + valor
     }
   })
 
@@ -116,13 +147,34 @@ export function compararMesAtualVsAnterior(linhas, campoData, extrairValor) {
   const totalAtual = linhasResultado.reduce((acc, l) => acc + l.atual, 0)
   const totalAnterior = linhasResultado.reduce((acc, l) => acc + l.anterior, 0)
 
+  // Série diária alinhada por "dia N do período" (não pela data em si),
+  // pra dar pra sobrepor visualmente os dois períodos mesmo que tenham
+  // durações diferentes.
+  const maxOffset = Math.max(
+    _diffDias(periodoAtual.inicio, periodoAtual.fim),
+    _diffDias(periodoAnterior.inicio, periodoAnterior.fim)
+  )
+  const porDia = []
+  for (let i = 0; i <= maxOffset; i++) {
+    const dataAtualDia = _somarDias(periodoAtual.inicio, i)
+    const dataAnteriorDia = _somarDias(periodoAnterior.inicio, i)
+    porDia.push({
+      dia: i + 1,
+      dataAtual: dataAtualDia <= periodoAtual.fim ? dataAtualDia : null,
+      valorAtual: porDiaAtual[i] || 0,
+      dataAnterior: dataAnteriorDia <= periodoAnterior.fim ? dataAnteriorDia : null,
+      valorAnterior: porDiaAnterior[i] || 0,
+    })
+  }
+
   return {
     linhas: linhasResultado,
     totalAtual,
     totalAnterior,
     variacaoTotal: calcVariacao(totalAtual, totalAnterior),
-    periodoAtual: { inicio: inicioAtual, fim: fimAtual },
-    periodoAnterior: { inicio: inicioAnterior, fim: fimAnterior },
+    porDia,
+    periodoAtual,
+    periodoAnterior,
   }
 }
 
