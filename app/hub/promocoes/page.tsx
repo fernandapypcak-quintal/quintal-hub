@@ -7,5 +7,6 @@ export default async function PromocoesPage() {
   if (!access) redirect('/login')
   if (!hasDashboardAccess(access, 'promocoes')) redirect('/hub')
 
- return <PromocoesClientApp allowedLojas={access.lojas as any} />
+  // @ts-ignore - allowedLojas é '*' | UnitId[], mas o ClientApp.jsx não é tipado
+  return <PromocoesClientApp allowedLojas={access.lojas} />
 }
