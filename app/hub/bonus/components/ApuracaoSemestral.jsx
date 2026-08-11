@@ -1,169 +1,188 @@
 // app/hub/bonus/components/ApuracaoSemestral.jsx
 //
-// Apuração OFICIAL do bônus: S1 (Jan-Jun) e S2 (Jul-Dez, ou Jan-Dez pra
-// quem não bateu nenhuma faixa em S1 — regra de recuperação).
-//
-// Reforça 3 coisas visualmente que antes ficavam escondidas numa tabela:
-// 1. Quantos meses de cada período JÁ foram lançados (nem todo período
-//    fechado tem os 6/12 meses digitados ainda).
-// 2. O status de cada período: Fechado (6 ou 12 de 6 ou 12) vs Em andamento.
-// 3. A "jornada" de cada indicador — o que aconteceu no S1 e pra onde
-//    isso empurra o S2 (janela própria ou recuperação).
+// Pensado pra quem só quer entender "como estou indo", sem precisar
+// saber como o cálculo funciona por trás. Regras de exposição:
+// - Números grandes, frase em português simples por indicador.
+// - Nenhum jargão de metodologia ("acumulado"/"média fallback") na tela
+//   principal — isso vira um ⓘ com tooltip pra quem quiser o detalhe.
+// - A regra de recuperação é contada como frase, não como badge pequeno.
 
 'use client'
 
-import { ArrowRight, RotateCcw, CheckCircle2, Clock } from 'lucide-react'
-import { FAIXA_LABEL } from '@/lib/bonus/scoring'
+import { CheckCircle2, AlertTriangle, XCircle, Info, ArrowDown } from 'lucide-react'
+import { useState } from 'react'
 
-const FAIXA_STYLE = {
-  meta:         { bg: 'bg-emerald-50',  text: 'text-emerald-700' },
-  meta_80:      { bg: 'bg-amber-50',    text: 'text-amber-700' },
-  meta_60:      { bg: 'bg-amber-50',    text: 'text-amber-700' },
-  nao_atingiu:  { bg: 'bg-rose-50',     text: 'text-rose-700' },
-  pendente:     { bg: 'bg-zinc-100',    text: 'text-zinc-400' },
-}
+const MESES_LABEL = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
 function fmtPct(v, digits = 1) {
   if (v == null) return '—'
   return `${(v * 100).toFixed(digits)}%`
 }
 
-function StatusPeriodo({ lancados, total }) {
-  const fechado = lancados >= total
-  return (
-    <span className={`inline-flex items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded-full ${
-      fechado ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
-    }`}>
-      {fechado ? <CheckCircle2 size={11} /> : <Clock size={11} />}
-      {fechado ? 'Fechado' : `${lancados}/${total} meses`}
-    </span>
-  )
+// -------- linguagem simples por faixa --------
+const FAIXA_INFO = {
+  meta:        { texto: 'Bateu a meta cheia',      cor: 'text-emerald-700', bg: 'bg-emerald-50', Icon: CheckCircle2, iconCor: '#059669' },
+  meta_80:     { texto: 'Bateu a faixa de 80%',     cor: 'text-amber-700',   bg: 'bg-amber-50',   Icon: AlertTriangle, iconCor: '#D97706' },
+  meta_60:     { texto: 'Bateu a faixa de 60%',     cor: 'text-amber-700',   bg: 'bg-amber-50',   Icon: AlertTriangle, iconCor: '#D97706' },
+  nao_atingiu: { texto: 'Não bateu nenhuma faixa',  cor: 'text-rose-700',    bg: 'bg-rose-50',    Icon: XCircle, iconCor: '#E11D48' },
+  pendente:    { texto: 'Ainda sem dados',          cor: 'text-zinc-500',    bg: 'bg-zinc-100',   Icon: Info, iconCor: '#A1A1AA' },
 }
 
-function CardPeriodo({ label, subtitulo, resultado, lancados, total }) {
+function resumoPeriodo(indicadores, chave) {
+  const validos = indicadores.filter((i) => i[chave].faixa !== 'pendente')
+  if (validos.length === 0) return 'Ainda não há dados suficientes pra apurar este período.'
+  const bateram = validos.filter((i) => i[chave].faixa !== 'nao_atingiu').length
+  if (bateram === validos.length) return `Todos os ${validos.length} indicadores já apurados bateram pelo menos uma faixa da meta.`
+  if (bateram === 0) return `Nenhum dos ${validos.length} indicadores já apurados bateu a meta ainda.`
+  return `${bateram} de ${validos.length} indicadores já apurados bateram pelo menos uma faixa da meta.`
+}
+
+function HeroPeriodo({ titulo, subtitulo, resultado, lancados, total, indicadores, chave }) {
   const pct = resultado.percentualAtingido * 100
-  const barColor = pct >= 70 ? '#059669' : pct >= 40 ? '#D97706' : '#E11D48'
+  const fechado = lancados >= total
+  const cor = pct >= 70 ? '#059669' : pct >= 40 ? '#D97706' : '#E11D48'
 
   return (
-    <div className="rounded-xl border border-surface-border p-4 flex flex-col gap-2 flex-1 min-w-[220px] max-w-xs">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-[11px] text-zinc-400 uppercase tracking-wide">{label}</p>
-          <p className="text-[11px] font-mono text-zinc-400">{subtitulo}</p>
-        </div>
-        <StatusPeriodo lancados={lancados} total={total} />
+    <div className="flex-1 min-w-[280px] rounded-2xl border border-surface-border bg-white p-6 shadow-card">
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-sm font-semibold text-zinc-500 uppercase tracking-wide">{titulo}</p>
+        <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
+          fechado ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+        }`}>
+          {fechado ? 'Fechado' : `Dados de ${lancados} de ${total} meses`}
+        </span>
       </div>
+      <p className="text-sm text-zinc-400 mb-4">{subtitulo}</p>
 
-      <p className="text-2xl font-mono font-semibold text-brand-black">{pct.toFixed(0)}%</p>
-
-      <div className="h-1.5 w-full rounded-full bg-surface-muted overflow-hidden">
-        <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: barColor }} />
-      </div>
-
-      <p className="text-[11px] font-mono text-zinc-400">
-        {resultado.pontosTotais.toFixed(3).replace('.', ',')} / {resultado.pesoTotalColetivo.toFixed(2).replace('.', ',')} pts
+      <p className="text-6xl font-bold text-brand-black leading-none mb-1" style={{ color: cor }}>
+        {pct.toFixed(0)}%
       </p>
+      <p className="text-sm text-zinc-500 mb-4">do bônus coletivo garantido até aqui</p>
+
+      <p className="text-sm text-zinc-600">{resumoPeriodo(indicadores, chave)}</p>
     </div>
   )
 }
 
-function Badge({ resultado, mesesLancados, totalMeses }) {
-  const style = FAIXA_STYLE[resultado.faixa]
-  return (
-    <div className={`rounded-lg ${style.bg} px-3 py-2 flex flex-col gap-0.5 flex-1 min-w-[104px] max-w-[220px]`}>
-      <span className="text-sm font-mono font-semibold text-brand-black">{fmtPct(resultado.real)}</span>
-      <span className={`text-[10px] font-mono ${style.text}`}>{FAIXA_LABEL[resultado.faixa]}</span>
-      <span className="text-[9px] font-mono text-zinc-400">{mesesLancados}/{totalMeses} meses</span>
-    </div>
-  )
-}
+function CardIndicador({ item }) {
+  const { config, s1, s2, recuperandoS1, mesesLancadosS1, mesesLancadosS2, totalMesesS2, metodologiaS1, metodologiaS2 } = item
+  const [detalheAberto, setDetalheAberto] = useState(false)
 
-function JornadaIndicador({ item }) {
-  const { config, s1, s2, s2Janela, recuperandoS1, mesesLancadosS1, mesesLancadosS2, totalMesesS2 } = item
+  const infoS1 = FAIXA_INFO[s1.faixa]
+  const infoS2 = FAIXA_INFO[s2.faixa]
+
+  const fraseConexao = recuperandoS1
+    ? 'Não bateu no 1º semestre — o resultado final agora vai depender do ano inteiro (Jan a Dez), não só do 2º semestre.'
+    : 'Bateu no 1º semestre — o 2º semestre é avaliado à parte, só com Jul a Dez.'
 
   return (
-    <div className="flex items-center gap-3 py-3 border-t border-surface-border first:border-t-0 max-w-2xl">
-      <div className="w-36 shrink-0">
-        <p className="text-sm font-medium text-brand-black">{config.label}</p>
-        <p className="text-[10px] font-mono text-zinc-400">peso {(config.peso * 100).toFixed(0)}%</p>
+    <div className="rounded-2xl border border-surface-border bg-white p-5 shadow-card">
+      <div className="flex items-baseline justify-between mb-4">
+        <h3 className="text-lg font-semibold text-brand-black">{config.label}</h3>
+        <span className="text-sm text-zinc-400">peso {(config.peso * 100).toFixed(0)}% do bônus coletivo</span>
       </div>
 
-      <Badge resultado={s1} mesesLancados={mesesLancadosS1} totalMeses={6} />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* S1 */}
+        <div className={`rounded-xl p-4 ${infoS1.bg}`}>
+          <p className="text-xs font-medium text-zinc-500 mb-1">1º Semestre (Jan-Jun)</p>
+          <p className="text-3xl font-bold text-brand-black mb-1">{fmtPct(s1.real)}</p>
+          <div className="flex items-center gap-1.5">
+            <infoS1.Icon size={15} color={infoS1.iconCor} />
+            <span className={`text-sm font-medium ${infoS1.cor}`}>{infoS1.texto}</span>
+          </div>
+          <p className="text-xs text-zinc-400 mt-1">meta: {fmtPct(s1.meta)} · dados de {mesesLancadosS1}/6 meses</p>
+        </div>
 
-      <div className="flex flex-col items-center shrink-0 w-16">
-        {recuperandoS1 ? (
-          <>
-            <RotateCcw size={14} className="text-amber-600" />
-            <span className="text-[9px] font-mono text-amber-600 text-center leading-tight mt-0.5">
-              recuperando<br />no S2
-            </span>
-          </>
-        ) : (
-          <ArrowRight size={14} className="text-zinc-300" />
-        )}
+        {/* S2 */}
+        <div className={`rounded-xl p-4 ${infoS2.bg}`}>
+          <p className="text-xs font-medium text-zinc-500 mb-1">
+            2º Semestre {recuperandoS1 ? '(Jan-Dez)' : '(Jul-Dez)'}
+          </p>
+          <p className="text-3xl font-bold text-brand-black mb-1">{fmtPct(s2.real)}</p>
+          <div className="flex items-center gap-1.5">
+            <infoS2.Icon size={15} color={infoS2.iconCor} />
+            <span className={`text-sm font-medium ${infoS2.cor}`}>{infoS2.texto}</span>
+          </div>
+          <p className="text-xs text-zinc-400 mt-1">meta: {fmtPct(s2.meta)} · dados de {mesesLancadosS2}/{totalMesesS2} meses</p>
+        </div>
       </div>
 
-      <Badge resultado={s2} mesesLancados={mesesLancadosS2} totalMeses={totalMesesS2} />
+      <div className={`mt-3 flex items-start gap-2 text-sm rounded-lg px-3 py-2 ${
+        recuperandoS1 ? 'bg-amber-50/60 text-amber-800' : 'bg-surface-muted/60 text-zinc-600'
+      }`}>
+        <ArrowDown size={14} className="mt-0.5 shrink-0 rotate-[-90deg]" />
+        <span>{fraseConexao}</span>
+      </div>
 
-      <span className="text-[10px] font-mono text-zinc-400 shrink-0 hidden lg:inline w-20 text-right">
-        {s2Janela === 'jul_dez' ? 'Jul-Dez' : 'Jan-Dez'}
-      </span>
+      <button
+        onClick={() => setDetalheAberto((v) => !v)}
+        className="mt-2 text-xs text-zinc-400 hover:text-zinc-600 flex items-center gap-1"
+      >
+        <Info size={12} /> {detalheAberto ? 'Ocultar' : 'Como esse número foi calculado?'}
+      </button>
+
+      {detalheAberto && (
+        <div className="mt-2 text-xs text-zinc-500 bg-surface-muted/40 rounded-lg p-3 space-y-1">
+          <p>
+            <strong>1º Semestre:</strong> {metodologiaS1 === 'acumulado'
+              ? 'acumulado real do período (soma dos valores ÷ soma da base de todos os meses lançados).'
+              : 'faltou volume lançado em algum mês — usando a média simples dos meses como aproximação.'}
+          </p>
+          <p>
+            <strong>2º Semestre:</strong> {metodologiaS2 === 'acumulado'
+              ? 'acumulado real do período (soma dos valores ÷ soma da base de todos os meses lançados).'
+              : 'faltou volume lançado em algum mês — usando a média simples dos meses como aproximação.'}
+          </p>
+        </div>
+      )}
     </div>
   )
 }
 
 export default function ApuracaoSemestral({ resultadoAnual }) {
   const { ano, indicadores, s1, s2 } = resultadoAnual
-  const algumRecuperando = indicadores.some((i) => i.recuperandoS1)
 
-  // status geral do período = o mínimo entre os indicadores (a apuração
-  // só está "fechada" quando TODOS os indicadores tiverem os meses lançados)
   const lancadosS1 = Math.min(...indicadores.map((i) => i.mesesLancadosS1))
   const lancadosS2 = Math.min(...indicadores.map((i) => i.mesesLancadosS2))
   const totalS2 = indicadores[0]?.totalMesesS2 ?? 6
-  const janelaS2Mista = new Set(indicadores.map((i) => i.s2Janela)).size > 1
 
   return (
-    <div className="bg-white border border-surface-border rounded-2xl shadow-card overflow-hidden">
-      <div className="p-5 pb-4">
-        <h2 className="text-base font-semibold text-brand-black mb-1">Apuração Semestral — {ano}</h2>
-        <p className="text-[11px] text-zinc-400 font-mono mb-4">
-          S1: Jan-Jun · S2: Jul-Dez (ou Jan-Dez pro indicador que não bateu nenhuma faixa em S1)
+    <div className="flex flex-col gap-4">
+      <div>
+        <h2 className="text-2xl font-bold text-brand-black">Apuração do Bônus — {ano}</h2>
+        <p className="text-sm text-zinc-500 mt-1">
+          O bônus coletivo é apurado 2 vezes por ano. Se um indicador não bater meta no 1º semestre,
+          ele ganha mais uma chance no fechamento do ano — avaliando Jan a Dez inteiro em vez de só o 2º semestre.
         </p>
-
-        <div className="flex flex-wrap gap-3">
-          <CardPeriodo
-            label="S1"
-            subtitulo="Jan-Jun"
-            resultado={s1}
-            lancados={lancadosS1}
-            total={6}
-          />
-          <CardPeriodo
-            label="S2"
-            subtitulo={janelaS2Mista ? 'misto (varia por indicador)' : (indicadores[0]?.s2Janela === 'jan_dez' ? 'Jan-Dez' : 'Jul-Dez')}
-            resultado={s2}
-            lancados={lancadosS2}
-            total={totalS2}
-          />
-        </div>
       </div>
 
-      <div className="border-t border-surface-border px-5">
+      <div className="flex flex-wrap gap-4">
+        <HeroPeriodo
+          titulo="1º Semestre"
+          subtitulo="Jan-Jun/2026"
+          resultado={s1}
+          lancados={lancadosS1}
+          total={6}
+          indicadores={indicadores}
+          chave="s1"
+        />
+        <HeroPeriodo
+          titulo="2º Semestre"
+          subtitulo="Jul-Dez/2026 (ou ano inteiro pra quem tá recuperando)"
+          resultado={s2}
+          lancados={lancadosS2}
+          total={totalS2}
+          indicadores={indicadores}
+          chave="s2"
+        />
+      </div>
+
+      <div className="flex flex-col gap-3">
         {indicadores.map((item) => (
-          <JornadaIndicador key={item.config.key} item={item} />
+          <CardIndicador key={item.config.key} item={item} />
         ))}
       </div>
-
-      {algumRecuperando && (
-        <div className="px-5 py-3 bg-amber-50/60 border-t border-amber-100">
-          <p className="text-xs text-amber-800 flex items-center gap-1.5">
-            <RotateCcw size={12} />
-            Pelo menos um indicador não bateu nenhuma faixa em S1 — pra esse indicador, o S2 está
-            avaliando o acumulado do ano inteiro (Jan-Dez), não só o segundo semestre.
-          </p>
-        </div>
-      )}
     </div>
   )
 }
