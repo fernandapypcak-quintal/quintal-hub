@@ -209,6 +209,8 @@ function montarEstruturaDiaria(pacotes, promocoesDiario) {
 export function usePromocoesData() {
   const [dados, setDados] = useState(null)
   const [dadosDiarios, setDadosDiarios] = useState(null)
+  const [pacotesRaw, setPacotesRaw] = useState([])
+  const [promocoesDiarioRaw, setPromocoesDiarioRaw] = useState([])
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState(null)
 
@@ -227,6 +229,8 @@ export function usePromocoesData() {
         if (cancelado) return
         setDados(montarEstrutura(pacotes, promocoes, faturamentoPorMes))
         setDadosDiarios(montarEstruturaDiaria(pacotes, promocoesDiario))
+        setPacotesRaw(pacotes)
+        setPromocoesDiarioRaw(promocoesDiario)
       } catch (e) {
         if (!cancelado) setErro(e.message)
       } finally {
@@ -238,5 +242,5 @@ export function usePromocoesData() {
     return () => { cancelado = true }
   }, [])
 
-  return { dados, dadosDiarios, loading, erro, CATEGORIAS, ALL_UNIT_IDS, labelForUnit }
+  return { dados, dadosDiarios, pacotesRaw, promocoesDiarioRaw, loading, erro, CATEGORIAS, ALL_UNIT_IDS, labelForUnit }
 }
