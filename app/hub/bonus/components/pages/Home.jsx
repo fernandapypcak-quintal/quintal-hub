@@ -17,7 +17,7 @@ export default function Home() {
   const { anoMes, setAnoMes, resultadoMes, resultadosPorMes, resultadoAnual, loading, error } = useBonusData()
 
   return (
-    <div className="p-6 md:p-8 max-w-4xl">
+    <div className="p-6 md:p-8 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold text-brand-black">Meta de Bônus</h1>
