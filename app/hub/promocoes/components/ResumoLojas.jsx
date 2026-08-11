@@ -4,7 +4,7 @@
 import { useMemo, useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { useResumoMensal, CATEGORIAS_LINHA, CATEGORIAS_BASE } from './DashboardPromocoes'
+import { useResumoMensal, CATEGORIAS_LINHA, CATEGORIAS_BASE, TOTAL_PROMOCOES } from './DashboardPromocoes'
 
 const brlK = (v) => { const n = v || 0; return Math.abs(n) >= 1000 ? `R$ ${(n / 1000).toFixed(1)}k` : `R$ ${n.toFixed(1)}` }
 const brl = (v) => (v ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 1, maximumFractionDigits: 1 })
@@ -22,7 +22,7 @@ function corStatus(cmvPct) {
 }
 
 function calcularKpisLoja(agregadoMes) {
-  const totalPacotes = agregadoMes.faturamento['Pacotes (total)']
+  const totalPacotes = agregadoMes.faturamento[TOTAL_PROMOCOES]
   const peso = agregadoMes.faturamentoTotal ? totalPacotes / agregadoMes.faturamentoTotal : 0
   const custoTotal = CATEGORIAS_BASE.reduce((s, c) => s + agregadoMes.custoTotal[c], 0)
   const cmv = totalPacotes ? custoTotal / totalPacotes : 0
@@ -49,7 +49,7 @@ function CardLoja({ unitId, nome, cor, mesAtual, mesAnterior, agregarPorUnidades
     const agregadoTodos = agregarPorUnidades([unitId], todosMeses)
     return todosMeses.map(m => ({
       mes: m.slice(2), // "26-07" fica mais compacto
-      faturamento: agregadoTodos[m]?.faturamento['Pacotes (total)'] || 0,
+      faturamento: agregadoTodos[m]?.faturamento[TOTAL_PROMOCOES] || 0,
     }))
   }, [aberto, unitId, todosMeses.join(',')])
 
