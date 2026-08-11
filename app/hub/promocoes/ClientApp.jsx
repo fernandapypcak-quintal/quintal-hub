@@ -2,14 +2,16 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { LayoutDashboard, Building2, Calculator } from 'lucide-react'
+import { LayoutDashboard, Building2, CalendarDays, Calculator } from 'lucide-react'
 import DashboardPromocoes from './components/DashboardPromocoes'
 import ResumoLojas from './components/ResumoLojas'
+import AnaliseDiaria from './components/AnaliseDiaria'
 import SimuladorPromocoesClientApp from '../simulador-promocoes/ClientApp'
 
 const ABAS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'lojas', label: 'Resumo das Casas', icon: Building2 },
+  { id: 'diaria', label: 'Análise Diária', icon: CalendarDays },
   { id: 'simulador', label: 'Simulador', icon: Calculator },
 ]
 
@@ -44,6 +46,7 @@ export default function PromocoesClientApp({ allowedLojas = '*' }) {
       <div className="flex-1">
         {aba === 'dashboard' && <DashboardPromocoes />}
         {aba === 'lojas' && <ResumoLojas />}
+        {aba === 'diaria' && <AnaliseDiaria />}
         {aba === 'simulador' && <SimuladorPromocoesClientApp allowedLojas={allowedLojas} mostrarBarraVoltar={false} />}
       </div>
     </div>
