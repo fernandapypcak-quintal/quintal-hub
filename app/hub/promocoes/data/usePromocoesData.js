@@ -88,6 +88,19 @@ async function carregarPromocoesPacotes() {
   return { pacotes: pacotes || [], promocoes: promocoes || [] }
 }
 
+// Relatório diário de Promoções Utilizadas — alimentado por um pipeline
+// resumível (trigger a cada 10min no Apps Script). Pode vir vazio/parcial
+// enquanto o histórico ainda está sendo processado — nesse caso o CMV
+// diário simplesmente não aparece pros dias que faltam.
+async function carregarPromocoesDiario() {
+  try {
+    const dados = await fetchJson(`${URL_PROMOCOES}?tipo=promocoes_utilizadas_diario`)
+    return Array.isArray(dados) ? dados : []
+  } catch (e) {
+    return []
+  }
+}
+
 // ── Monta a estrutura final: por unidade+mês, valores por categoria ────────
 function montarEstrutura(pacotes, promocoes, faturamentoPorMes) {
   // base[unitId][anoMes] = { faturamento: {categoria: valor}, pessoas: {categoria: valor}, faturamentoTotal, custoPromo: {categoria: valor} }
@@ -143,10 +156,11 @@ function montarEstrutura(pacotes, promocoes, faturamentoPorMes) {
   return base
 }
 
-// ── Estrutura diária (só Faturamento + Pessoas, vem do relatório de Pacotes
-// que já tem data exata por linha — Promoções Utilizadas só vem por mês) ───
-function montarEstruturaDiaria(pacotes) {
-  const base = {} // base[unitId][data 'AAAA-MM-DD'] = { faturamento: {cat:v}, pessoas: {cat:v} }
+// ── Estrutura diária: Faturamento + Pessoas (do relatório de Pacotes, que
+// já tem data exata) e Custo/CMV (do relatório diário de Promoções
+// Utilizadas, quando disponível pra aquele dia) ────────────────────────────
+function montarEstruturaDiaria(pacotes, promocoesDiario) {
+  const base = {} // base[unitId][data 'AAAA-MM-DD'] = { faturamento: {cat:v}, pessoas: {cat:v}, custoTotal: {cat:v} }
 
   function getSlot(unitId, data) {
     if (!base[unitId]) base[unitId] = {}
@@ -154,6 +168,8 @@ function montarEstruturaDiaria(pacotes) {
       base[unitId][data] = {
         faturamento: Object.fromEntries(CATEGORIAS.map(c => [c, 0])),
         pessoas: Object.fromEntries(CATEGORIAS.map(c => [c, 0])),
+        custoTotal: Object.fromEntries(CATEGORIAS.map(c => [c, 0])),
+        temCustoDoDia: false,
       }
     }
     return base[unitId][data]
@@ -169,6 +185,22 @@ function montarEstruturaDiaria(pacotes) {
     const slot = getSlot(unitId, data)
     slot.faturamento[categoria] += (parseFloat(r.faturamento_r) || 0) + (parseFloat(r.emitido_nf_r) || 0)
     slot.pessoas[categoria] += parseFloat(r.confirmados) || 0
+  }
+
+  for (const r of promocoesDiario || []) {
+    const unitId = unitIdFromString(r.unidade || r.loja)
+    const data = String(r.data || '').slice(0, 10)
+    if (!unitId || !data) continue
+    const categoria = r.categoria
+    if (!CATEGORIAS.includes(categoria)) continue
+
+    const slot = getSlot(unitId, data)
+    slot.temCustoDoDia = true
+    const custoUnitario = custoDoProduto(r.produto)
+    const usos = parseFloat(r.usos) || 0
+    if (custoUnitario != null) {
+      slot.custoTotal[categoria] += custoUnitario * usos
+    }
   }
 
   return base
@@ -187,13 +219,14 @@ export function usePromocoesData() {
       setLoading(true)
       setErro(null)
       try {
-        const [faturamentoPorMes, { pacotes, promocoes }] = await Promise.all([
+        const [faturamentoPorMes, { pacotes, promocoes }, promocoesDiario] = await Promise.all([
           carregarFaturamentoPorMes(),
           carregarPromocoesPacotes(),
+          carregarPromocoesDiario(),
         ])
         if (cancelado) return
         setDados(montarEstrutura(pacotes, promocoes, faturamentoPorMes))
-        setDadosDiarios(montarEstruturaDiaria(pacotes))
+        setDadosDiarios(montarEstruturaDiaria(pacotes, promocoesDiario))
       } catch (e) {
         if (!cancelado) setErro(e.message)
       } finally {
