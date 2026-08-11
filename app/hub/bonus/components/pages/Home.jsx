@@ -3,6 +3,7 @@
 
 import { useBonusData } from '../../hooks/useBonusData'
 import BonusResumo from '../BonusResumo'
+import ApuracaoSemestral from '../ApuracaoSemestral'
 import TendenciaBonus from '../TendenciaBonus'
 
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
@@ -13,7 +14,7 @@ function labelMes(anoMes) {
 }
 
 export default function Home() {
-  const { anoMes, setAnoMes, resultado, resultadosPorMes, loading, error } = useBonusData()
+  const { anoMes, setAnoMes, resultadoMes, resultadosPorMes, resultadoAnual, loading, error } = useBonusData()
 
   return (
     <div className="p-6 md:p-8 max-w-4xl">
@@ -34,21 +35,26 @@ export default function Home() {
       {error && <p className="text-sm text-rose-600">Erro ao carregar: {error}</p>}
 
       {!loading && !error && (
-        <>
-          {resultado.indicadores.every((i) => i.faixa === 'pendente') ? (
-            <div className="bg-white border border-surface-border rounded-2xl p-8 text-center shadow-card">
-              <p className="text-sm text-zinc-500">
-                Ainda não há apuração lançada para {labelMes(anoMes)}.
-              </p>
-            </div>
-          ) : (
-            <BonusResumo resultado={resultado} />
-          )}
+        <div className="flex flex-col gap-4">
+          <ApuracaoSemestral resultadoAnual={resultadoAnual} />
 
-          <div className="mt-4">
-            <TendenciaBonus resultadosPorMes={resultadosPorMes} />
+          <div>
+            <p className="text-xs text-zinc-400 uppercase tracking-wide mb-2 mt-2">
+              Visão do mês — {labelMes(anoMes)}
+            </p>
+            {resultadoMes.indicadores.every((i) => i.faixa === 'pendente') ? (
+              <div className="bg-white border border-surface-border rounded-2xl p-8 text-center shadow-card">
+                <p className="text-sm text-zinc-500">
+                  Ainda não há apuração lançada para {labelMes(anoMes)}.
+                </p>
+              </div>
+            ) : (
+              <BonusResumo resultado={resultadoMes} />
+            )}
           </div>
-        </>
+
+          <TendenciaBonus resultadosPorMes={resultadosPorMes} />
+        </div>
       )}
     </div>
   )
