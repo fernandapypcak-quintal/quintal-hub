@@ -19,6 +19,7 @@ export const DASHBOARDS: Dashboard[] = [
   { id: 'promocoes', name: 'Promoções', description: 'Dashboard mensal de promoções/pacotes + simulador de CMV', url: '', internalPath: '/hub/promocoes', color: '#9A3412', icon: '🔥' },
   { id: 'kids', name: 'Kids', description: 'Crianças, Combo Quintal Feliz, shows e infláveis', url: '', internalPath: '/hub/kids', color: '#DB2777', icon: '🎈' },
   { id: 'metas', name: 'Metas Regionais', description: 'Acompanhamento de metas por unidade — gerentes regionais', url: '', internalPath: '/hub/metas', color: '#7C3AED', icon: '🎯' },
+  { id: 'bonus', name: 'Meta de Bônus', description: 'Acompanhamento da meta coletiva de bônus (CMV, Custo c/ Pessoal, LOL, NPS)', url: '', internalPath: '/hub/bonus', color: '#97A624', icon: '🏆' },
 ]
 
 export const USER_PERMISSIONS: Record<string, string[] | '*'> = {
