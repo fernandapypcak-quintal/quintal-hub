@@ -1,10 +1,13 @@
 // app/hub/promocoes/components/AnaliseDiaria.jsx
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, Fragment } from 'react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
 import { usePromocoesData } from '../data/usePromocoesData'
 import { CATEGORIAS_BASE } from './DashboardPromocoes'
+import { unitIdFromString } from '@/lib/units'
+import { custoDoProduto } from '@/lib/catalogoCustos'
 
 const brlK = (v) => { const n = v || 0; return Math.abs(n) >= 1000 ? `R$ ${(n / 1000).toFixed(1)}k` : `R$ ${n.toFixed(1)}` }
 const brl = (v) => (v ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 1, maximumFractionDigits: 1 })
@@ -24,9 +27,10 @@ function corCmv(cmv) {
 }
 
 export default function AnaliseDiaria() {
-  const { dadosDiarios, loading, erro, ALL_UNIT_IDS, labelForUnit } = usePromocoesData()
+  const { dadosDiarios, pacotesRaw, promocoesDiarioRaw, loading, erro, ALL_UNIT_IDS, labelForUnit } = usePromocoesData()
   const [unidadeSelecionada, setUnidadeSelecionada] = useState('rede')
   const [mesSelecionado, setMesSelecionado] = useState(null)
+  const [diaExpandido, setDiaExpandido] = useState(null)
 
   const mesesDisponiveis = useMemo(() => {
     if (!dadosDiarios) return []
@@ -70,6 +74,56 @@ export default function AnaliseDiaria() {
   }, [dadosDiarios, mes, unidadesParaSomar.join(',')])
 
   const totalMes = linhasPorDia.reduce((s, l) => s + l.faturamento, 0)
+
+  const promocoesDoDia = useMemo(() => {
+    if (!diaExpandido) return []
+
+    const unidadesSet = new Set(unidadesParaSomar)
+
+    const porPromocao = {}
+    for (const r of pacotesRaw) {
+      const unitId = unitIdFromString(r.unidade || r.loja)
+      const data = String(r.data || '').slice(0, 10)
+      if (data !== diaExpandido || !unidadesSet.has(unitId)) continue
+      if (!CATEGORIAS_BASE.includes(r.categoria)) continue
+
+      const nome = r.nome_do_pacote || '(sem nome)'
+      if (!porPromocao[nome]) porPromocao[nome] = { nome, categoria: r.categoria, faturamento: 0, pessoas: 0, custo: 0, temCusto: false }
+      porPromocao[nome].faturamento += (parseFloat(r.faturamento_r) || 0) + (parseFloat(r.emitido_nf_r) || 0)
+      porPromocao[nome].pessoas += parseFloat(r.confirmados) || 0
+    }
+
+    function normalizarNome(s) {
+      return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+    }
+    const custoPorPromocaoNormalizada = {}
+    for (const r of promocoesDiarioRaw) {
+      const unitId = unitIdFromString(r.unidade || r.loja)
+      const data = String(r.data || '').slice(0, 10)
+      if (data !== diaExpandido || !unidadesSet.has(unitId)) continue
+      if (!CATEGORIAS_BASE.includes(r.categoria)) continue
+
+      const chave = normalizarNome(r.promocao)
+      const custoUnitario = custoDoProduto(r.produto)
+      const usos = parseFloat(r.usos) || 0
+      if (custoUnitario != null) {
+        custoPorPromocaoNormalizada[chave] = (custoPorPromocaoNormalizada[chave] || 0) + custoUnitario * usos
+      }
+    }
+
+    for (const p of Object.values(porPromocao)) {
+      const chave = normalizarNome(p.nome)
+      if (custoPorPromocaoNormalizada[chave] != null) {
+        p.custo = custoPorPromocaoNormalizada[chave]
+        p.temCusto = true
+      }
+    }
+
+    return Object.values(porPromocao)
+      .map(p => ({ ...p, cmv: p.temCusto && p.faturamento ? p.custo / p.faturamento : null }))
+      .sort((a, b) => b.faturamento - a.faturamento)
+  }, [diaExpandido, pacotesRaw, promocoesDiarioRaw, unidadesParaSomar.join(',')])
+
   const pessoasMes = linhasPorDia.reduce((s, l) => s + l.pessoas, 0)
   const melhorDia = linhasPorDia.reduce((melhor, l) => (!melhor || l.faturamento > melhor.faturamento ? l : melhor), null)
 
@@ -168,20 +222,67 @@ export default function AnaliseDiaria() {
               <th className="py-2.5 px-3">Pessoas</th>
               <th className="py-2.5 px-3">Ticket Médio</th>
               <th className="py-2.5 px-3">CMV</th>
+              <th className="py-2.5 px-3"></th>
             </tr>
           </thead>
           <tbody>
-            {linhasPorDia.map((l, idx) => (
-              <tr key={l.data} className={idx % 2 ? 'bg-zinc-50/50' : ''}>
-                <td className="py-2 px-3 font-medium text-brand-black">{l.data.split('-').reverse().join('/')}</td>
-                <td className="py-2 px-3 text-right font-mono tabular-nums">{brl(l.faturamento)}</td>
-                <td className="py-2 px-3 text-right font-mono tabular-nums">{num(l.pessoas)}</td>
-                <td className="py-2 px-3 text-right font-mono tabular-nums">{brl(l.ticket)}</td>
-                <td className="py-2 px-3 text-right font-mono tabular-nums" style={{ color: l.cmv != null ? corCmv(l.cmv) : '#d4d4d8' }}>
-                  {l.cmv != null ? pct(l.cmv) : '—'}
-                </td>
-              </tr>
-            ))}
+            {linhasPorDia.map((l, idx) => {
+              const aberto = diaExpandido === l.data
+              return (
+                <Fragment key={l.data}>
+                  <tr
+                    key={l.data}
+                    onClick={() => setDiaExpandido(aberto ? null : l.data)}
+                    className={`cursor-pointer hover:bg-zinc-50 ${idx % 2 ? 'bg-zinc-50/50' : ''} ${aberto ? 'bg-zinc-50' : ''}`}
+                  >
+                    <td className="py-2 px-3 font-medium text-brand-black">{l.data.split('-').reverse().join('/')}</td>
+                    <td className="py-2 px-3 text-right font-mono tabular-nums">{brl(l.faturamento)}</td>
+                    <td className="py-2 px-3 text-right font-mono tabular-nums">{num(l.pessoas)}</td>
+                    <td className="py-2 px-3 text-right font-mono tabular-nums">{brl(l.ticket)}</td>
+                    <td className="py-2 px-3 text-right font-mono tabular-nums" style={{ color: l.cmv != null ? corCmv(l.cmv) : '#d4d4d8' }}>
+                      {l.cmv != null ? pct(l.cmv) : '—'}
+                    </td>
+                    <td className="py-2 px-3 text-right text-zinc-400">
+                      {aberto ? <ChevronUp size={14} className="inline" /> : <ChevronDown size={14} className="inline" />}
+                    </td>
+                  </tr>
+                  {aberto && (
+                    <tr key={l.data + '-detalhe'}>
+                      <td colSpan={6} className="bg-zinc-50/70 px-3 py-3">
+                        {promocoesDoDia.length === 0 ? (
+                          <p className="text-[12px] text-zinc-400">Nenhuma promoção/pacote encontrado nesse dia pra essa unidade.</p>
+                        ) : (
+                          <table className="w-full text-[12.5px]">
+                            <thead>
+                              <tr className="text-right text-[10.5px] text-zinc-400 uppercase">
+                                <th className="pb-1.5 text-left">Promoção</th>
+                                <th className="pb-1.5">Categoria</th>
+                                <th className="pb-1.5">Faturamento</th>
+                                <th className="pb-1.5">Pessoas</th>
+                                <th className="pb-1.5">CMV</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {promocoesDoDia.map((p) => (
+                                <tr key={p.nome} className="border-t border-zinc-100">
+                                  <td className="py-1.5 font-medium text-brand-black">{p.nome}</td>
+                                  <td className="py-1.5 text-right text-zinc-500">{p.categoria}</td>
+                                  <td className="py-1.5 text-right font-mono tabular-nums">{brl(p.faturamento)}</td>
+                                  <td className="py-1.5 text-right font-mono tabular-nums">{num(p.pessoas)}</td>
+                                  <td className="py-1.5 text-right font-mono tabular-nums" style={{ color: p.cmv != null ? corCmv(p.cmv) : '#d4d4d8' }}>
+                                    {p.cmv != null ? pct(p.cmv) : '—'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              )
+            })}
           </tbody>
         </table>
       </div>
