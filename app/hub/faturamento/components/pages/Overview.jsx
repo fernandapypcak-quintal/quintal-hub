@@ -624,27 +624,36 @@ export default function Overview() {
       {periodo && (() => {
         const { ano, mes, lastDay } = periodo;
         const DOW_LABELS = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+        const MESES_ABREV_DOW = ['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+        const mesAnt = mes === 1 ? 12 : mes - 1;
+        const anoMesAnt = mes === 1 ? ano - 1 : ano;
+        const mesAntLabel = `${MESES_ABREV_DOW[mesAnt]}/${String(anoMesAnt).slice(2)}`;
         const rows = Array.from({length:7}, (_,dow) => {
           const r26 = baseData.filter(r => r.Ano === ano   && r.Mes === mes && r.Dia_Semana_Num === dow);
           const r25 = baseData.filter(r => r.Ano === ano-1 && r.Mes === mes && r.Dia_Semana_Num === dow);
+          const rMesAnt = baseData.filter(r => r.Ano === anoMesAnt && r.Mes === mesAnt && r.Dia_Semana_Num === dow);
           const dias26 = new Set(r26.map(r => r.Dia)).size;
           const dias25 = new Set(r25.map(r => r.Dia)).size;
+          const diasMesAnt = new Set(rMesAnt.map(r => r.Dia)).size;
           const vol26  = sum(r26);
           const vol25  = sum(r25);
+          const volMesAnt = sum(rMesAnt);
           const med26  = dias26 > 0 ? vol26/dias26 : 0;
           const med25  = dias25 > 0 ? vol25/dias25 : 0;
+          const medMesAnt = diasMesAnt > 0 ? volMesAnt/diasMesAnt : 0;
           const varMed = variation(med26, med25);
-          return { dow, label: DOW_LABELS[dow], dias26, dias25, vol26, vol25, med26, med25, varMed };
-        }).filter(r => r.vol26 > 0 || r.vol25 > 0);
+          const varMesAnt = variation(med26, medMesAnt);
+          return { dow, label: DOW_LABELS[dow], dias26, dias25, diasMesAnt, vol26, vol25, volMesAnt, med26, med25, medMesAnt, varMed, varMesAnt };
+        }).filter(r => r.vol26 > 0 || r.vol25 > 0 || r.volMesAnt > 0);
 
         return (
           <div className="bg-white border border-surface-border rounded-2xl overflow-hidden">
             <div className="px-5 py-4 border-b border-surface-border flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-2">
                 <h3 className="section-title">Média por Dia da Semana</h3>
-                <InfoTip text="Média diária de faturamento por dia da semana no mês selecionado. Compara 2026 com o mesmo mês de 2025." />
+                <InfoTip text="Média diária de faturamento por dia da semana no mês selecionado. Compara 2026 com o mesmo mês de 2025 e com o mês anterior." />
               </div>
-              <span className="text-xs text-zinc-400">{periodo.label} vs {periodo.label.split('/')[0]}/{String(periodo.ano-1).slice(2)}</span>
+              <span className="text-xs text-zinc-400">{periodo.label} vs {periodo.label.split('/')[0]}/{String(periodo.ano-1).slice(2)} vs {mesAntLabel}</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -652,8 +661,10 @@ export default function Overview() {
                   <tr className="border-b border-surface-border bg-surface-muted/30">
                     <th className="text-left py-3 px-4 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Dia</th>
                     <th className="text-right py-3 px-4 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Média {ano-1}</th>
+                    <th className="text-right py-3 px-4 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Média {mesAntLabel}</th>
                     <th className="text-right py-3 px-4 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Média {ano}</th>
-                    <th className="text-right py-3 px-4 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Variação</th>
+                    <th className="text-right py-3 px-4 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Var. YoY</th>
+                    <th className="text-right py-3 px-4 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Var. vs Mês Ant.</th>
                     <th className="text-right py-3 px-4 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Dias {ano-1}</th>
                     <th className="text-right py-3 px-4 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Dias {ano}</th>
                     <th className="text-right py-3 px-4 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Volume {ano-1}</th>
@@ -665,12 +676,21 @@ export default function Overview() {
                     <tr key={r.dow} className="border-b border-surface-border/50 hover:bg-surface-muted/20 transition-colors">
                       <td className="py-3 px-4 font-semibold text-brand-black">{r.label}</td>
                       <td className="py-3 px-4 text-right font-mono text-zinc-400">{r.med25 > 0 ? formatBRL(r.med25, true) : '—'}</td>
+                      <td className="py-3 px-4 text-right font-mono text-zinc-400">{r.medMesAnt > 0 ? formatBRL(r.medMesAnt, true) : '—'}</td>
                       <td className="py-3 px-4 text-right font-mono font-semibold text-brand-black">{r.med26 > 0 ? formatBRL(r.med26, true) : '—'}</td>
                       <td className="py-3 px-4 text-right">
                         {r.varMed !== null ? (
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full
                             ${r.varMed >= 0 ? 'text-emerald-700 bg-emerald-50' : 'text-rose-700 bg-rose-50'}`}>
                             {r.varMed >= 0 ? '▲' : '▼'} {Math.abs(r.varMed).toFixed(1).replace('.',',')}%
+                          </span>
+                        ) : '—'}
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        {r.varMesAnt !== null ? (
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full
+                            ${r.varMesAnt >= 0 ? 'text-emerald-700 bg-emerald-50' : 'text-rose-700 bg-rose-50'}`}>
+                            {r.varMesAnt >= 0 ? '▲' : '▼'} {Math.abs(r.varMesAnt).toFixed(1).replace('.',',')}%
                           </span>
                         ) : '—'}
                       </td>
