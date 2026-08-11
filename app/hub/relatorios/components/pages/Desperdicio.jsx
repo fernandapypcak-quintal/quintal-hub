@@ -8,17 +8,12 @@ import PainelPareto from '../ui/PainelPareto.jsx'
 import ParetoChart from '../ui/ParetoChart.jsx'
 import ImpressaoDetalhe from '../ui/ImpressaoDetalhe.jsx'
 import ComparativoMensal from '../ui/ComparativoMensal.jsx'
-import { useRelatorios, agruparPorChave, agruparPorUnidade, paretoPorChave, contarDistintos, somar, compararMesAtualVsAnterior } from '../../hooks/useRelatorios.jsx'
+import { useRelatorios, agruparPorChave, agruparPorUnidade, paretoPorChave, contarDistintos, somar } from '../../hooks/useRelatorios.jsx'
 import { Trash2, Users, Receipt, TrendingDown, Printer } from 'lucide-react'
 
 export default function Desperdicio() {
   const { desperdicio, desperdicioBruto } = useRelatorios()
   const [mostrarImpressao, setMostrarImpressao] = useState(false)
-
-  const comparativoMensal = useMemo(
-    () => compararMesAtualVsAnterior(desperdicioBruto, 'data', d => d.valor),
-    [desperdicioBruto]
-  )
 
   const totalValor = useMemo(() => somar(desperdicio, d => d.valor), [desperdicio])
   const totalQtd = desperdicio.length
@@ -59,7 +54,12 @@ export default function Desperdicio() {
           <KpiCard label="Funcionários Envolvidos" valor={qtdFuncionarios} icon={Users} />
         </div>
 
-        <ComparativoMensal titulo="Desperdício — Mês Atual x Mês Anterior" dadosComparativo={comparativoMensal} />
+        <ComparativoMensal
+          titulo="Desperdício — Comparativo de Períodos"
+          dadosBruto={desperdicioBruto}
+          campoData="data"
+          extrairValor={d => d.valor}
+        />
 
         <PainelPareto
           titulo="Onde Atuar"
