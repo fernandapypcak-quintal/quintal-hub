@@ -15,8 +15,9 @@ function corDelta(v, invertido) {
   return positivo ? 'text-brand-olive' : 'text-brand-crimson'
 }
 
-export const CATEGORIAS_LINHA = ['All Inclusive', 'C&C', 'Clássicos', 'Pacotes dias Promo', 'Pacotes', 'Pacotes (total)', 'Sem Promos']
+export const TOTAL_PROMOCOES = 'Total de Promoções'
 export const CATEGORIAS_BASE = ['All Inclusive', 'C&C', 'Clássicos', 'Pacotes dias Promo', 'Pacotes']
+export const CATEGORIAS_LINHA = [...CATEGORIAS_BASE, TOTAL_PROMOCOES, 'Sem Promos']
 
 function KpiCard({ label, value, sub, ok, icon }) {
   return (
@@ -35,9 +36,9 @@ function KpiCard({ label, value, sub, ok, icon }) {
   )
 }
 
-// Hook compartilhado (Dashboard + Resumo das Casas usam a mesma agregação)
+// Hook compartilhado (Dashboard + Resumo das Casas + Análise Diária usam a mesma agregação)
 export function useResumoMensal() {
-  const { dados, loading, erro, ALL_UNIT_IDS, labelForUnit } = usePromocoesData()
+  const { dados, dadosDiarios, loading, erro, ALL_UNIT_IDS, labelForUnit } = usePromocoesData()
 
   const meses = useMemo(() => {
     if (!dados) return []
@@ -65,15 +66,18 @@ export function useResumoMensal() {
           acc.custoTotal[cat] += slot.custoTotal[cat] || 0
         }
       }
-      const totalPacotes = CATEGORIAS_BASE.reduce((s, c) => s + acc.faturamento[c], 0)
-      acc.faturamento['Pacotes (total)'] = totalPacotes
-      acc.faturamento['Sem Promos'] = Math.max(0, acc.faturamentoTotal - totalPacotes)
+      // Total de Promoções = soma de TODAS as categorias de promoção/pacote —
+      // aparece em toda análise (Faturamento, CMV, Peso, Pessoas, Ticket Médio)
+      acc.faturamento[TOTAL_PROMOCOES] = CATEGORIAS_BASE.reduce((s, c) => s + acc.faturamento[c], 0)
+      acc.pessoas[TOTAL_PROMOCOES] = CATEGORIAS_BASE.reduce((s, c) => s + acc.pessoas[c], 0)
+      acc.custoTotal[TOTAL_PROMOCOES] = CATEGORIAS_BASE.reduce((s, c) => s + acc.custoTotal[c], 0)
+      acc.faturamento['Sem Promos'] = Math.max(0, acc.faturamentoTotal - acc.faturamento[TOTAL_PROMOCOES])
       resultado[mes] = acc
     }
     return resultado
   }
 
-  return { dados, loading, erro, ALL_UNIT_IDS, labelForUnit, meses, agregarPorUnidades }
+  return { dados, dadosDiarios, loading, erro, ALL_UNIT_IDS, labelForUnit, meses, agregarPorUnidades }
 }
 
 export default function DashboardPromocoes() {
@@ -119,29 +123,29 @@ export default function DashboardPromocoes() {
   const dAtual = dadosAgregados[mesAtual]
   const dAnterior = mesAnterior ? dadosAgregados[mesAnterior] : null
 
-  const totalPacotesAtual = dAtual.faturamento['Pacotes (total)']
-  const pesoAtual = dAtual.faturamentoTotal ? totalPacotesAtual / dAtual.faturamentoTotal : 0
-  const pesoAnterior = dAnterior?.faturamentoTotal ? dAnterior.faturamento['Pacotes (total)'] / dAnterior.faturamentoTotal : null
+  const totalPromocoesAtual = dAtual.faturamento[TOTAL_PROMOCOES]
+  const pesoAtual = dAtual.faturamentoTotal ? totalPromocoesAtual / dAtual.faturamentoTotal : 0
+  const pesoAnterior = dAnterior?.faturamentoTotal ? dAnterior.faturamento[TOTAL_PROMOCOES] / dAnterior.faturamentoTotal : null
   const deltaPeso = pesoAnterior != null ? pesoAtual - pesoAnterior : null
 
-  const custoTotalAtual = CATEGORIAS_BASE.reduce((s, c) => s + dAtual.custoTotal[c], 0)
-  const cmvMedioAtual = totalPacotesAtual ? custoTotalAtual / totalPacotesAtual : 0
+  const custoTotalAtual = dAtual.custoTotal[TOTAL_PROMOCOES]
+  const cmvMedioAtual = totalPromocoesAtual ? custoTotalAtual / totalPromocoesAtual : 0
 
-  const pessoasAtual = CATEGORIAS_BASE.reduce((s, c) => s + dAtual.pessoas[c], 0)
+  const pessoasAtual = dAtual.pessoas[TOTAL_PROMOCOES]
 
-  function linhaMetrica(label, getValor, formatador, invertido) {
+  function linhaMetrica(label, getValor, formatador, invertido, destaque) {
     return (
-      <tr key={label} className="border-t border-zinc-100">
-        <td className="py-1.5 px-3 font-medium text-brand-black">{label}</td>
+      <tr key={label} className={`border-t border-zinc-100 ${destaque ? 'bg-zinc-50/70' : ''}`}>
+        <td className={`py-1.5 px-3 ${destaque ? 'font-bold' : 'font-medium'} text-brand-black`}>{label}</td>
         {mesesExibidos.map((mes, idx) => {
           const valor = getValor(dadosAgregados[mes])
           const anterior = idx > 0 ? getValor(dadosAgregados[mesesExibidos[idx - 1]]) : null
           const delta = anterior != null && anterior !== 0 ? (valor - anterior) / anterior : null
           return (
-            <td key={mes} className="py-1.5 px-3 text-right font-mono tabular-nums">
+            <td key={mes} className={`py-1.5 px-3 text-right font-mono tabular-nums ${destaque ? 'font-bold' : ''}`}>
               {formatador(valor)}
               {delta != null && (
-                <div className={`text-[10.5px] ${corDelta(delta, invertido)}`}>
+                <div className={`text-[10.5px] font-normal ${corDelta(delta, invertido)}`}>
                   {delta > 0 ? '+' : ''}{pct(delta)}
                 </div>
               )}
@@ -182,7 +186,7 @@ export default function DashboardPromocoes() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard label="Faturamento em Promoções" value={brlK(totalPacotesAtual)} icon="🎟️"
+        <KpiCard label="Faturamento em Promoções" value={brlK(totalPromocoesAtual)} icon="🎟️"
           sub={deltaPeso != null ? `${deltaPeso > 0 ? '+' : ''}${pct(deltaPeso)} peso vs mês anterior` : null}
           ok={deltaPeso != null ? deltaPeso <= 0 : null}
         />
@@ -204,24 +208,26 @@ export default function DashboardPromocoes() {
           </thead>
           <tbody>
             {secao('Faturamento')}
-            {CATEGORIAS_LINHA.map(cat => linhaMetrica(cat, (d) => d?.faturamento[cat] ?? 0, brl, false))}
+            {CATEGORIAS_LINHA.map(cat => linhaMetrica(cat, (d) => d?.faturamento[cat] ?? 0, brl, false, cat === TOTAL_PROMOCOES))}
 
             {secao('CMV (estimado)')}
-            {CATEGORIAS_BASE.map(cat =>
-              linhaMetrica(cat, (d) => (d?.faturamento[cat] ? (d.custoTotal[cat] || 0) / d.faturamento[cat] : 0), pct, true)
+            {[...CATEGORIAS_BASE, TOTAL_PROMOCOES].map(cat =>
+              linhaMetrica(cat, (d) => (d?.faturamento[cat] ? (d.custoTotal[cat] || 0) / d.faturamento[cat] : 0), pct, true, cat === TOTAL_PROMOCOES)
             )}
 
             {secao('Peso das Promoções (% do faturamento total)')}
-            {[...CATEGORIAS_BASE, 'Pacotes (total)'].map(cat =>
-              linhaMetrica(cat, (d) => (d?.faturamentoTotal ? d.faturamento[cat] / d.faturamentoTotal : 0), pct, false)
+            {[...CATEGORIAS_BASE, TOTAL_PROMOCOES].map(cat =>
+              linhaMetrica(cat, (d) => (d?.faturamentoTotal ? d.faturamento[cat] / d.faturamentoTotal : 0), pct, false, cat === TOTAL_PROMOCOES)
             )}
 
             {secao('Nº de Pessoas')}
-            {CATEGORIAS_BASE.map(cat => linhaMetrica(cat, (d) => d?.pessoas[cat] ?? 0, num, false))}
+            {[...CATEGORIAS_BASE, TOTAL_PROMOCOES].map(cat =>
+              linhaMetrica(cat, (d) => d?.pessoas[cat] ?? 0, num, false, cat === TOTAL_PROMOCOES)
+            )}
 
             {secao('Ticket Médio')}
-            {CATEGORIAS_BASE.map(cat =>
-              linhaMetrica(cat, (d) => (d?.pessoas[cat] ? d.faturamento[cat] / d.pessoas[cat] : 0), brl, false)
+            {[...CATEGORIAS_BASE, TOTAL_PROMOCOES].map(cat =>
+              linhaMetrica(cat, (d) => (d?.pessoas[cat] ? d.faturamento[cat] / d.pessoas[cat] : 0), brl, false, cat === TOTAL_PROMOCOES)
             )}
           </tbody>
         </table>
