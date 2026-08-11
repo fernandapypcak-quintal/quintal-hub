@@ -45,7 +45,7 @@ function CardPeriodo({ label, subtitulo, resultado, lancados, total }) {
   const barColor = pct >= 70 ? '#059669' : pct >= 40 ? '#D97706' : '#E11D48'
 
   return (
-    <div className="rounded-xl border border-surface-border p-4 flex flex-col gap-2 flex-1 min-w-[220px]">
+    <div className="rounded-xl border border-surface-border p-4 flex flex-col gap-2 flex-1 min-w-[220px] max-w-xs">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-[11px] text-zinc-400 uppercase tracking-wide">{label}</p>
@@ -70,7 +70,7 @@ function CardPeriodo({ label, subtitulo, resultado, lancados, total }) {
 function Badge({ resultado, mesesLancados, totalMeses }) {
   const style = FAIXA_STYLE[resultado.faixa]
   return (
-    <div className={`rounded-lg ${style.bg} px-3 py-2 flex flex-col gap-0.5 min-w-[104px]`}>
+    <div className={`rounded-lg ${style.bg} px-3 py-2 flex flex-col gap-0.5 flex-1 min-w-[104px] max-w-[220px]`}>
       <span className="text-sm font-mono font-semibold text-brand-black">{fmtPct(resultado.real)}</span>
       <span className={`text-[10px] font-mono ${style.text}`}>{FAIXA_LABEL[resultado.faixa]}</span>
       <span className="text-[9px] font-mono text-zinc-400">{mesesLancados}/{totalMeses} meses</span>
@@ -82,7 +82,7 @@ function JornadaIndicador({ item }) {
   const { config, s1, s2, s2Janela, recuperandoS1, mesesLancadosS1, mesesLancadosS2, totalMesesS2 } = item
 
   return (
-    <div className="flex items-center gap-3 py-3 border-t border-surface-border first:border-t-0">
+    <div className="flex items-center gap-3 py-3 border-t border-surface-border first:border-t-0 max-w-2xl">
       <div className="w-36 shrink-0">
         <p className="text-sm font-medium text-brand-black">{config.label}</p>
         <p className="text-[10px] font-mono text-zinc-400">peso {(config.peso * 100).toFixed(0)}%</p>
@@ -90,7 +90,7 @@ function JornadaIndicador({ item }) {
 
       <Badge resultado={s1} mesesLancados={mesesLancadosS1} totalMeses={6} />
 
-      <div className="flex flex-col items-center shrink-0 w-24">
+      <div className="flex flex-col items-center shrink-0 w-16">
         {recuperandoS1 ? (
           <>
             <RotateCcw size={14} className="text-amber-600" />
@@ -105,8 +105,8 @@ function JornadaIndicador({ item }) {
 
       <Badge resultado={s2} mesesLancados={mesesLancadosS2} totalMeses={totalMesesS2} />
 
-      <span className="text-[10px] font-mono text-zinc-400 ml-auto shrink-0 hidden sm:inline">
-        {s2Janela === 'jul_dez' ? 'S2 = Jul-Dez' : 'S2 = Jan-Dez'}
+      <span className="text-[10px] font-mono text-zinc-400 shrink-0 hidden lg:inline w-20 text-right">
+        {s2Janela === 'jul_dez' ? 'Jul-Dez' : 'Jan-Dez'}
       </span>
     </div>
   )
