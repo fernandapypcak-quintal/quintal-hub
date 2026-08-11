@@ -143,8 +143,40 @@ function montarEstrutura(pacotes, promocoes, faturamentoPorMes) {
   return base
 }
 
+// ── Estrutura diária (só Faturamento + Pessoas, vem do relatório de Pacotes
+// que já tem data exata por linha — Promoções Utilizadas só vem por mês) ───
+function montarEstruturaDiaria(pacotes) {
+  const base = {} // base[unitId][data 'AAAA-MM-DD'] = { faturamento: {cat:v}, pessoas: {cat:v} }
+
+  function getSlot(unitId, data) {
+    if (!base[unitId]) base[unitId] = {}
+    if (!base[unitId][data]) {
+      base[unitId][data] = {
+        faturamento: Object.fromEntries(CATEGORIAS.map(c => [c, 0])),
+        pessoas: Object.fromEntries(CATEGORIAS.map(c => [c, 0])),
+      }
+    }
+    return base[unitId][data]
+  }
+
+  for (const r of pacotes) {
+    const unitId = unitIdFromString(r.unidade || r.loja)
+    const data = String(r.data || '').slice(0, 10)
+    if (!unitId || !data) continue
+    const categoria = r.categoria
+    if (!CATEGORIAS.includes(categoria)) continue
+
+    const slot = getSlot(unitId, data)
+    slot.faturamento[categoria] += (parseFloat(r.faturamento_r) || 0) + (parseFloat(r.emitido_nf_r) || 0)
+    slot.pessoas[categoria] += parseFloat(r.confirmados) || 0
+  }
+
+  return base
+}
+
 export function usePromocoesData() {
   const [dados, setDados] = useState(null)
+  const [dadosDiarios, setDadosDiarios] = useState(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState(null)
 
@@ -160,8 +192,8 @@ export function usePromocoesData() {
           carregarPromocoesPacotes(),
         ])
         if (cancelado) return
-        const estrutura = montarEstrutura(pacotes, promocoes, faturamentoPorMes)
-        setDados(estrutura)
+        setDados(montarEstrutura(pacotes, promocoes, faturamentoPorMes))
+        setDadosDiarios(montarEstruturaDiaria(pacotes))
       } catch (e) {
         if (!cancelado) setErro(e.message)
       } finally {
@@ -173,5 +205,5 @@ export function usePromocoesData() {
     return () => { cancelado = true }
   }, [])
 
-  return { dados, loading, erro, CATEGORIAS, ALL_UNIT_IDS, labelForUnit }
+  return { dados, dadosDiarios, loading, erro, CATEGORIAS, ALL_UNIT_IDS, labelForUnit }
 }
