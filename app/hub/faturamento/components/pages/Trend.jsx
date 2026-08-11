@@ -36,6 +36,7 @@ function getPeriodo(rawData) {
 
 const DOW_LABELS = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']; // 0=Dom
 const DOW_PT = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+const MESES_ABREV = ['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
 function PctLabel({ x, y, width, value, showLabels }) {
   if (!showLabels || value === null || value === undefined) return null;
@@ -89,22 +90,31 @@ export default function Trend() {
     // Médias por dia da semana:
     // 2026 = dias ANTERIORES ao lastDay (< lastDay, igual à fórmula da planilha)
     // 2025 = mês COMPLETO (igual à planilha de acompanhamento)
+    // Mês anterior = mês completo anterior ao atual (ex: se atual é Jul/26, usa Jun/26)
+    const mesAnt = mes === 1 ? 12 : mes - 1;
+    const anoMesAnt = mes === 1 ? ano - 1 : ano;
+    const recsMesAnt = baseData.filter(r => r.Ano === anoMesAnt && r.Mes === mesAnt);
+    const mesAntLabel = `${MESES_ABREV[mesAnt]}/${String(anoMesAnt).slice(2)}`;
     const recsParaMedia = recs.filter(r => r.Dia < lastDay); // strict < como na planilha
     const recsAA_completo = recsAA; // sem corte de dia
     const dowStats = Array.from({length: 7}, (_, dow) => {
-      const curRecs  = recsParaMedia.filter(r => r.Dia_Semana_Num === dow);
-      const prevRecs = recsAA_completo.filter(r => r.Dia_Semana_Num === dow);
+      const curRecs    = recsParaMedia.filter(r => r.Dia_Semana_Num === dow);
+      const prevRecs   = recsAA_completo.filter(r => r.Dia_Semana_Num === dow);
+      const mesAntRecs = recsMesAnt.filter(r => r.Dia_Semana_Num === dow);
       // Usa r.Dia (número) para contar dias distintos — evita problemas de formato de data
-      const diasCur  = new Set(curRecs.map(r => r.Dia)).size;
-      const diasPrev = new Set(prevRecs.map(r => r.Dia)).size;
-      const mediaCur  = diasCur  > 0 ? sum(curRecs)  / diasCur  : 0;
-      const mediaPrev = diasPrev > 0 ? sum(prevRecs) / diasPrev : 0;
+      const diasCur    = new Set(curRecs.map(r => r.Dia)).size;
+      const diasPrev   = new Set(prevRecs.map(r => r.Dia)).size;
+      const diasMesAnt = new Set(mesAntRecs.map(r => r.Dia)).size;
+      const mediaCur    = diasCur    > 0 ? sum(curRecs)    / diasCur    : 0;
+      const mediaPrev   = diasPrev   > 0 ? sum(prevRecs)   / diasPrev   : 0;
+      const mediaMesAnt = diasMesAnt > 0 ? sum(mesAntRecs) / diasMesAnt : 0;
       return {
         label: DOW_LABELS[dow],
         labelFull: DOW_PT[dow],
-        mediaCur, mediaPrev,
+        mediaCur, mediaPrev, mediaMesAnt,
         variacao: variation(mediaCur, mediaPrev),
-        diasCur, diasPrev,
+        variacaoMesAnt: variation(mediaCur, mediaMesAnt),
+        diasCur, diasPrev, diasMesAnt,
       };
     });
 
@@ -130,7 +140,7 @@ export default function Trend() {
         tendVsAADel:  variation(lojaTendDel,  lojaAADel) };
     }).sort((a, b) => b.lojaReal - a.lojaReal);
 
-    return { recs, realizado, tendFat, totalAA, yoy, tendVsAA, dowStats, porLoja };
+    return { recs, realizado, tendFat, totalAA, yoy, tendVsAA, dowStats, porLoja, mesAntLabel };
   }, [baseData, periodo]);
 
   // ── YoY por mês (barras) ──────────────────────────────────────────────
@@ -491,10 +501,10 @@ export default function Trend() {
       <div className="chart-card">
         <div className="flex items-center gap-2 mb-1">
           <h3 className="section-title">Média por Dia da Semana</h3>
-          <InfoTip text={`Média de faturamento por ocorrência de cada dia. ${periodo.label} vs mesmo período de ${periodo.ano - 1} (até dia ${periodo.lastDay}).`} />
+          <InfoTip text={`Média de faturamento por ocorrência de cada dia. ${periodo.label} vs mesmo período de ${periodo.ano - 1} (até dia ${periodo.lastDay}) e vs ${mesAtual.mesAntLabel}.`} />
         </div>
         <p className="text-xs text-zinc-400 mb-5">
-          {periodo.label} vs mesmo período {periodo.ano - 1} (até dia {periodo.lastDay})
+          {periodo.label} vs mesmo período {periodo.ano - 1} (até dia {periodo.lastDay}) vs {mesAtual.mesAntLabel}
         </p>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={mesAtual.dowStats} margin={{ top: 12, right: 4, left: 0, bottom: 0 }} barGap={4}>
@@ -517,10 +527,20 @@ export default function Trend() {
                         <span className="text-zinc-400">{periodo.ano - 1} ({d?.diasPrev} dias)</span>
                         <span className="text-zinc-400">{formatBRL(d?.mediaPrev||0, true)}</span>
                       </div>
+                      <div className="flex justify-between gap-4">
+                        <span className="text-zinc-400">{mesAtual.mesAntLabel} ({d?.diasMesAnt} dias)</span>
+                        <span className="text-zinc-400">{formatBRL(d?.mediaMesAnt||0, true)}</span>
+                      </div>
                       {d?.variacao !== null && (
                         <div className={`flex justify-between gap-4 pt-1.5 border-t border-surface-border font-semibold ${d.variacao >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          <span>Variação</span>
+                          <span>Variação YoY</span>
                           <span>{d.variacao >= 0 ? '▲' : '▼'} {Math.abs(d.variacao).toFixed(1).replace('.', ',')}%</span>
+                        </div>
+                      )}
+                      {d?.variacaoMesAnt !== null && (
+                        <div className={`flex justify-between gap-4 font-semibold ${d.variacaoMesAnt >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          <span>Var. vs Mês Ant.</span>
+                          <span>{d.variacaoMesAnt >= 0 ? '▲' : '▼'} {Math.abs(d.variacaoMesAnt).toFixed(1).replace('.', ',')}%</span>
                         </div>
                       )}
                     </div>
@@ -528,6 +548,7 @@ export default function Trend() {
                 );
               }}
             />
+            <Bar dataKey="mediaMesAnt" name={mesAtual.mesAntLabel} fill="#C4C4B5" radius={[3,3,0,0]} maxBarSize={22} />
             <Bar dataKey="mediaPrev" name={`${periodo.ano - 1}`} fill="#E8E8E2" radius={[3,3,0,0]} maxBarSize={28} />
             <Bar dataKey="mediaCur"  name={`${periodo.ano}`}     fill="#97A624" radius={[3,3,0,0]} maxBarSize={28}>
               <LabelList dataKey="mediaCur" content={(p) => {
@@ -545,8 +566,10 @@ export default function Trend() {
               <tr className="border-b border-surface-border">
                 <th className="table-header text-left py-2 pr-4">Dia</th>
                 <th className="table-header text-right py-2 px-4">Média {periodo.ano - 1}</th>
+                <th className="table-header text-right py-2 px-4">Média {mesAtual.mesAntLabel}</th>
                 <th className="table-header text-right py-2 px-4">Média {periodo.ano}</th>
-                <th className="table-header text-right py-2 pl-4">Variação</th>
+                <th className="table-header text-right py-2 px-4">Var. YoY</th>
+                <th className="table-header text-right py-2 pl-4">Var. vs Mês Ant.</th>
               </tr>
             </thead>
             <tbody>
@@ -554,11 +577,19 @@ export default function Trend() {
                 <tr key={d.label} className="border-b border-surface-border/50 hover:bg-surface-muted/50 transition-colors">
                   <td className="py-2.5 pr-4 font-medium text-brand-black">{d.labelFull}</td>
                   <td className="py-2.5 px-4 text-right font-mono text-sm text-zinc-400">{d.mediaPrev > 0 ? formatBRL(d.mediaPrev) : '—'}</td>
+                  <td className="py-2.5 px-4 text-right font-mono text-sm text-zinc-400">{d.mediaMesAnt > 0 ? formatBRL(d.mediaMesAnt) : '—'}</td>
                   <td className="py-2.5 px-4 text-right font-mono text-sm font-semibold text-brand-black">{d.mediaCur > 0 ? formatBRL(d.mediaCur) : '—'}</td>
-                  <td className="py-2.5 pl-4 text-right">
+                  <td className="py-2.5 px-4 text-right">
                     {d.variacao !== null && d.mediaCur > 0 && d.mediaPrev > 0 ? (
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${d.variacao >= 0 ? 'text-emerald-700 bg-emerald-50' : 'text-rose-700 bg-rose-50'}`}>
                         {d.variacao >= 0 ? '▲' : '▼'} {Math.abs(d.variacao).toFixed(1).replace('.', ',')}%
+                      </span>
+                    ) : '—'}
+                  </td>
+                  <td className="py-2.5 pl-4 text-right">
+                    {d.variacaoMesAnt !== null && d.mediaCur > 0 && d.mediaMesAnt > 0 ? (
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${d.variacaoMesAnt >= 0 ? 'text-emerald-700 bg-emerald-50' : 'text-rose-700 bg-rose-50'}`}>
+                        {d.variacaoMesAnt >= 0 ? '▲' : '▼'} {Math.abs(d.variacaoMesAnt).toFixed(1).replace('.', ',')}%
                       </span>
                     ) : '—'}
                   </td>
