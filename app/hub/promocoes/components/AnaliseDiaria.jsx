@@ -80,6 +80,12 @@ export default function AnaliseDiaria() {
 
     const unidadesSet = new Set(unidadesParaSomar)
 
+    // Faturamento/Pessoas por promoção — vem do relatório de Pacotes.
+    // OBS: "nome_do_pacote" às vezes é o nome do cliente/reserva (ex: eventos
+    // fechados), não o nome da promoção em si — por isso não dá pra casar
+    // com o relatório de Promoções Utilizadas linha a linha pra achar o CMV
+    // exato de cada reserva. O CMV que dá pra confiar é por CATEGORIA (a
+    // classificação é a mesma nos dois relatórios), calculado abaixo.
     const porPromocao = {}
     for (const r of pacotesRaw) {
       const unitId = unitIdFromString(r.unidade || r.loja)
@@ -88,40 +94,47 @@ export default function AnaliseDiaria() {
       if (!CATEGORIAS_BASE.includes(r.categoria)) continue
 
       const nome = r.nome_do_pacote || '(sem nome)'
-      if (!porPromocao[nome]) porPromocao[nome] = { nome, categoria: r.categoria, faturamento: 0, pessoas: 0, custo: 0, temCusto: false }
+      if (!porPromocao[nome]) porPromocao[nome] = { nome, categoria: r.categoria, faturamento: 0, pessoas: 0 }
       porPromocao[nome].faturamento += (parseFloat(r.faturamento_r) || 0) + (parseFloat(r.emitido_nf_r) || 0)
       porPromocao[nome].pessoas += parseFloat(r.confirmados) || 0
     }
 
-    function normalizarNome(s) {
-      return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+    return Object.values(porPromocao).sort((a, b) => b.faturamento - a.faturamento)
+  }, [diaExpandido, pacotesRaw, unidadesParaSomar.join(',')])
+
+  // CMV por categoria nesse dia — confiável, porque a categorização (não o
+  // nome) é igual nos dois relatórios
+  const cmvPorCategoriaDoDia = useMemo(() => {
+    if (!diaExpandido) return {}
+    const unidadesSet = new Set(unidadesParaSomar)
+    const custoPorCategoria = {}
+    const faturamentoPorCategoria = {}
+
+    for (const cat of CATEGORIAS_BASE) { custoPorCategoria[cat] = 0; faturamentoPorCategoria[cat] = 0 }
+
+    for (const r of pacotesRaw) {
+      const unitId = unitIdFromString(r.unidade || r.loja)
+      const data = String(r.data || '').slice(0, 10)
+      if (data !== diaExpandido || !unidadesSet.has(unitId)) continue
+      if (!CATEGORIAS_BASE.includes(r.categoria)) continue
+      faturamentoPorCategoria[r.categoria] += (parseFloat(r.faturamento_r) || 0) + (parseFloat(r.emitido_nf_r) || 0)
     }
-    const custoPorPromocaoNormalizada = {}
+
     for (const r of promocoesDiarioRaw) {
       const unitId = unitIdFromString(r.unidade || r.loja)
       const data = String(r.data || '').slice(0, 10)
       if (data !== diaExpandido || !unidadesSet.has(unitId)) continue
       if (!CATEGORIAS_BASE.includes(r.categoria)) continue
-
-      const chave = normalizarNome(r.promocao)
       const custoUnitario = custoDoProduto(r.produto)
       const usos = parseFloat(r.usos) || 0
-      if (custoUnitario != null) {
-        custoPorPromocaoNormalizada[chave] = (custoPorPromocaoNormalizada[chave] || 0) + custoUnitario * usos
-      }
+      if (custoUnitario != null) custoPorCategoria[r.categoria] += custoUnitario * usos
     }
 
-    for (const p of Object.values(porPromocao)) {
-      const chave = normalizarNome(p.nome)
-      if (custoPorPromocaoNormalizada[chave] != null) {
-        p.custo = custoPorPromocaoNormalizada[chave]
-        p.temCusto = true
-      }
+    const resultado = {}
+    for (const cat of CATEGORIAS_BASE) {
+      resultado[cat] = faturamentoPorCategoria[cat] ? custoPorCategoria[cat] / faturamentoPorCategoria[cat] : null
     }
-
-    return Object.values(porPromocao)
-      .map(p => ({ ...p, cmv: p.temCusto && p.faturamento ? p.custo / p.faturamento : null }))
-      .sort((a, b) => b.faturamento - a.faturamento)
+    return resultado
   }, [diaExpandido, pacotesRaw, promocoesDiarioRaw, unidadesParaSomar.join(',')])
 
   const pessoasMes = linhasPorDia.reduce((s, l) => s + l.pessoas, 0)
@@ -249,17 +262,28 @@ export default function AnaliseDiaria() {
                   {aberto && (
                     <tr key={l.data + '-detalhe'}>
                       <td colSpan={6} className="bg-zinc-50/70 px-3 py-3">
+                        {Object.values(cmvPorCategoriaDoDia).some(v => v != null) && (
+                          <div className="flex gap-4 mb-3 flex-wrap">
+                            {CATEGORIAS_BASE.map(cat => (
+                              <div key={cat} className="text-[11px]">
+                                <span className="text-zinc-400">{cat}: </span>
+                                <span className="font-mono font-semibold" style={{ color: cmvPorCategoriaDoDia[cat] != null ? corCmv(cmvPorCategoriaDoDia[cat]) : '#d4d4d8' }}>
+                                  {cmvPorCategoriaDoDia[cat] != null ? pct(cmvPorCategoriaDoDia[cat]) : '—'}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         {promocoesDoDia.length === 0 ? (
                           <p className="text-[12px] text-zinc-400">Nenhuma promoção/pacote encontrado nesse dia pra essa unidade.</p>
                         ) : (
                           <table className="w-full text-[12.5px]">
                             <thead>
                               <tr className="text-right text-[10.5px] text-zinc-400 uppercase">
-                                <th className="pb-1.5 text-left">Promoção</th>
+                                <th className="pb-1.5 text-left">Promoção / Reserva</th>
                                 <th className="pb-1.5">Categoria</th>
                                 <th className="pb-1.5">Faturamento</th>
                                 <th className="pb-1.5">Pessoas</th>
-                                <th className="pb-1.5">CMV</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -269,14 +293,14 @@ export default function AnaliseDiaria() {
                                   <td className="py-1.5 text-right text-zinc-500">{p.categoria}</td>
                                   <td className="py-1.5 text-right font-mono tabular-nums">{brl(p.faturamento)}</td>
                                   <td className="py-1.5 text-right font-mono tabular-nums">{num(p.pessoas)}</td>
-                                  <td className="py-1.5 text-right font-mono tabular-nums" style={{ color: p.cmv != null ? corCmv(p.cmv) : '#d4d4d8' }}>
-                                    {p.cmv != null ? pct(p.cmv) : '—'}
-                                  </td>
                                 </tr>
                               ))}
                             </tbody>
                           </table>
                         )}
+                        <p className="text-[10.5px] text-zinc-400 mt-2">
+                          O nome que aparece aqui vem do relatório de Pacotes — pra eventos fechados costuma ser o nome do cliente/reserva, não o nome da promoção. Por isso o CMV é mostrado por categoria (acima), não linha a linha.
+                        </p>
                       </td>
                     </tr>
                   )}
