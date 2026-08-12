@@ -117,7 +117,6 @@ export default function ImpressaoDetalhe({
           <div
             key={u.unidade}
             style={{
-              breakInside: 'avoid',
               breakBefore: idxUnidade === 0 ? 'auto' : 'page',
               marginBottom: 28,
             }}
@@ -125,6 +124,7 @@ export default function ImpressaoDetalhe({
             <div style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
               borderBottom: '2px solid #1a1a1a', paddingBottom: 8, marginBottom: 14,
+              breakAfter: 'avoid',
             }}>
               <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#1a1a1a' }}>{u.unidade}</h3>
               <div style={{ fontSize: 12.5, color: '#666' }}>
@@ -133,10 +133,11 @@ export default function ImpressaoDetalhe({
             </div>
 
             {u.grupos.map(g => (
-              <div key={g.chave} style={{ breakInside: 'avoid', marginBottom: 22 }}>
+              <div key={g.chave} style={{ marginBottom: 22 }}>
                 <div style={{
                   display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
                   borderBottom: '1px solid #EEE', paddingBottom: 6, marginBottom: 6,
+                  breakAfter: 'avoid',
                 }}>
                   <h4 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: '#1a1a1a' }}>{g.chave}</h4>
                   <div style={{ fontSize: 12, color: '#666' }}>
