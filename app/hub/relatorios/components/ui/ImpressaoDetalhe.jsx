@@ -27,23 +27,45 @@ export default function ImpressaoDetalhe({
     return dadosDetalhe.filter(d => d[campoData] === dia)
   }, [dadosDetalhe, dia, campoData])
 
-  const grupos = useMemo(() => {
-    const mapa = {}
+  // Agrupa primeiro por Unidade (casa) e, dentro de cada casa, por
+  // funcionário/responsável -- assim a impressão sempre separa por casa,
+  // mesmo quando o filtro do cabeçalho está em "Todas as unidades".
+  const unidades = useMemo(() => {
+    const porUnidade = {}
     filtrados.forEach(d => {
-      const chave = d[campoAgrupador] || '(sem responsável)'
-      if (!mapa[chave]) mapa[chave] = []
-      mapa[chave].push(d)
+      const unidade = d.unidade || '(sem unidade)'
+      if (!porUnidade[unidade]) porUnidade[unidade] = []
+      porUnidade[unidade].push(d)
     })
-    return Object.keys(mapa).sort().map(chave => {
-      const itens = [...mapa[chave]].sort((a, b) => String(b[campoData]).localeCompare(String(a[campoData])))
+
+    return Object.keys(porUnidade).sort().map(unidade => {
+      const itensUnidade = porUnidade[unidade]
+
+      const porResponsavel = {}
+      itensUnidade.forEach(d => {
+        const chave = d[campoAgrupador] || '(sem responsável)'
+        if (!porResponsavel[chave]) porResponsavel[chave] = []
+        porResponsavel[chave].push(d)
+      })
+
+      const grupos = Object.keys(porResponsavel).sort().map(chave => {
+        const itens = [...porResponsavel[chave]].sort((a, b) => String(b[campoData]).localeCompare(String(a[campoData])))
+        return {
+          chave,
+          itens,
+          qtd: itens.length,
+          valor: itens.reduce((acc, d) => acc + campoValor(d), 0),
+        }
+      }).sort((a, b) => b.valor - a.valor)
+
       return {
-        chave,
-        itens,
-        qtd: itens.length,
-        valor: itens.reduce((acc, d) => acc + campoValor(d), 0),
+        unidade,
+        grupos,
+        qtd: itensUnidade.length,
+        valor: itensUnidade.reduce((acc, d) => acc + campoValor(d), 0),
       }
     }).sort((a, b) => b.valor - a.valor)
-  }, [filtrados, campoAgrupador, campoValor])
+  }, [filtrados, campoAgrupador, campoData, campoValor])
 
   return (
     <div>
@@ -85,28 +107,49 @@ export default function ImpressaoDetalhe({
           </p>
         </div>
 
-        {grupos.length === 0 && (
+        {unidades.length === 0 && (
           <div style={{ padding: '32px 0', textAlign: 'center', fontSize: 13, color: '#BBB' }}>
             Sem lançamentos {dia ? 'nesse dia' : 'no período'}.
           </div>
         )}
 
-        {grupos.map(g => (
-          <div key={g.chave} style={{ breakInside: 'avoid', marginBottom: 22 }}>
+        {unidades.map((u, idxUnidade) => (
+          <div
+            key={u.unidade}
+            style={{
+              breakInside: 'avoid',
+              breakBefore: idxUnidade === 0 ? 'auto' : 'page',
+              marginBottom: 28,
+            }}
+          >
             <div style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
-              borderBottom: '1px solid #EEE', paddingBottom: 6, marginBottom: 6,
+              borderBottom: '2px solid #1a1a1a', paddingBottom: 8, marginBottom: 14,
             }}>
-              <h4 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: '#1a1a1a' }}>{g.chave}</h4>
-              <div style={{ fontSize: 12, color: '#666' }}>
-                {g.qtd.toLocaleString('pt-BR')} lançamentos · <strong>{formatarReais(g.valor)}</strong>
+              <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#1a1a1a' }}>{u.unidade}</h3>
+              <div style={{ fontSize: 12.5, color: '#666' }}>
+                {u.qtd.toLocaleString('pt-BR')} lançamentos · <strong>{formatarReais(u.valor)}</strong>
               </div>
             </div>
-            <Tabela
-              colunas={colunasDetalhe}
-              linhas={g.itens}
-              chaveLinha={(l, idx) => `${g.chave}-${idx}`}
-            />
+
+            {u.grupos.map(g => (
+              <div key={g.chave} style={{ breakInside: 'avoid', marginBottom: 22 }}>
+                <div style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+                  borderBottom: '1px solid #EEE', paddingBottom: 6, marginBottom: 6,
+                }}>
+                  <h4 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: '#1a1a1a' }}>{g.chave}</h4>
+                  <div style={{ fontSize: 12, color: '#666' }}>
+                    {g.qtd.toLocaleString('pt-BR')} lançamentos · <strong>{formatarReais(g.valor)}</strong>
+                  </div>
+                </div>
+                <Tabela
+                  colunas={colunasDetalhe}
+                  linhas={g.itens}
+                  chaveLinha={(l, idx) => `${g.chave}-${idx}`}
+                />
+              </div>
+            ))}
           </div>
         ))}
       </div>
