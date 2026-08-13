@@ -64,12 +64,49 @@ function HeroPeriodo({ titulo, subtitulo, resultado, lancados, total, indicadore
   )
 }
 
-function CardIndicador({ item }) {
-  const { config, s1, s2, recuperandoS1, mesesLancadosS1, mesesLancadosS2, totalMesesS2, metodologiaS1, metodologiaS2 } = item
-  const [detalheAberto, setDetalheAberto] = useState(false)
+function fmtReais(v) {
+  if (v == null) return null
+  const sinal = v < 0 ? '-' : ''
+  return `${sinal}R$ ${Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+}
 
-  const infoS1 = FAIXA_INFO[s1.faixa]
-  const infoS2 = FAIXA_INFO[s2.faixa]
+function BlocoPeriodo({ titulo, resultado, mesesLancados, totalMeses, valorAbsoluto, isLol }) {
+  const info = FAIXA_INFO[resultado.faixa]
+  return (
+    <div className={`rounded-xl p-4 ${info.bg}`}>
+      <p className="text-xs font-medium text-zinc-500 mb-2">{titulo}</p>
+
+      <div className="flex items-end gap-4 mb-1">
+        <div>
+          <p className="text-[10px] text-zinc-400 uppercase tracking-wide">Real</p>
+          <p className="text-3xl font-bold text-brand-black">{fmtPct(resultado.real)}</p>
+        </div>
+        <div className="pb-0.5">
+          <p className="text-[10px] text-zinc-400 uppercase tracking-wide">Meta</p>
+          <p className="text-lg font-semibold text-zinc-500">{fmtPct(resultado.meta)}</p>
+        </div>
+      </div>
+
+      {isLol && valorAbsoluto != null && (
+        <p className="text-xs text-zinc-500 mb-1">{fmtReais(valorAbsoluto)}</p>
+      )}
+
+      <div className="flex items-center gap-1.5 mt-1">
+        <info.Icon size={15} color={info.iconCor} />
+        <span className={`text-sm font-medium ${info.cor}`}>{info.texto}</span>
+      </div>
+      <p className="text-xs text-zinc-400 mt-1">dados de {mesesLancados}/{totalMeses} meses</p>
+    </div>
+  )
+}
+
+function CardIndicador({ item }) {
+  const {
+    config, s1, s2, recuperandoS1, mesesLancadosS1, mesesLancadosS2, totalMesesS2,
+    metodologiaS1, metodologiaS2, s1ValorAbsoluto, s2ValorAbsoluto,
+  } = item
+  const [detalheAberto, setDetalheAberto] = useState(false)
+  const isLol = config.key === 'lol_margem'
 
   const fraseConexao = recuperandoS1
     ? 'Não bateu no 1º semestre — o resultado final agora vai depender do ano inteiro (Jan a Dez), não só do 2º semestre.'
@@ -83,29 +120,22 @@ function CardIndicador({ item }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* S1 */}
-        <div className={`rounded-xl p-4 ${infoS1.bg}`}>
-          <p className="text-xs font-medium text-zinc-500 mb-1">1º Semestre (Jan-Jun)</p>
-          <p className="text-3xl font-bold text-brand-black mb-1">{fmtPct(s1.real)}</p>
-          <div className="flex items-center gap-1.5">
-            <infoS1.Icon size={15} color={infoS1.iconCor} />
-            <span className={`text-sm font-medium ${infoS1.cor}`}>{infoS1.texto}</span>
-          </div>
-          <p className="text-xs text-zinc-400 mt-1">meta: {fmtPct(s1.meta)} · dados de {mesesLancadosS1}/6 meses</p>
-        </div>
-
-        {/* S2 */}
-        <div className={`rounded-xl p-4 ${infoS2.bg}`}>
-          <p className="text-xs font-medium text-zinc-500 mb-1">
-            2º Semestre {recuperandoS1 ? '(Jan-Dez)' : '(Jul-Dez)'}
-          </p>
-          <p className="text-3xl font-bold text-brand-black mb-1">{fmtPct(s2.real)}</p>
-          <div className="flex items-center gap-1.5">
-            <infoS2.Icon size={15} color={infoS2.iconCor} />
-            <span className={`text-sm font-medium ${infoS2.cor}`}>{infoS2.texto}</span>
-          </div>
-          <p className="text-xs text-zinc-400 mt-1">meta: {fmtPct(s2.meta)} · dados de {mesesLancadosS2}/{totalMesesS2} meses</p>
-        </div>
+        <BlocoPeriodo
+          titulo="1º Semestre (Jan-Jun)"
+          resultado={s1}
+          mesesLancados={mesesLancadosS1}
+          totalMeses={6}
+          valorAbsoluto={s1ValorAbsoluto}
+          isLol={isLol}
+        />
+        <BlocoPeriodo
+          titulo={`2º Semestre ${recuperandoS1 ? '(Jan-Dez)' : '(Jul-Dez)'}`}
+          resultado={s2}
+          mesesLancados={mesesLancadosS2}
+          totalMeses={totalMesesS2}
+          valorAbsoluto={s2ValorAbsoluto}
+          isLol={isLol}
+        />
       </div>
 
       <div className={`mt-3 flex items-start gap-2 text-sm rounded-lg px-3 py-2 ${
