@@ -8,7 +8,7 @@
 // Sem dimensão de loja — a meta coletiva é única para a rede.
 
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
-import { calcularResultadoMes, calcularResultadoAnual, INDICADORES_BONUS } from '@/lib/bonus/scoring'
+import { calcularResultadoMes, calcularResultadoAnual, calcularAcumuladoAno, INDICADORES_BONUS } from '@/lib/bonus/scoring'
 
 const BonusDataContext = createContext(null)
 
@@ -76,23 +76,32 @@ export function BonusDataProvider({ children, isAdmin = false }) {
   })()
 
   // -------- apuração semestral oficial (S1 Jan-Jun / S2 Jul-Dez ou Jan-Dez) --------
-  const realPorMesPorIndicador = {}
+  // Cada mês carrega real (%, informativo) + numerador/denominador (pro
+  // acumulado de verdade). Ver lib/bonus/scoring.ts: calcularResultadoAnual
+  // usa numerador/denominador quando disponíveis em TODOS os meses da
+  // janela; senão cai pra média simples do Real como fallback.
+  const dadosPorMesPorIndicador = {}
   const limiaresPorIndicador = {}
   INDICADORES_BONUS.forEach((cfg) => {
-    realPorMesPorIndicador[cfg.key] = {}
+    dadosPorMesPorIndicador[cfg.key] = {}
   })
   linhasDoAno.forEach((l) => {
     const mm = (l.mes_ref || '').slice(5, 7)
     if (!mm) return
-    if (!realPorMesPorIndicador[l.indicador]) realPorMesPorIndicador[l.indicador] = {}
-    realPorMesPorIndicador[l.indicador][mm] = l.real
+    if (!dadosPorMesPorIndicador[l.indicador]) dadosPorMesPorIndicador[l.indicador] = {}
+    dadosPorMesPorIndicador[l.indicador][mm] = {
+      real: l.real,
+      numerador: l.numerador,
+      denominador: l.denominador,
+    }
     // usa o limiar mais recente lançado no ano pra esse indicador
     if (l.meta != null) {
       limiaresPorIndicador[l.indicador] = { meta: l.meta, meta80: l.meta_80, meta60: l.meta_60 }
     }
   })
 
-  const resultadoAnual = calcularResultadoAnual(Number(ano), realPorMesPorIndicador, limiaresPorIndicador)
+  const resultadoAnual = calcularResultadoAnual(Number(ano), dadosPorMesPorIndicador, limiaresPorIndicador)
+  const resultadoAcumuladoAno = calcularAcumuladoAno(Number(ano), dadosPorMesPorIndicador, limiaresPorIndicador)
 
   const salvarIndicador = useCallback(async (row) => {
     const res = await fetch('/api/bonus', {
@@ -111,6 +120,7 @@ export function BonusDataProvider({ children, isAdmin = false }) {
       resultadoMes,
       resultadosPorMes,
       resultadoAnual,
+      resultadoAcumuladoAno,
       loading, error, isAdmin,
       salvarIndicador,
       recarregar: () => carregarAno(ano),
