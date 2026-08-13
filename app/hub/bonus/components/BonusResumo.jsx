@@ -22,9 +22,16 @@ function fmtPct(v, digits = 1) {
   return `${(v * 100).toFixed(digits)}%`
 }
 
+function fmtReais(v) {
+  if (v == null) return null
+  const sinal = v < 0 ? '-' : ''
+  return `${sinal}R$ ${Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+}
+
 function Selo({ resultado }) {
-  const { config, real, meta, faixa, pontos } = resultado
+  const { config, real, meta, faixa, pontos, numerador } = resultado
   const style = FAIXA_STYLE[faixa]
+  const isLol = config.key === 'lol_margem'
 
   return (
     <div className={`flex items-center gap-2 px-3 py-2 rounded-full ${style.bg}`}>
@@ -35,6 +42,11 @@ function Selo({ resultado }) {
         <span className="text-[10px] text-zinc-400 whitespace-nowrap font-mono">
           {fmtPct(real)} / meta {fmtPct(meta)}
         </span>
+        {isLol && numerador != null && (
+          <span className="text-[10px] text-zinc-400 whitespace-nowrap font-mono">
+            ({fmtReais(numerador)})
+          </span>
+        )}
         <span className={`text-[10px] whitespace-nowrap font-mono ${style.text}/70`}>
           {FAIXA_LABEL[faixa]} · {pontos.toFixed(3).replace('.', ',')} pts
         </span>
@@ -59,7 +71,7 @@ function LinhaDetalhe({ resultado }) {
   )
 }
 
-export default function BonusResumo({ resultado }) {
+export default function BonusResumo({ resultado, titulo = 'Meta Coletiva', subtitulo }) {
   const [aberto, setAberto] = useState(false)
   const pct = resultado.percentualAtingido * 100
   const barColor = pct >= 70 ? '#059669' : pct >= 40 ? '#D97706' : '#E11D48'
@@ -70,7 +82,10 @@ export default function BonusResumo({ resultado }) {
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <TrendingUp size={16} className="text-brand-olive" />
-            <h2 className="text-base font-semibold text-brand-black">Meta Coletiva</h2>
+            <div>
+              <h2 className="text-base font-semibold text-brand-black">{titulo}</h2>
+              {subtitulo && <p className="text-[11px] text-zinc-400 font-mono">{subtitulo}</p>}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <div className="hidden sm:block w-24 h-1.5 bg-surface-muted rounded-full overflow-hidden">
