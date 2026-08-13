@@ -22,6 +22,51 @@ export default function Home() {
   const totalReceita = totalComboValor + totalFaturamentoDom + totalEntradasKids
   const resultado = totalReceita - totalGasto
 
+  // ── Vs mês anterior ──────────────────────────────────────────────
+  // Calcula a variação % entre os 2 últimos meses presentes nos dados
+  // filtrados (independente do range de data selecionado no topo).
+  const formatarDelta = (porMesObj) => {
+    const meses = Object.keys(porMesObj).sort()
+    if (meses.length < 2) return null
+    const atual = porMesObj[meses[meses.length - 1]] || 0
+    const anterior = porMesObj[meses[meses.length - 2]] || 0
+    if (anterior === 0) {
+      if (atual === 0) return null
+      return { texto: 'novo neste mês', cor: '#97A624' }
+    }
+    const pct = ((atual - anterior) / Math.abs(anterior)) * 100
+    const seta = pct >= 0 ? '▲' : '▼'
+    const cor = pct >= 0 ? '#97A624' : '#8C1414'
+    return { texto: `${seta} ${Math.abs(pct).toFixed(0)}% vs mês anterior`, cor }
+  }
+
+  const deltaCriancas = useMemo(() => formatarDelta(agruparPorMes(criancas, c => c.qtdCriancas)), [criancas])
+  const deltaComboQtd = useMemo(() => formatarDelta(agruparPorMes(combo, c => c.qtdVendida)), [combo])
+  const deltaFaturamentoDom = useMemo(() => formatarDelta(agruparPorMes(faturamentoDomShow, f => f.valor)), [faturamentoDomShow])
+  const deltaEntradasKids = useMemo(() => formatarDelta(agruparPorMes(entradasKids, e => e.valor)), [entradasKids])
+  const deltaGastoInflaveis = useMemo(() => formatarDelta(agruparPorMes(inflaveis, i => i.valor)), [inflaveis])
+  const deltaGastoShows = useMemo(() => formatarDelta(agruparPorMes(shows, s => s.valor)), [shows])
+  const deltaResultado = useMemo(() => {
+    // Resultado = receita - gasto, mês a mês (não dá pra usar agruparPorMes
+    // direto porque é uma combinação de 3 fontes de receita e 2 de gasto)
+    const comboM = agruparPorMes(combo, c => c.valor)
+    const faturamentoM = agruparPorMes(faturamentoDomShow, f => f.valor)
+    const entradasM = agruparPorMes(entradasKids, e => e.valor)
+    const inflaveisM = agruparPorMes(inflaveis, i => i.valor)
+    const showsM = agruparPorMes(shows, s => s.valor)
+    const todosMeses = new Set([
+      ...Object.keys(comboM), ...Object.keys(faturamentoM), ...Object.keys(entradasM),
+      ...Object.keys(inflaveisM), ...Object.keys(showsM),
+    ])
+    const resultadoPorMes = {}
+    todosMeses.forEach(mes => {
+      const receita = (comboM[mes] || 0) + (faturamentoM[mes] || 0) + (entradasM[mes] || 0)
+      const gasto = (inflaveisM[mes] || 0) + (showsM[mes] || 0)
+      resultadoPorMes[mes] = receita - gasto
+    })
+    return formatarDelta(resultadoPorMes)
+  }, [combo, faturamentoDomShow, entradasKids, inflaveis, shows])
+
   const criancasPorUnidade = useMemo(
     () => agruparPorUnidade(criancas, c => c.qtdCriancas),
     [criancas]
@@ -83,6 +128,46 @@ export default function Home() {
     return `${nomes[Number(mes) - 1] || mes}/${ano.slice(2)}`
   }
 
+  // ── Evolução Mensal por Unidade ──────────────────────────────────
+  const evolucaoPorUnidade = useMemo(() => {
+    const porMesUnidade = (arr, extrair) => {
+      const mapa = {}
+      arr.forEach(l => {
+        const mes = (l.data || '').slice(0, 7)
+        const unidade = l.unidade || '(não informado)'
+        if (!mes) return
+        const chave = unidade + '|' + mes
+        if (!mapa[chave]) mapa[chave] = 0
+        mapa[chave] += extrair(l) || 0
+      })
+      return mapa
+    }
+
+    const criancasM = porMesUnidade(criancas, c => c.qtdCriancas)
+    const comboM = porMesUnidade(combo, c => c.valor)
+    const faturamentoM = porMesUnidade(faturamentoDomShow, f => f.valor)
+    const entradasM = porMesUnidade(entradasKids, e => e.valor)
+    const gastoInflaveisM = porMesUnidade(inflaveis, i => i.valor)
+    const gastoShowsM = porMesUnidade(shows, s => s.valor)
+
+    const todasChaves = new Set([
+      ...Object.keys(criancasM), ...Object.keys(comboM), ...Object.keys(faturamentoM),
+      ...Object.keys(entradasM), ...Object.keys(gastoInflaveisM), ...Object.keys(gastoShowsM),
+    ])
+
+    return Array.from(todasChaves).map(chave => {
+      const [unidade, mes] = chave.split('|')
+      const receita = (comboM[chave] || 0) + (faturamentoM[chave] || 0) + (entradasM[chave] || 0)
+      const gasto = (gastoInflaveisM[chave] || 0) + (gastoShowsM[chave] || 0)
+      return {
+        unidade, mes,
+        criancas: criancasM[chave] || 0,
+        receita, gasto,
+        resultado: receita - gasto,
+      }
+    }).sort((a, b) => a.unidade === b.unidade ? a.mes.localeCompare(b.mes) : a.unidade.localeCompare(b.unidade))
+  }, [criancas, combo, faturamentoDomShow, entradasKids, inflaveis, shows])
+
   return (
     <>
       <Header
@@ -92,28 +177,31 @@ export default function Home() {
 
       <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
-          <KpiCard label="Crianças na Kids" valor={totalCriancas.toLocaleString('pt-BR')} icon={Baby} />
+          <KpiCard label="Crianças na Kids" valor={totalCriancas.toLocaleString('pt-BR')} icon={Baby} delta={deltaCriancas} />
           <KpiCard
             label="Combo Quintal Feliz"
             valor={totalComboQtd.toLocaleString('pt-BR')}
             subtitulo={formatarReais(totalComboValor)}
             icon={ShoppingBag}
+            delta={deltaComboQtd}
           />
-          <KpiCard label="Faturamento Dom. 12h-14h" valor={formatarReais(totalFaturamentoDom)} icon={PartyPopper} />
+          <KpiCard label="Faturamento Dom. 12h-14h" valor={formatarReais(totalFaturamentoDom)} icon={PartyPopper} delta={deltaFaturamentoDom} />
           <KpiCard
             label="Entradas Kids"
             valor={formatarReais(totalEntradasKids)}
             subtitulo="Passaporte, infláveis, bichinho (fora do horário do show)"
             icon={Ticket}
+            delta={deltaEntradasKids}
           />
-          <KpiCard label="Gasto Infláveis" valor={formatarReais(totalGastoInflaveis)} icon={Wallet2} />
-          <KpiCard label="Gasto Shows" valor={formatarReais(totalGastoShows)} icon={PiggyBank} />
+          <KpiCard label="Gasto Infláveis" valor={formatarReais(totalGastoInflaveis)} icon={Wallet2} delta={deltaGastoInflaveis} />
+          <KpiCard label="Gasto Shows" valor={formatarReais(totalGastoShows)} icon={PiggyBank} delta={deltaGastoShows} />
           <KpiCard
             label="Resultado Kids"
             valor={formatarReais(resultado)}
             subtitulo={resultado >= 0 ? 'Receita cobre o gasto' : 'Gasto acima da receita'}
             subtituloColor={resultado >= 0 ? '#97A624' : '#8C1414'}
             icon={TrendingUp}
+            delta={deltaResultado}
           />
         </div>
 
@@ -158,6 +246,46 @@ export default function Home() {
                       </td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+
+        <Card titulo="Evolução Mensal por Unidade">
+          {evolucaoPorUnidade.length === 0 ? (
+            <div style={{ color: '#BBB', fontSize: 13, padding: '12px 0' }}>Sem dados suficientes pra montar a evolução por unidade.</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #EBEBEB', textAlign: 'left', color: '#999' }}>
+                    <th style={{ padding: '6px 8px' }}>Unidade</th>
+                    <th style={{ padding: '6px 8px' }}>Mês</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>Crianças</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>Receita</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>Gasto</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>Resultado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {evolucaoPorUnidade.map((m, idx) => {
+                    const primeiraDaUnidade = idx === 0 || evolucaoPorUnidade[idx - 1].unidade !== m.unidade
+                    return (
+                      <tr key={idx} style={{ borderBottom: '1px solid #F5F5F5', borderTop: primeiraDaUnidade && idx > 0 ? '2px solid #EBEBEB' : undefined }}>
+                        <td style={{ padding: '6px 8px', fontWeight: primeiraDaUnidade ? 700 : 400, color: primeiraDaUnidade ? '#111' : '#BBB' }}>
+                          {primeiraDaUnidade ? m.unidade : ''}
+                        </td>
+                        <td style={{ padding: '6px 8px' }}>{nomeMes(m.mes)}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right' }}>{m.criancas.toLocaleString('pt-BR')}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right' }}>{formatarReais(m.receita)}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right' }}>{formatarReais(m.gasto)}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: m.resultado >= 0 ? '#97A624' : '#8C1414' }}>
+                          {formatarReais(m.resultado)}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
