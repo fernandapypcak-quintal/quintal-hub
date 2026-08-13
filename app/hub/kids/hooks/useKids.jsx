@@ -46,8 +46,15 @@ export function KidsProvider({ children, allowedLojas = '*' }) {
   const [error, setError] = useState(null)
 
   const [unidadeFiltro, setUnidadeFiltro] = useState('Todas')
-  const [dataInicio, setDataInicio] = useState('')
-  const [dataFim, setDataFim] = useState('')
+  // Por padrão, abre já no mês atual (mais útil no dia a dia); quem
+  // quiser ver outro período/histórico completo usa os filtros/"limpar".
+  const hoje = new Date()
+  const primeiroDiaMesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-01`
+  const ultimoDiaMesAtual = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0)
+    .toISOString().slice(0, 10)
+
+  const [dataInicio, setDataInicio] = useState(primeiroDiaMesAtual)
+  const [dataFim, setDataFim] = useState(ultimoDiaMesAtual)
 
   useEffect(() => {
     loadTudo()
@@ -124,6 +131,18 @@ export function KidsProvider({ children, allowedLojas = '*' }) {
   const faturamentoFiltrado = useMemo(() => filtra(faturamentoDomShow, 'data'), [faturamentoDomShow, unidadeFiltro, dataInicio, dataFim])
   const entradasFiltradas = useMemo(() => filtra(entradasKids, 'data'), [entradasKids, unidadeFiltro, dataInicio, dataFim])
 
+  // Versões filtradas SÓ por unidade (ignora o filtro de data do topo) --
+  // usadas pra calcular "vs mês anterior", que precisa ver pelo menos os
+  // últimos 2 meses de histórico mesmo que o filtro de data esteja restrito
+  // a 1 mês só (senão nunca teria o mês anterior pra comparar).
+  const filtraSoUnidade = (arr) => unidadeFiltro !== 'Todas' ? arr.filter(l => l.unidade === unidadeFiltro) : arr
+  const showsHistorico = useMemo(() => filtraSoUnidade(shows), [shows, unidadeFiltro])
+  const criancasHistorico = useMemo(() => filtraSoUnidade(criancas), [criancas, unidadeFiltro])
+  const inflaveisHistorico = useMemo(() => filtraSoUnidade(inflaveis), [inflaveis, unidadeFiltro])
+  const comboHistorico = useMemo(() => filtraSoUnidade(combo), [combo, unidadeFiltro])
+  const faturamentoHistorico = useMemo(() => filtraSoUnidade(faturamentoDomShow), [faturamentoDomShow, unidadeFiltro])
+  const entradasHistorico = useMemo(() => filtraSoUnidade(entradasKids), [entradasKids, unidadeFiltro])
+
   return (
     <KidsCtx.Provider value={{
       loading, error,
@@ -135,6 +154,9 @@ export function KidsProvider({ children, allowedLojas = '*' }) {
       combo: comboFiltrado,
       faturamentoDomShow: faturamentoFiltrado,
       entradasKids: entradasFiltradas,
+      // Só filtrados por unidade (ignoram data) -- pra base de "vs mês anterior"
+      showsHistorico, criancasHistorico, inflaveisHistorico,
+      comboHistorico, faturamentoHistorico, entradasHistorico,
     }}>
       {children}
     </KidsCtx.Provider>
