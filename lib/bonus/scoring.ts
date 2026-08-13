@@ -137,19 +137,32 @@ export const FAIXA_LABEL: Record<FaixaBonus, string> = {
 // A regra é por INDICADOR, não pro bônus como um todo — um indicador
 // pode "recuperar" enquanto outro não, no mesmo semestre.
 //
-// O Real de cada janela é a MÉDIA SIMPLES dos meses incluídos (mesma
-// convenção já usada em lib/metas/scoring.ts pra indicadores em %).
-// Se quiser trocar pra acumulado "de verdade" (soma custo / soma ROB),
-// dá pra fazer isso no DRE antes de lançar o Real mensal — aqui a
-// agregação já assume que o que chega em Real já é comparável mês a mês.
+// O Real de cada janela é o ACUMULADO DE VERDADE do período: soma dos
+// numeradores ÷ soma dos denominadores dos meses incluídos — não a
+// média das médias mensais. Isso é o que a Fernanda validou com o DRE:
+//   CMV / Custo c/ Pessoal -> numerador = custo do mês (R$), denominador = ROB do mês (R$)
+//   LOL (Margem)           -> numerador = LOL líquido do mês (R$), denominador = ROB do mês (R$)
+//   NPS                    -> numerador = Promotores - Detratores do mês, denominador = respondentes do mês
+//
+// Se algum mês da janela não tiver numerador/denominador lançado (só
+// Real), a agregação daquele indicador/janela cai pra MÉDIA SIMPLES dos
+// Real disponíveis, como fallback — e isso fica marcado explicitamente
+// (`metodologia: 'media_fallback'`) pra nunca passar por acumulado sem ser.
 // ═══════════════════════════════════════════════════════════════════════
 
 export type JanelaS2 = 'jul_dez' | 'jan_dez'
+export type MetodologiaAgregacao = 'acumulado' | 'media_fallback'
 
 export interface LimiaresIndicador {
   meta: number
   meta80: number
   meta60: number
+}
+
+export interface DadosMesIndicador {
+  real: number | null | undefined
+  numerador: number | null | undefined
+  denominador: number | null | undefined
 }
 
 export interface ResultadoIndicadorSemestral {
@@ -161,6 +174,10 @@ export interface ResultadoIndicadorSemestral {
   mesesLancadosS1: number // quantos dos 6 meses de S1 já têm Real lançado (de 0 a 6)
   mesesLancadosS2: number // quantos meses da janela de S2 já têm Real lançado
   totalMesesS2: number // tamanho da janela de S2 (6 se jul_dez, 12 se jan_dez)
+  metodologiaS1: MetodologiaAgregacao
+  metodologiaS2: MetodologiaAgregacao
+  s1ValorAbsoluto: number | null // soma do numerador em S1 (ex: LOL em R$) — null se metodologia = média fallback
+  s2ValorAbsoluto: number | null // idem pra S2
 }
 
 export interface ResultadoSemestre {
@@ -187,19 +204,44 @@ function mediaSimples(valores: Array<number | null | undefined>): number | null 
 }
 
 /**
- * @param realPorMesPorIndicador  ex: { cmv: { '01': 0.267, '02': 0.287, ... }, ... } — chave do mês em 'MM'
- * @param limiaresPorIndicador    Meta/Meta80/Meta60 vigentes no ano (mesmo valor usado em todos os meses)
+ * Acumulado real (soma numerador / soma denominador) sobre os meses
+ * informados. Só usa acumulado se TODOS os meses da janela tiverem
+ * numerador E denominador lançados — senão cai pra média simples do
+ * Real disponível (fallback), e avisa qual dos dois foi usado.
+ */
+function agregarPeriodo(meses: string[], porMes: Record<string, DadosMesIndicador>): {
+  valor: number | null
+  metodologia: MetodologiaAgregacao
+  somaNumerador: number | null // soma bruta do numerador (ex: R$ de LOL) — só quando 'acumulado'
+} {
+  const entradas = meses.map((m) => porMes[m]).filter((e): e is DadosMesIndicador => e != null)
+  const todasComVolume = entradas.length > 0 && entradas.every(
+    (e) => e.numerador != null && e.denominador != null && e.denominador !== 0
+  )
+
+  if (todasComVolume) {
+    const somaNum = entradas.reduce((a, e) => a + (e.numerador as number), 0)
+    const somaDen = entradas.reduce((a, e) => a + (e.denominador as number), 0)
+    return { valor: somaDen !== 0 ? somaNum / somaDen : null, metodologia: 'acumulado', somaNumerador: somaNum }
+  }
+
+  return { valor: mediaSimples(entradas.map((e) => e.real)), metodologia: 'media_fallback', somaNumerador: null }
+}
+
+/**
+ * @param dadosPorMesPorIndicador  ex: { cmv: { '01': { real, numerador, denominador }, ... }, ... } — chave do mês em 'MM'
+ * @param limiaresPorIndicador     Meta/Meta80/Meta60 vigentes no ano (mesmo valor usado em todos os meses)
  */
 export function calcularResultadoAnual(
   ano: number,
-  realPorMesPorIndicador: Record<string, Record<string, number | null | undefined>>,
+  dadosPorMesPorIndicador: Record<string, Record<string, DadosMesIndicador>>,
   limiaresPorIndicador: Record<string, LimiaresIndicador>
 ): ResultadoBonusAnual {
   const indicadores: ResultadoIndicadorSemestral[] = INDICADORES_BONUS.map((config) => {
-    const porMes = realPorMesPorIndicador[config.key] ?? {}
+    const porMes = dadosPorMesPorIndicador[config.key] ?? {}
     const lim = limiaresPorIndicador[config.key]
 
-    const realS1 = mediaSimples(MESES_S1.map((m) => porMes[m]))
+    const { valor: realS1, metodologia: metodologiaS1, somaNumerador: numS1 } = agregarPeriodo(MESES_S1, porMes)
     const resultadoS1 = calcularResultadoIndicador(config, {
       indicador: config.key,
       real: realS1,
@@ -212,7 +254,7 @@ export function calcularResultadoAnual(
     const s2Janela: JanelaS2 = recuperandoS1 ? 'jan_dez' : 'jul_dez'
     const mesesS2 = recuperandoS1 ? MESES_ANO : MESES_S2
 
-    const realS2 = mediaSimples(mesesS2.map((m) => porMes[m]))
+    const { valor: realS2, metodologia: metodologiaS2, somaNumerador: numS2 } = agregarPeriodo(mesesS2, porMes)
     const resultadoS2 = calcularResultadoIndicador(config, {
       indicador: config.key,
       real: realS2,
@@ -221,7 +263,7 @@ export function calcularResultadoAnual(
       meta60: lim?.meta60 ?? null,
     })
 
-    const contarLancados = (meses: string[]) => meses.filter((m) => porMes[m] != null).length
+    const contarLancados = (meses: string[]) => meses.filter((m) => porMes[m]?.real != null).length
 
     return {
       config,
@@ -232,6 +274,10 @@ export function calcularResultadoAnual(
       mesesLancadosS1: contarLancados(MESES_S1),
       mesesLancadosS2: contarLancados(mesesS2),
       totalMesesS2: mesesS2.length,
+      metodologiaS1,
+      metodologiaS2,
+      s1ValorAbsoluto: numS1,
+      s2ValorAbsoluto: numS2,
     }
   })
 
@@ -250,5 +296,65 @@ export function calcularResultadoAnual(
       pesoTotalColetivo: PESO_COLETIVO_TOTAL,
       percentualAtingido: somar('s2') / PESO_COLETIVO_TOTAL,
     },
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Visão "Acumulado do Ano" — segunda visão, mais simples: acumulado
+// Jan-Dez direto (soma numerador / soma denominador de todos os meses
+// lançados no ano), SEM a divisão em S1/S2 e SEM a regra de recuperação.
+// É o número "cru" do ano até agora, útil pra acompanhar a tendência
+// sem misturar com a mecânica de pagamento do bônus.
+// ═══════════════════════════════════════════════════════════════════════
+
+export interface ResultadoIndicadorAcumuladoAno {
+  config: IndicadorBonusConfig
+  resultado: ResultadoIndicadorBonus
+  metodologia: MetodologiaAgregacao
+  mesesLancados: number
+  valorAbsoluto: number | null
+}
+
+export interface ResultadoAcumuladoAno {
+  ano: number
+  indicadores: ResultadoIndicadorAcumuladoAno[]
+  pontosTotais: number
+  pesoTotalColetivo: number
+  percentualAtingido: number
+  mesesLancados: number // mínimo entre os indicadores
+}
+
+export function calcularAcumuladoAno(
+  ano: number,
+  dadosPorMesPorIndicador: Record<string, Record<string, DadosMesIndicador>>,
+  limiaresPorIndicador: Record<string, LimiaresIndicador>
+): ResultadoAcumuladoAno {
+  const indicadores: ResultadoIndicadorAcumuladoAno[] = INDICADORES_BONUS.map((config) => {
+    const porMes = dadosPorMesPorIndicador[config.key] ?? {}
+    const lim = limiaresPorIndicador[config.key]
+
+    const { valor: real, metodologia, somaNumerador } = agregarPeriodo(MESES_ANO, porMes)
+    const resultado = calcularResultadoIndicador(config, {
+      indicador: config.key,
+      real,
+      meta: lim?.meta ?? null,
+      meta80: lim?.meta80 ?? null,
+      meta60: lim?.meta60 ?? null,
+    })
+
+    const mesesLancados = MESES_ANO.filter((m) => porMes[m]?.real != null).length
+
+    return { config, resultado, metodologia, mesesLancados, valorAbsoluto: somaNumerador }
+  })
+
+  const pontosTotais = indicadores.reduce((soma, i) => soma + i.resultado.pontos, 0)
+
+  return {
+    ano,
+    indicadores,
+    pontosTotais,
+    pesoTotalColetivo: PESO_COLETIVO_TOTAL,
+    percentualAtingido: pontosTotais / PESO_COLETIVO_TOTAL,
+    mesesLancados: Math.min(...indicadores.map((i) => i.mesesLancados)),
   }
 }
