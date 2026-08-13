@@ -193,7 +193,7 @@ export default function Home() {
           <KpiCard
             label="Entradas Kids"
             valor={formatarReais(totalEntradasKids)}
-            subtitulo="Passaporte, infláveis, bichinho (fora do horário do show)"
+            subtitulo="Passaporte, infláveis, bichinho"
             icon={Ticket}
             delta={deltaEntradasKids}
           />
