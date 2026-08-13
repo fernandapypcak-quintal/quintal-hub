@@ -109,8 +109,8 @@ function CardIndicador({ item }) {
   const isLol = config.key === 'lol_margem'
 
   const fraseConexao = recuperandoS1
-    ? 'Não bateu no 1º semestre — o resultado final agora vai depender do ano inteiro (Jan a Dez), não só do 2º semestre.'
-    : 'Bateu no 1º semestre — o 2º semestre é avaliado à parte, só com Jul a Dez.'
+    ? 'Não bateu no 1º semestre — isso não muda o número do 2º semestre (ele continua só Jul-Dez). A chance de recuperar aparece na aba "Acumulado do Ano".'
+    : 'Bateu no 1º semestre — o 2º semestre segue avaliado à parte, normalmente.'
 
   return (
     <div className="rounded-2xl border border-surface-border bg-white p-5 shadow-card">
@@ -129,7 +129,7 @@ function CardIndicador({ item }) {
           isLol={isLol}
         />
         <BlocoPeriodo
-          titulo={`2º Semestre ${recuperandoS1 ? '(Jan-Dez)' : '(Jul-Dez)'}`}
+          titulo="2º Semestre (Jul-Dez)"
           resultado={s2}
           mesesLancados={mesesLancadosS2}
           totalMeses={totalMesesS2}
@@ -182,8 +182,10 @@ export default function ApuracaoSemestral({ resultadoAnual }) {
       <div>
         <h2 className="text-2xl font-bold text-brand-black">Apuração do Bônus — {ano}</h2>
         <p className="text-sm text-zinc-500 mt-1">
-          O bônus coletivo é apurado 2 vezes por ano. Se um indicador não bater meta no 1º semestre,
-          ele ganha mais uma chance no fechamento do ano — avaliando Jan a Dez inteiro em vez de só o 2º semestre.
+          1º e 2º semestre são fotos independentes — cada um só conta os próprios 6 meses.
+          Se um indicador não bateu meta no 1º semestre, ele não "estraga" o 2º nem se mistura com ele:
+          a chance de recuperação aparece na visão <strong>Acumulado do Ano</strong> (Jan-Dez), que é onde
+          os 12 meses entram juntos na mesma conta.
         </p>
       </div>
 
@@ -199,7 +201,7 @@ export default function ApuracaoSemestral({ resultadoAnual }) {
         />
         <HeroPeriodo
           titulo="2º Semestre"
-          subtitulo="Jul-Dez/2026 (ou ano inteiro pra quem tá recuperando)"
+          subtitulo="Jul-Dez/2026"
           resultado={s2}
           lancados={lancadosS2}
           total={totalS2}
