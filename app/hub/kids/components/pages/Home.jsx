@@ -27,48 +27,80 @@ export default function Home() {
   const resultado = totalReceita - totalGasto
 
   // ── Vs mês anterior ──────────────────────────────────────────────
-  // Calcula a variação % entre os 2 últimos meses presentes nos dados
-  // filtrados (independente do range de data selecionado no topo).
-  const formatarDelta = (porMesObj) => {
-    const meses = Object.keys(porMesObj).sort()
+  // Agrupa por DIA (não por mês) — precisamos disso pra poder cortar os
+  // dois meses no mesmo dia quando o mês mais recente ainda está em
+  // andamento (senão "13 dias de agosto" perde feio pra "31 dias de julho"
+  // mesmo que o ritmo esteja igual ou melhor).
+  const agruparPorDia = (linhas, extrairValor) => {
+    const mapa = {}
+    linhas.forEach(l => {
+      const dia = l.data
+      if (!dia) return
+      mapa[dia] = (mapa[dia] || 0) + (extrairValor(l) || 0)
+    })
+    return mapa
+  }
+
+  // Recebe um objeto { "yyyy-MM-dd": valor } e devolve o badge de delta,
+  // comparando os 2 últimos meses -- cortados no mesmo dia-do-mês se o mês
+  // mais recente for o mês corrente (ainda em andamento).
+  const formatarDeltaJusto = (porDia) => {
+    const dias = Object.keys(porDia).sort()
+    if (dias.length === 0) return null
+
+    const meses = Array.from(new Set(dias.map(d => d.slice(0, 7)))).sort()
     if (meses.length < 2) return null
-    const atual = porMesObj[meses[meses.length - 1]] || 0
-    const anterior = porMesObj[meses[meses.length - 2]] || 0
+
+    const mesAtual = meses[meses.length - 1]
+    const mesAnterior = meses[meses.length - 2]
+
+    const hojeStr = new Date().toISOString().slice(0, 10)
+    const ehMesEmAndamento = mesAtual === hojeStr.slice(0, 7)
+    const diaCorte = ehMesEmAndamento ? Number(hojeStr.slice(8, 10)) : 31
+
+    const somaMes = (mes, limiteDia) => dias
+      .filter(d => d.slice(0, 7) === mes && Number(d.slice(8, 10)) <= limiteDia)
+      .reduce((acc, d) => acc + porDia[d], 0)
+
+    const atual = somaMes(mesAtual, diaCorte)
+    const anterior = somaMes(mesAnterior, diaCorte)
+
     if (anterior === 0) {
       if (atual === 0) return null
-      return { texto: 'novo neste mês', cor: '#97A624' }
+      return { texto: 'novo neste período', cor: '#97A624' }
     }
     const pct = ((atual - anterior) / Math.abs(anterior)) * 100
     const seta = pct >= 0 ? '▲' : '▼'
     const cor = pct >= 0 ? '#97A624' : '#8C1414'
-    return { texto: `${seta} ${Math.abs(pct).toFixed(0)}% vs mês anterior`, cor }
+    const sufixo = ehMesEmAndamento ? ` (até dia ${diaCorte})` : ''
+    return { texto: `${seta} ${Math.abs(pct).toFixed(0)}% vs mês anterior${sufixo}`, cor }
   }
 
-  const deltaCriancas = useMemo(() => formatarDelta(agruparPorMes(criancasHistorico, c => c.qtdCriancas)), [criancasHistorico])
-  const deltaComboQtd = useMemo(() => formatarDelta(agruparPorMes(comboHistorico, c => c.qtdVendida)), [comboHistorico])
-  const deltaFaturamentoDom = useMemo(() => formatarDelta(agruparPorMes(faturamentoHistorico, f => f.valor)), [faturamentoHistorico])
-  const deltaEntradasKids = useMemo(() => formatarDelta(agruparPorMes(entradasHistorico, e => e.valor)), [entradasHistorico])
-  const deltaGastoInflaveis = useMemo(() => formatarDelta(agruparPorMes(inflaveisHistorico, i => i.valor)), [inflaveisHistorico])
-  const deltaGastoShows = useMemo(() => formatarDelta(agruparPorMes(showsHistorico, s => s.valor)), [showsHistorico])
+  const deltaCriancas = useMemo(() => formatarDeltaJusto(agruparPorDia(criancasHistorico, c => c.qtdCriancas)), [criancasHistorico])
+  const deltaComboQtd = useMemo(() => formatarDeltaJusto(agruparPorDia(comboHistorico, c => c.qtdVendida)), [comboHistorico])
+  const deltaFaturamentoDom = useMemo(() => formatarDeltaJusto(agruparPorDia(faturamentoHistorico, f => f.valor)), [faturamentoHistorico])
+  const deltaEntradasKids = useMemo(() => formatarDeltaJusto(agruparPorDia(entradasHistorico, e => e.valor)), [entradasHistorico])
+  const deltaGastoInflaveis = useMemo(() => formatarDeltaJusto(agruparPorDia(inflaveisHistorico, i => i.valor)), [inflaveisHistorico])
+  const deltaGastoShows = useMemo(() => formatarDeltaJusto(agruparPorDia(showsHistorico, s => s.valor)), [showsHistorico])
   const deltaResultado = useMemo(() => {
-    // Resultado = receita - gasto, mês a mês (não dá pra usar agruparPorMes
-    // direto porque é uma combinação de 3 fontes de receita e 2 de gasto)
-    const comboM = agruparPorMes(comboHistorico, c => c.valor)
-    const faturamentoM = agruparPorMes(faturamentoHistorico, f => f.valor)
-    const entradasM = agruparPorMes(entradasHistorico, e => e.valor)
-    const inflaveisM = agruparPorMes(inflaveisHistorico, i => i.valor)
-    const showsM = agruparPorMes(showsHistorico, s => s.valor)
-    const todosMeses = new Set([
-      ...Object.keys(comboM), ...Object.keys(faturamentoM), ...Object.keys(entradasM),
-      ...Object.keys(inflaveisM), ...Object.keys(showsM),
+    // Resultado = receita - gasto, dia a dia (combinação de 3 fontes de
+    // receita e 2 de gasto), depois aplica a mesma comparação justa por cima
+    const porDiaCombo = agruparPorDia(comboHistorico, c => c.valor)
+    const porDiaFaturamento = agruparPorDia(faturamentoHistorico, f => f.valor)
+    const porDiaEntradas = agruparPorDia(entradasHistorico, e => e.valor)
+    const porDiaInflaveis = agruparPorDia(inflaveisHistorico, i => i.valor)
+    const porDiaShows = agruparPorDia(showsHistorico, s => s.valor)
+    const todosDias = new Set([
+      ...Object.keys(porDiaCombo), ...Object.keys(porDiaFaturamento), ...Object.keys(porDiaEntradas),
+      ...Object.keys(porDiaInflaveis), ...Object.keys(porDiaShows),
     ])
-    const resultadoPorMes = {}
-    todosMeses.forEach(mes => {
-      const receita = (comboM[mes] || 0) + (faturamentoM[mes] || 0) + (entradasM[mes] || 0)
-      const gasto = (inflaveisM[mes] || 0) + (showsM[mes] || 0)
-      resultadoPorMes[mes] = receita - gasto
+    const porDiaResultado = {}
+    todosDias.forEach(dia => {
+      const receita = (porDiaCombo[dia] || 0) + (porDiaFaturamento[dia] || 0) + (porDiaEntradas[dia] || 0)
+      const gasto = (porDiaInflaveis[dia] || 0) + (porDiaShows[dia] || 0)
+      porDiaResultado[dia] = receita - gasto
     })
-    return formatarDelta(resultadoPorMes)
+    return formatarDeltaJusto(porDiaResultado)
   }, [comboHistorico, faturamentoHistorico, entradasHistorico, inflaveisHistorico, showsHistorico])
 
   const criancasPorUnidade = useMemo(
