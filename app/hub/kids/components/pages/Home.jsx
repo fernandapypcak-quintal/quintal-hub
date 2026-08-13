@@ -7,7 +7,11 @@ import { useKids, agruparPorUnidade, agruparPorMes, somar } from '../../hooks/us
 import { Baby, ShoppingBag, PartyPopper, Wallet2, PiggyBank, TrendingUp, Ticket } from 'lucide-react'
 
 export default function Home() {
-  const { criancas, combo, faturamentoDomShow, inflaveis, shows, entradasKids } = useKids()
+  const {
+    criancas, combo, faturamentoDomShow, inflaveis, shows, entradasKids,
+    showsHistorico, criancasHistorico, inflaveisHistorico,
+    comboHistorico, faturamentoHistorico, entradasHistorico,
+  } = useKids()
 
   const totalCriancas = useMemo(() => somar(criancas, c => c.qtdCriancas), [criancas])
   const totalComboQtd = useMemo(() => somar(combo, c => c.qtdVendida), [combo])
@@ -40,20 +44,20 @@ export default function Home() {
     return { texto: `${seta} ${Math.abs(pct).toFixed(0)}% vs mês anterior`, cor }
   }
 
-  const deltaCriancas = useMemo(() => formatarDelta(agruparPorMes(criancas, c => c.qtdCriancas)), [criancas])
-  const deltaComboQtd = useMemo(() => formatarDelta(agruparPorMes(combo, c => c.qtdVendida)), [combo])
-  const deltaFaturamentoDom = useMemo(() => formatarDelta(agruparPorMes(faturamentoDomShow, f => f.valor)), [faturamentoDomShow])
-  const deltaEntradasKids = useMemo(() => formatarDelta(agruparPorMes(entradasKids, e => e.valor)), [entradasKids])
-  const deltaGastoInflaveis = useMemo(() => formatarDelta(agruparPorMes(inflaveis, i => i.valor)), [inflaveis])
-  const deltaGastoShows = useMemo(() => formatarDelta(agruparPorMes(shows, s => s.valor)), [shows])
+  const deltaCriancas = useMemo(() => formatarDelta(agruparPorMes(criancasHistorico, c => c.qtdCriancas)), [criancasHistorico])
+  const deltaComboQtd = useMemo(() => formatarDelta(agruparPorMes(comboHistorico, c => c.qtdVendida)), [comboHistorico])
+  const deltaFaturamentoDom = useMemo(() => formatarDelta(agruparPorMes(faturamentoHistorico, f => f.valor)), [faturamentoHistorico])
+  const deltaEntradasKids = useMemo(() => formatarDelta(agruparPorMes(entradasHistorico, e => e.valor)), [entradasHistorico])
+  const deltaGastoInflaveis = useMemo(() => formatarDelta(agruparPorMes(inflaveisHistorico, i => i.valor)), [inflaveisHistorico])
+  const deltaGastoShows = useMemo(() => formatarDelta(agruparPorMes(showsHistorico, s => s.valor)), [showsHistorico])
   const deltaResultado = useMemo(() => {
     // Resultado = receita - gasto, mês a mês (não dá pra usar agruparPorMes
     // direto porque é uma combinação de 3 fontes de receita e 2 de gasto)
-    const comboM = agruparPorMes(combo, c => c.valor)
-    const faturamentoM = agruparPorMes(faturamentoDomShow, f => f.valor)
-    const entradasM = agruparPorMes(entradasKids, e => e.valor)
-    const inflaveisM = agruparPorMes(inflaveis, i => i.valor)
-    const showsM = agruparPorMes(shows, s => s.valor)
+    const comboM = agruparPorMes(comboHistorico, c => c.valor)
+    const faturamentoM = agruparPorMes(faturamentoHistorico, f => f.valor)
+    const entradasM = agruparPorMes(entradasHistorico, e => e.valor)
+    const inflaveisM = agruparPorMes(inflaveisHistorico, i => i.valor)
+    const showsM = agruparPorMes(showsHistorico, s => s.valor)
     const todosMeses = new Set([
       ...Object.keys(comboM), ...Object.keys(faturamentoM), ...Object.keys(entradasM),
       ...Object.keys(inflaveisM), ...Object.keys(showsM),
@@ -65,7 +69,7 @@ export default function Home() {
       resultadoPorMes[mes] = receita - gasto
     })
     return formatarDelta(resultadoPorMes)
-  }, [combo, faturamentoDomShow, entradasKids, inflaveis, shows])
+  }, [comboHistorico, faturamentoHistorico, entradasHistorico, inflaveisHistorico, showsHistorico])
 
   const criancasPorUnidade = useMemo(
     () => agruparPorUnidade(criancas, c => c.qtdCriancas),
