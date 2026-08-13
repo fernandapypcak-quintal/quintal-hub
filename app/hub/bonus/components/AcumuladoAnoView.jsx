@@ -29,7 +29,7 @@ const FAIXA_INFO = {
 }
 
 function LinhaIndicador({ item }) {
-  const { config, resultado, mesesLancados, valorAbsoluto } = item
+  const { config, resultado, mesesLancados, valorAbsoluto, valorParcial } = item
   const info = FAIXA_INFO[resultado.faixa]
   const isLol = config.key === 'lol_margem'
 
@@ -45,7 +45,9 @@ function LinhaIndicador({ item }) {
           <p className="text-xs text-zinc-400 mb-1">Real (Jan-Dez acumulado)</p>
           <p className="text-4xl font-bold text-brand-black">{fmtPct(resultado.real)}</p>
           {isLol && valorAbsoluto != null && (
-            <p className="text-sm text-zinc-500 mt-1">{fmtReais(valorAbsoluto)}</p>
+            <p className="text-sm text-zinc-500 mt-1">
+              {fmtReais(valorAbsoluto)}{valorParcial && <span className="text-zinc-400"> (parcial — faltam meses)</span>}
+            </p>
           )}
         </div>
 
