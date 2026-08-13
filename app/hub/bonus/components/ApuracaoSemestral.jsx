@@ -70,7 +70,7 @@ function fmtReais(v) {
   return `${sinal}R$ ${Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 }
 
-function BlocoPeriodo({ titulo, resultado, mesesLancados, totalMeses, valorAbsoluto, isLol }) {
+function BlocoPeriodo({ titulo, resultado, mesesLancados, totalMeses, valorAbsoluto, valorParcial, isLol }) {
   const info = FAIXA_INFO[resultado.faixa]
   return (
     <div className={`rounded-xl p-4 ${info.bg}`}>
@@ -88,7 +88,9 @@ function BlocoPeriodo({ titulo, resultado, mesesLancados, totalMeses, valorAbsol
       </div>
 
       {isLol && valorAbsoluto != null && (
-        <p className="text-xs text-zinc-500 mb-1">{fmtReais(valorAbsoluto)}</p>
+        <p className="text-xs text-zinc-500 mb-1">
+          {fmtReais(valorAbsoluto)}{valorParcial && <span className="text-zinc-400"> (parcial — faltam meses)</span>}
+        </p>
       )}
 
       <div className="flex items-center gap-1.5 mt-1">
@@ -103,7 +105,7 @@ function BlocoPeriodo({ titulo, resultado, mesesLancados, totalMeses, valorAbsol
 function CardIndicador({ item }) {
   const {
     config, s1, s2, recuperandoS1, mesesLancadosS1, mesesLancadosS2, totalMesesS2,
-    metodologiaS1, metodologiaS2, s1ValorAbsoluto, s2ValorAbsoluto,
+    metodologiaS1, metodologiaS2, s1ValorAbsoluto, s2ValorAbsoluto, s1ValorParcial, s2ValorParcial,
   } = item
   const [detalheAberto, setDetalheAberto] = useState(false)
   const isLol = config.key === 'lol_margem'
@@ -126,6 +128,7 @@ function CardIndicador({ item }) {
           mesesLancados={mesesLancadosS1}
           totalMeses={6}
           valorAbsoluto={s1ValorAbsoluto}
+          valorParcial={s1ValorParcial}
           isLol={isLol}
         />
         <BlocoPeriodo
@@ -134,6 +137,7 @@ function CardIndicador({ item }) {
           mesesLancados={mesesLancadosS2}
           totalMeses={totalMesesS2}
           valorAbsoluto={s2ValorAbsoluto}
+          valorParcial={s2ValorParcial}
           isLol={isLol}
         />
       </div>
