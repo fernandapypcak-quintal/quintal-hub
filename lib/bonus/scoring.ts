@@ -129,17 +129,25 @@ export const FAIXA_LABEL: Record<FaixaBonus, string> = {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// Apuração SEMESTRAL (oficial) — regra de recuperação
+// Apuração SEMESTRAL (oficial) — S1 e S2 são sempre PUROS
 //
-// S1 = Jan-Jun. S2 = Jul-Dez... EXCETO se o indicador não bateu nenhuma
-// faixa em S1: nesse caso o S2 passa a avaliar o acumulado Jan-Dez (ano
-// inteiro), dando uma segunda chance de recuperar no fechamento do ano.
+// S1 = Jan-Jun (acumulado só desses 6 meses). S2 = Jul-Dez (acumulado só
+// desses 6 meses). Nenhum dos dois absorve o outro — são duas fotos
+// independentes do ano.
+//
+// Se um indicador não bateu nenhuma faixa em S1 (`recuperandoS1 = true`),
+// isso NÃO muda o número de S2 — é só um sinalizador pra UI apontar pra
+// visão "Acumulado do Ano" (Jan-Dez, ver calcularAcumuladoAno mais abaixo),
+// que é onde a recuperação de fato aparece, porque ali sim os 12 meses
+// entram juntos na mesma conta.
+//
 // A regra é por INDICADOR, não pro bônus como um todo — um indicador
-// pode "recuperar" enquanto outro não, no mesmo semestre.
+// pode não bater em S1 enquanto outro bate, no mesmo semestre.
 //
-// O Real de cada janela é o ACUMULADO DE VERDADE do período: soma dos
-// numeradores ÷ soma dos denominadores dos meses incluídos — não a
-// média das médias mensais. Isso é o que a Fernanda validou com o DRE:
+// O Real de cada janela (S1, S2, ou o acumulado do ano) é o ACUMULADO DE
+// VERDADE do período: soma dos numeradores ÷ soma dos denominadores dos
+// meses incluídos — não a média das médias mensais. Isso é o que a
+// Fernanda validou com o DRE:
 //   CMV / Custo c/ Pessoal -> numerador = custo do mês (R$), denominador = ROB do mês (R$)
 //   LOL (Margem)           -> numerador = LOL líquido do mês (R$), denominador = ROB do mês (R$)
 //   NPS                    -> numerador = Promotores - Detratores do mês, denominador = respondentes do mês
@@ -167,13 +175,13 @@ export interface DadosMesIndicador {
 
 export interface ResultadoIndicadorSemestral {
   config: IndicadorBonusConfig
-  s1: ResultadoIndicadorBonus // Jan-Jun
-  s2: ResultadoIndicadorBonus // Jul-Dez, ou Jan-Dez se recuperando
-  s2Janela: JanelaS2
-  recuperandoS1: boolean // true = S1 não bateu nenhuma faixa, S2 avalia o ano inteiro
+  s1: ResultadoIndicadorBonus // Jan-Jun, sempre puro
+  s2: ResultadoIndicadorBonus // Jul-Dez, sempre puro (nunca absorve S1)
+  s2Janela: JanelaS2 // sempre 'jul_dez' — mantido pra compatibilidade, não muda mais
+  recuperandoS1: boolean // true = S1 não bateu nenhuma faixa; consulte a visão "Acumulado do Ano" pra ver a recuperação
   mesesLancadosS1: number // quantos dos 6 meses de S1 já têm Real lançado (de 0 a 6)
-  mesesLancadosS2: number // quantos meses da janela de S2 já têm Real lançado
-  totalMesesS2: number // tamanho da janela de S2 (6 se jul_dez, 12 se jan_dez)
+  mesesLancadosS2: number // quantos dos 6 meses de S2 já têm Real lançado (de 0 a 6)
+  totalMesesS2: number // sempre 6
   metodologiaS1: MetodologiaAgregacao
   metodologiaS2: MetodologiaAgregacao
   s1ValorAbsoluto: number | null // soma do numerador em S1 (ex: LOL em R$) — null se metodologia = média fallback
@@ -251,8 +259,12 @@ export function calcularResultadoAnual(
     })
 
     const recuperandoS1 = resultadoS1.faixa === 'nao_atingiu'
-    const s2Janela: JanelaS2 = recuperandoS1 ? 'jan_dez' : 'jul_dez'
-    const mesesS2 = recuperandoS1 ? MESES_ANO : MESES_S2
+    // S2 é SEMPRE Jul-Dez, sozinho — nunca absorve os meses de S1.
+    // Se o indicador não bateu em S1, quem conta a história de recuperação
+    // é a visão "Acumulado do Ano" (Jan-Dez), não este card — por isso
+    // `recuperandoS1` fica só como sinalizador pra UI apontar pra lá.
+    const s2Janela: JanelaS2 = 'jul_dez'
+    const mesesS2 = MESES_S2
 
     const { valor: realS2, metodologia: metodologiaS2, somaNumerador: numS2 } = agregarPeriodo(mesesS2, porMes)
     const resultadoS2 = calcularResultadoIndicador(config, {
