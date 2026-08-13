@@ -1,9 +1,11 @@
 // app/hub/bonus/components/pages/Home.jsx
 'use client'
 
+import { useState } from 'react'
 import { useBonusData } from '../../hooks/useBonusData'
 import BonusResumo from '../BonusResumo'
 import ApuracaoSemestral from '../ApuracaoSemestral'
+import AcumuladoAnoView from '../AcumuladoAnoView'
 import TendenciaBonus from '../TendenciaBonus'
 
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
@@ -14,7 +16,8 @@ function labelMes(anoMes) {
 }
 
 export default function Home() {
-  const { anoMes, setAnoMes, resultadoMes, resultadosPorMes, resultadoAnual, loading, error } = useBonusData()
+  const { anoMes, setAnoMes, resultadoMes, resultadosPorMes, resultadoAnual, resultadoAcumuladoAno, loading, error } = useBonusData()
+  const [visao, setVisao] = useState('semestre') // 'semestre' | 'ano'
 
   return (
     <div className="p-6 md:p-8 max-w-6xl mx-auto">
@@ -36,7 +39,30 @@ export default function Home() {
 
       {!loading && !error && (
         <div className="flex flex-col gap-4">
-          <ApuracaoSemestral resultadoAnual={resultadoAnual} />
+          <div className="flex gap-1 bg-surface-muted/60 rounded-lg p-1 w-fit">
+            <button
+              onClick={() => setVisao('semestre')}
+              className={`text-sm px-4 py-1.5 rounded-md font-medium transition-colors ${
+                visao === 'semestre' ? 'bg-white text-brand-black shadow-card' : 'text-zinc-500'
+              }`}
+            >
+              Por Semestre
+            </button>
+            <button
+              onClick={() => setVisao('ano')}
+              className={`text-sm px-4 py-1.5 rounded-md font-medium transition-colors ${
+                visao === 'ano' ? 'bg-white text-brand-black shadow-card' : 'text-zinc-500'
+              }`}
+            >
+              Acumulado do Ano
+            </button>
+          </div>
+
+          {visao === 'semestre' ? (
+            <ApuracaoSemestral resultadoAnual={resultadoAnual} />
+          ) : (
+            <AcumuladoAnoView resultadoAcumuladoAno={resultadoAcumuladoAno} />
+          )}
 
           <div>
             <p className="text-xs text-zinc-400 uppercase tracking-wide mb-2 mt-2">
