@@ -220,6 +220,18 @@ export function MetasDataProvider({ children, allowedLojas = '*', isAdmin = fals
     return { id: 'consolidado', nome: 'Consolidado — todas as unidades', unidades: unidadesHolding }
   }, [allowedLojas, unidadesHolding])
 
+  // Top 5 — unidades críticas (cross-gerente). Também só pra quem tem
+  // acesso total, já que junta unidades de gerentes diferentes.
+  const UNIDADES_TOP5_CRITICAS = useMemo(
+    () => ['santo_andre', 'chacara', 'santana', 'tatuape', 'vila_madalena'],
+    []
+  )
+
+  const grupoTop5 = useMemo(() => {
+    if (allowedLojas !== '*') return null
+    return { id: 'top5', nome: 'Top 5 — Unidades Críticas', unidades: UNIDADES_TOP5_CRITICAS }
+  }, [allowedLojas, UNIDADES_TOP5_CRITICAS])
+
   const resultadosPorGerente = useMemo(() => {
     return gruposVisiveis.map((g) => {
       const unidadesResultado = g.unidades.map((unidade) => {
@@ -239,6 +251,15 @@ export function MetasDataProvider({ children, allowedLojas = '*', isAdmin = fals
     return calcularResultadoGerente(grupoConsolidado.id, grupoConsolidado.nome, anoMes, unidadesResultado)
   }, [grupoConsolidado, manuaisPorMes, faturamentoRealPorMes, faturamentoMetaPorMes, anoMes])
 
+  const resultadoTop5 = useMemo(() => {
+    if (!grupoTop5) return null
+    const unidadesResultado = grupoTop5.unidades.map((unidade) => {
+      const inputs = montarInputsDaUnidade(unidade, manuaisPorMes, faturamentoRealPorMes, faturamentoMetaPorMes)
+      return calcularResultadoUnidade(unidade, anoMes, inputs)
+    })
+    return calcularResultadoGerente(grupoTop5.id, grupoTop5.nome, anoMes, unidadesResultado)
+  }, [grupoTop5, manuaisPorMes, faturamentoRealPorMes, faturamentoMetaPorMes, anoMes])
+
   const salvarIndicador = useCallback(async (row) => {
     const res = await fetch('/api/metas', {
       method: 'POST',
@@ -257,6 +278,7 @@ export function MetasDataProvider({ children, allowedLojas = '*', isAdmin = fals
       trimestreLabel: trimestreDoMes(anoMes),
       resultadosPorGerente,
       resultadoConsolidado,
+      resultadoTop5,
       loading, error, isAdmin,
       salvarIndicador,
       recarregar: () => carregar(anoMes, visao),
