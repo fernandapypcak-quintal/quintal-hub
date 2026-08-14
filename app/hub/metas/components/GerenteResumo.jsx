@@ -103,6 +103,27 @@ function LinhaDetalhe({ unidade, indicadores }) {
   )
 }
 
+function LinhaTotal({ totalIndicadores }) {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 mb-3 p-3 rounded-lg bg-surface-muted/60">
+      {GRUPOS.map((g) => {
+        const ind = achar(totalIndicadores, g.indicador)
+        const metaLabel = g.indicador === 'bandas' ? fmt('moeda', ind?.custoArtista) : fmt(g.tipo, ind?.meta)
+        const realLabel = fmt(g.tipo, ind?.real)
+        return (
+          <div key={g.indicador}>
+            <div className="text-[10px] text-zinc-400 uppercase tracking-wider mb-0.5">{g.label}</div>
+            <div className="text-xs font-mono text-zinc-500">{metaLabel} → <span className="text-brand-black font-semibold">{realLabel}</span></div>
+            <div className={`text-xs font-mono ${corDelta(g.indicador, ind?.delta)}`}>
+              {ind ? fmtDelta(g.indicador === 'bandas' ? 'moeda' : g.tipo, ind.delta) : '—'}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function GerenteResumo({ resultado }) {
   const [aberto, setAberto] = useState(false)
   const pct = (resultado.pontosTotais / resultado.pontosPossiveis) * 100
@@ -126,6 +147,8 @@ export default function GerenteResumo({ resultado }) {
             </span>
           </div>
         </div>
+
+        <LinhaTotal totalIndicadores={resultado.totalIndicadores} />
 
         <div className="flex flex-wrap gap-2 mb-3">
           {GRUPOS.map((g) => (
