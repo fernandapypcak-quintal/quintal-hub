@@ -34,7 +34,10 @@ function Selo({ resultado }) {
   const isLol = config.key === 'lol_margem'
 
   return (
-    <div className={`flex items-center gap-2 px-3 py-2 rounded-full ${style.bg}`}>
+    <div
+      className={`flex items-center gap-2 px-3 py-2 rounded-full ${style.bg}`}
+      title={`Precisamos: ${config.objetivo} · Fonte: ${config.fonte}`}
+    >
       <div className="flex items-baseline gap-1.5 min-w-0">
         <span className={`text-xs font-semibold whitespace-nowrap ${style.text}`}>
           {config.label}
@@ -59,7 +62,10 @@ function LinhaDetalhe({ resultado }) {
   const { config, meta, meta80, meta60, real, gapProximaFaixa, faixa } = resultado
   return (
     <tr className="border-t border-surface-border">
-      <td className="px-3 py-1.5 text-sm text-brand-black whitespace-nowrap">{config.label}</td>
+      <td className="px-3 py-1.5 text-sm text-brand-black whitespace-nowrap">
+        {config.label}
+        <p className="text-[10px] text-zinc-400 font-normal">{config.objetivo} · {config.fonte}</p>
+      </td>
       <td className="px-2 py-1.5 text-right text-xs font-mono text-zinc-500">{fmtPct(meta)}</td>
       <td className="px-2 py-1.5 text-right text-xs font-mono text-zinc-500">{fmtPct(meta80)}</td>
       <td className="px-2 py-1.5 text-right text-xs font-mono text-zinc-500">{fmtPct(meta60)}</td>
