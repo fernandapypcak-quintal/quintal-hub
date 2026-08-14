@@ -29,13 +29,31 @@ export interface IndicadorBonusConfig {
   label: string
   peso: number
   direcao: DirecaoBonus
+  fonte: string // de onde vem o dado (sistema, DRE, pesquisa, etc.)
+  objetivo: string // o que precisamos, em português simples — não é o número exato do limiar, é o "porquê" do limiar
 }
 
 export const INDICADORES_BONUS: IndicadorBonusConfig[] = [
-  { key: 'cmv',            label: 'CMV',               peso: 0.10, direcao: 'menor_melhor' },
-  { key: 'custo_pessoal',  label: 'Custo com Pessoal', peso: 0.10, direcao: 'menor_melhor' },
-  { key: 'lol_margem',     label: 'LOL (Margem)',      peso: 0.40, direcao: 'maior_melhor' },
-  { key: 'nps',            label: 'NPS',               peso: 0.10, direcao: 'maior_melhor' },
+  {
+    key: 'cmv', label: 'CMV', peso: 0.10, direcao: 'menor_melhor',
+    fonte: 'Sistema de gestão de inventário e acompanhamento de CMV',
+    objetivo: '-1% em relação ao ROB 2025',
+  },
+  {
+    key: 'custo_pessoal', label: 'Custo com Pessoal', peso: 0.10, direcao: 'menor_melhor',
+    fonte: 'DRE',
+    objetivo: '-2% em relação ao ROB 2025',
+  },
+  {
+    key: 'lol_margem', label: 'LOL (Margem)', peso: 0.40, direcao: 'maior_melhor',
+    fonte: 'DRE',
+    objetivo: '+2% em relação ao ROB 2025',
+  },
+  {
+    key: 'nps', label: 'NPS', peso: 0.10, direcao: 'maior_melhor',
+    fonte: 'Cliente (pesquisa de satisfação)',
+    objetivo: 'Manter avaliação de satisfação em 85%',
+  },
 ]
 
 export const PESO_COLETIVO_TOTAL = INDICADORES_BONUS.reduce((soma, i) => soma + i.peso, 0) // 0.70
