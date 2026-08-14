@@ -114,7 +114,7 @@ function LeadsHoje({ filtros }: { filtros: any }) {
           { label:'Leads hoje', value:loading?'…':String(deals.length), sub:toDateStr(today), color:'#0D0F14' },
           { label:'Em aberto',  value:loading?'…':String(deals.filter(d=>d.status==='open').length), color:'#185FA5' },
           { label:'Ganhos',     value:loading?'…':String(deals.filter(d=>d.status==='won').length), color:'#3B6D11' },
-          { label:'Etapas',     value:loading?'…':String(new Set(deals.map(d=>d.stage_nome)).size), color:'#D9B504' },
+          { label:'Por vendedor', value:loading?'…':String(new Set(deals.map(d=>d.vendedor).filter(Boolean)).size), sub:'vendedores ativos', color:'#D9B504' },
         ].map(k => (
           <div key={k.label} style={{ background:'#fff',border:'0.5px solid #E8E8E2',borderRadius:12,padding:'12px 14px',borderTop:`3px solid ${k.color}` }}>
             <div style={{ fontSize:10,fontWeight:600,color:'#9a9c9f',textTransform:'uppercase',marginBottom:4 }}>{k.label}</div>
@@ -133,22 +133,23 @@ function LeadsHoje({ filtros }: { filtros: any }) {
         </div>
       ) : (
         <div style={{ background:'#fff',border:'0.5px solid #E8E8E2',borderRadius:14,overflow:'hidden' }}>
-          <div style={{ display:'grid',gridTemplateColumns:'1fr 130px 100px 80px 70px',gap:10,padding:'10px 16px',fontSize:10,fontWeight:600,color:'#9a9c9f',textTransform:'uppercase',letterSpacing:'0.05em',background:'#F5F5F2' }}>
-            <span>Empresa</span><span>Etapa</span><span>Unidade</span><span>Vendedor</span><span>Status</span>
+          <div style={{ display:'grid',gridTemplateColumns:'1fr 140px 120px 100px 80px 70px',gap:8,padding:'10px 16px',fontSize:10,fontWeight:600,color:'#9a9c9f',textTransform:'uppercase',letterSpacing:'0.05em',background:'#F5F5F2' }}>
+            <span>Empresa</span><span>Etapa</span><span>Unidade</span><span>Vendedor</span><span style={{textAlign:'center'}}>Pax</span><span>Status</span>
           </div>
           <div style={{ padding:'6px 8px' }}>
             {deals.map(d => (
               <div key={d.id} onClick={() => setSelected(d)}
-                style={{ display:'grid',gridTemplateColumns:'1fr 130px 100px 80px 70px',gap:10,padding:'9px 8px',borderRadius:6,alignItems:'center',fontSize:12,borderBottom:'0.5px solid #F5F5F2',cursor:'pointer' }}
+                style={{ display:'grid',gridTemplateColumns:'1fr 140px 120px 100px 80px 70px',gap:8,padding:'9px 8px',borderRadius:6,alignItems:'center',fontSize:12,borderBottom:'0.5px solid #F5F5F2',cursor:'pointer' }}
                 onMouseOver={e=>(e.currentTarget.style.background='#F5F5F2')}
                 onMouseOut={e=>(e.currentTarget.style.background='')}>
                 <div>
                   <div style={{ fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{d.empresa||d.titulo}</div>
                   {d.data_evento && <div style={{ fontSize:10,color:'#9a9c9f' }}>ev: {fmtDate(d.data_evento)}</div>}
                 </div>
-                <span style={{ fontSize:10,color:'#5a5c5f',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{d.stage_nome}</span>
+                <span style={{ fontSize:10,padding:'2px 7px',borderRadius:4,background:'#F5F5F2',color:'#5a5c5f',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'inline-block',maxWidth:'100%' }}>{d.stage_nome}</span>
                 <span style={{ fontSize:10,color:'#9a9c9f',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{d.unidade_nome?.split(',')[0]||'—'}</span>
                 <span style={{ fontSize:10,color:'#9a9c9f',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{d.vendedor||'—'}</span>
+                <span style={{ fontSize:11,fontFamily:'DM Mono, monospace',textAlign:'center',color:'#5a5c5f' }}>{d.qtd_pessoas||'—'}</span>
                 <span style={{ fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:20,background:statusColor(d.status)+'22',color:statusColor(d.status),whiteSpace:'nowrap' }}>
                   {statusLabel(d.status)}
                 </span>
