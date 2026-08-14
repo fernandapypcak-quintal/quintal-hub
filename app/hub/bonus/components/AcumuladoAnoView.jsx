@@ -35,9 +35,14 @@ function LinhaIndicador({ item }) {
 
   return (
     <div className="rounded-2xl border border-surface-border bg-white p-5 shadow-card">
-      <div className="flex items-baseline justify-between mb-3">
-        <h3 className="text-lg font-semibold text-brand-black">{config.label}</h3>
-        <span className="text-sm text-zinc-400">peso {(config.peso * 100).toFixed(0)}%</span>
+      <div className="flex items-start justify-between mb-3">
+        <div>
+          <h3 className="text-lg font-semibold text-brand-black">{config.label}</h3>
+          <p className="text-xs text-zinc-400 mt-0.5">
+            Precisamos: <span className="text-zinc-500">{config.objetivo}</span> · Fonte: {config.fonte}
+          </p>
+        </div>
+        <span className="text-sm text-zinc-400 shrink-0 ml-3">peso {(config.peso * 100).toFixed(0)}%</span>
       </div>
 
       <div className="flex flex-wrap items-end gap-6">
