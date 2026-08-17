@@ -2,6 +2,7 @@
 import { useMemo } from 'react';
 import { useFilters } from '../../hooks/useFilters';
 import { useMetas } from '../../hooks/useMetas';
+import { useCompradores } from '../../hooks/useCompradores';
 import { sum, variation, calcTendFat, daysInMonth, formatBRL, acharDiaComparavel, recsComparaveis } from '../../utils/formatters';
 
 const MESES = ['','Janeiro','Fevereiro','Março','Abril','Maio','Junho',
@@ -18,6 +19,7 @@ function clr(v) { return v >= 0 ? '#16a34a' : '#dc2626'; }
 export default function PrintReport({ onClose, mesAno }) {
   const { rawData } = useFilters();
   const { getMeta } = useMetas();
+  const { getPessoas } = useCompradores();
 
   const data = useMemo(() => {
     if (!rawData.length) return null;
@@ -109,11 +111,15 @@ export default function PrintReport({ onClose, mesAno }) {
       const v25   = sum(lrOAA);
       const casa25 = sum(lrOAA.filter(r => r.Canal === 'CASA'));
       const del25  = sum(lrOAA.filter(r => r.Canal === 'DELIVERY'));
+      const pessoas = getPessoas(anoO, mesO, null, diaO, loja);
       return { loja, v26, casa26, del26, v25, casa25, del25,
         var: variation(v26, v25),
         varCasa: variation(casa26, casa25),
-        varDel:  variation(del26, del25) };
+        varDel:  variation(del26, del25),
+        pessoas, ticket: pessoas > 0 ? v26 / pessoas : null };
     }).filter(l => l.v26 > 0).sort((a,b) => b.v26 - a.v26);
+
+    const pessoasTotalO = getPessoas(anoO, mesO, null, diaO, null);
 
     return { ano, mes, lastDay, totalDays, key,
       label: `${MESES[mes]}/${ano}`,
@@ -125,10 +131,11 @@ export default function PrintReport({ onClose, mesAno }) {
                total:totalO, totalAA:totalOAA, yoy:yoyO,
                casa:casaO, delivery:delO, casaAA:casaOAA, deliveryAA:delOAA,
                yoyCasa:yoyCasaO, yoyDelivery:yoyDelO, porLoja:porLojaO,
+               pessoas: pessoasTotalO, ticket: pessoasTotalO > 0 ? totalO / pessoasTotalO : null,
                compData: compOntem, compLabel: compOntem
                  ? `${String(compOntem.dia).padStart(2,'0')}/${String(compOntem.mes).padStart(2,'0')}/${compOntem.ano}`
                  : null } };
-  }, [rawData, getMeta, mesAno]);
+  }, [rawData, getMeta, mesAno, getPessoas]);
 
   if (!data) return null;
 
@@ -286,6 +293,7 @@ export default function PrintReport({ onClose, mesAno }) {
       <th>Total ${data.ontem.ano}</th>
       <th>Total ${data.ontem.ano-1}</th>
       <th>YoY Total</th>
+      <th>Ticket Médio</th>
       <th>Share</th>
     </tr>
   </thead>
@@ -302,6 +310,7 @@ export default function PrintReport({ onClose, mesAno }) {
       <td style="font-weight:700">${fmt(l.v26)}</td>
       <td style="color:#999">${l.v25>0?fmt(l.v25):'—'}</td>
       <td class="${l.var>=0?'pos':'neg'}">${l.v25>0?pct(l.var):'—'}</td>
+      <td>${l.ticket !== null ? fmt(l.ticket) : '—'}</td>
       <td>${data.ontem.total>0?(l.v26/data.ontem.total*100).toFixed(1).replace('.',',')+'%':'—'}</td>
     </tr>`).join('')}
   </tbody>
@@ -317,6 +326,7 @@ export default function PrintReport({ onClose, mesAno }) {
       <td>${fmt(data.ontem.total)}</td>
       <td style="color:#666">${fmt(data.ontem.totalAA)}</td>
       <td class="${data.ontem.yoy>=0?'pos':'neg'}">${pct(data.ontem.yoy)}</td>
+      <td>${data.ontem.ticket !== null ? fmt(data.ontem.ticket) : '—'}</td>
       <td>100%</td>
     </tr>
   </tfoot>
