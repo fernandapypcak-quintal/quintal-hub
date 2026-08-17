@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import {
   LayoutDashboard, TrendingUp, CalendarRange, Calendar,
-  Store, Table2, ChevronLeft, ChevronRight, Zap
+  Store, Table2, ChevronLeft, ChevronRight, Zap, ArrowLeftRight
 } from 'lucide-react';
 
 const NAV = [
@@ -10,6 +10,7 @@ const NAV = [
   { id: 'overview', label: 'Visão Geral',  icon: LayoutDashboard },
   { id: 'trend',    label: 'Tendência',    icon: TrendingUp },
   { id: 'weekly',   label: 'Semanal',      icon: Calendar },
+  { id: 'comparable', label: 'Dia Comparável', icon: ArrowLeftRight },
   { id: 'stores',   label: 'Por Loja',     icon: Store },
   { id: 'history',  label: 'Histórico',    icon: Table2 },
 ];
