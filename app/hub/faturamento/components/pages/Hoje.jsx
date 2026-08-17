@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, Clock } from 'lucide-react';
 import { formatBRL } from '../../utils/formatters';
 import { useFilters } from '../../hooks/useFilters';
+import { useCompradores } from '../../hooks/useCompradores';
 import { isUnitAllowed } from '@/lib/units';
 
 const ZIG_TOKEN = '2ecab4ee4268947c2b964fbbd999bf87960cf3c9dd77dabc25db479af38223d6';
@@ -60,6 +61,7 @@ function emptyLoja() {
 
 export default function Hoje() {
   const { allowedLojas } = useFilters();
+  const { getPessoas } = useCompradores();
   const [dados,     setDados]     = useState(null);
   const [loading,   setLoading]   = useState(true);
   const [ultimaAtu, setUltimaAtu] = useState(null);
@@ -117,15 +119,20 @@ export default function Hoje() {
 
       const todasLojas = [...new Set([...Object.keys(hoje_data), ...Object.keys(ontem_data)])].sort();
 
+      const anoH = hoje.getFullYear(),  mesH = hoje.getMonth()+1,  diaH = hoje.getDate();
+      const anoO = ontem.getFullYear(), mesO = ontem.getMonth()+1, diaO = ontem.getDate();
+
       const porLoja = todasLojas.map(lj => {
         const h = hoje_data[lj]  || emptyLoja();
         const o = ontem_data[lj] || emptyLoja();
         const totalH = h.salao + h.delivery;
         const totalO = o.salao + o.delivery;
+        const pessoasH = getPessoas(anoH, mesH, null, diaH, lj);
+        const pessoasO = getPessoas(anoO, mesO, null, diaO, lj);
         return {
           loja: lj,
-          hoje:  { total: totalH, salao: h.salao, delivery: h.delivery },
-          ontem: { total: totalO, salao: o.salao, delivery: o.delivery },
+          hoje:  { total: totalH, salao: h.salao, delivery: h.delivery, pessoas: pessoasH, ticket: pessoasH > 0 ? totalH/pessoasH : null },
+          ontem: { total: totalO, salao: o.salao, delivery: o.delivery, pessoas: pessoasO, ticket: pessoasO > 0 ? totalO/pessoasO : null },
           varOntem: totalO > 0 ? (totalH - totalO) / totalO * 100 : null,
           color: LOJA_COLORS[lj] || '#999',
         };
@@ -137,16 +144,18 @@ export default function Hoje() {
       const delH   = porLoja.reduce((s,l) => s + l.hoje.delivery, 0);
       const salaoO = porLoja.reduce((s,l) => s + l.ontem.salao,   0);
       const delO   = porLoja.reduce((s,l) => s + l.ontem.delivery,0);
+      const pessoasTotalH = getPessoas(anoH, mesH, null, diaH, null);
+      const pessoasTotalO = getPessoas(anoO, mesO, null, diaO, null);
 
       setDados({ porLoja, dtHoje, dtOntem,
-        hoje:  { total: totalH, salao: salaoH, delivery: delH },
-        ontem: { total: totalO, salao: salaoO, delivery: delO },
+        hoje:  { total: totalH, salao: salaoH, delivery: delH, pessoas: pessoasTotalH, ticket: pessoasTotalH > 0 ? totalH/pessoasTotalH : null },
+        ontem: { total: totalO, salao: salaoO, delivery: delO, pessoas: pessoasTotalO, ticket: pessoasTotalO > 0 ? totalO/pessoasTotalO : null },
         varTotal: totalO > 0 ? (totalH - totalO) / totalO * 100 : null,
       });
       setUltimaAtu(fmtHora());
     } catch(e) { setErro(e.message); }
     finally { setLoading(false); }
-  }, [allowedLojas]);
+  }, [allowedLojas, getPessoas]);
 
   useEffect(() => {
     carregar();
@@ -198,8 +207,8 @@ export default function Hoje() {
 
       {dados && kd && (
         <>
-          {/* KPI cards — apenas faturamento, salão e delivery */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* KPI cards — faturamento, salão, delivery e ticket médio */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div className="bg-white border border-surface-border rounded-2xl p-4">
               <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">
                 Faturamento {d ? 'Hoje' : 'Ontem'}
@@ -221,6 +230,11 @@ export default function Hoje() {
               <p className="text-2xl font-bold font-display text-brand-black">{formatBRL(kd.delivery, true)}</p>
               <p className="text-xs text-zinc-400 mt-1">{kd.total > 0 ? (kd.delivery/kd.total*100).toFixed(1).replace('.',',') : '0'}% do total</p>
             </div>
+            <div className="bg-white border border-surface-border rounded-2xl p-4">
+              <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">Ticket Médio</p>
+              <p className="text-2xl font-bold font-display text-brand-black">{kd.ticket !== null ? formatBRL(kd.ticket) : '—'}</p>
+              <p className="text-xs text-zinc-400 mt-1">{kd.pessoas > 0 ? `${kd.pessoas.toLocaleString('pt-BR')} pessoas` : 'sem dado'}</p>
+            </div>
           </div>
 
           {/* Tabela por loja */}
@@ -237,6 +251,7 @@ export default function Hoje() {
                     <th className="text-right py-3 px-4 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Total</th>
                     <th className="text-right py-3 px-4 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Salão</th>
                     <th className="text-right py-3 px-4 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Delivery</th>
+                    <th className="text-right py-3 px-4 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Ticket Médio</th>
                     {d && <th className="text-right py-3 px-4 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Vs Ontem</th>}
                   </tr>
                 </thead>
@@ -269,6 +284,9 @@ export default function Hoje() {
                           <td className="py-3 px-4 text-right font-mono text-zinc-600">
                             {v.delivery > 0 ? formatBRL(v.delivery, true) : '—'}
                           </td>
+                          <td className="py-3 px-4 text-right font-mono text-zinc-600">
+                            {v.ticket !== null ? formatBRL(v.ticket) : '—'}
+                          </td>
                           {d && (
                             <td className="py-3 px-4 text-right">
                               {l.varOntem !== null ? (
@@ -289,6 +307,7 @@ export default function Hoje() {
                     <td className="py-3 px-4 text-right font-mono text-brand-black">{formatBRL(kd.total, true)}</td>
                     <td className="py-3 px-4 text-right font-mono text-zinc-600">{formatBRL(kd.salao, true)}</td>
                     <td className="py-3 px-4 text-right font-mono text-zinc-600">{formatBRL(kd.delivery, true)}</td>
+                    <td className="py-3 px-4 text-right font-mono text-zinc-600">{kd.ticket !== null ? formatBRL(kd.ticket) : '—'}</td>
                     {d && (
                       <td className="py-3 px-4 text-right">
                         {dados.varTotal !== null && (
