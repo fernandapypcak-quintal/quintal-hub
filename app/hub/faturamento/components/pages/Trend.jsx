@@ -10,6 +10,7 @@ import { TrendingUp, TrendingDown, Target, Calendar, Info } from 'lucide-react';
 import { useFilters } from '../../hooks/useFilters';
 import { useMetas } from '../../hooks/useMetas';
 import { useLabels } from '../../hooks/useLabels';
+import { useCompradores } from '../../hooks/useCompradores';
 import { sum, monthlyTotals, formatBRL, formatPct, variation, calcTendFat, daysInMonth } from '../../utils/formatters';
 import InfoTip from '../ui/InfoTip';
 
@@ -53,6 +54,7 @@ export default function Trend() {
   const { rawData } = useFilters();
   const { getMeta } = useMetas();
   const { showLabels } = useLabels();
+  const { getPessoas } = useCompradores();
 
   const periodo = useMemo(() => getPeriodo(rawData), [rawData]);
 
@@ -142,6 +144,33 @@ export default function Trend() {
 
     return { recs, realizado, tendFat, totalAA, yoy, tendVsAA, dowStats, porLoja, mesAntLabel };
   }, [baseData, periodo]);
+
+  // ── Ticket Médio dia a dia do mês (Faturamento ÷ Pessoas/checkins) ──────
+  // Sem comparação com ano anterior — os dados de checkins só existem a
+  // partir de ago/2026, então ainda não tem base pra YoY aqui.
+  const ticketDiario = useMemo(() => {
+    if (!periodo) return [];
+    const { ano, mes, lastDay } = periodo;
+    return Array.from({ length: lastDay }, (_, i) => {
+      const dia = i + 1;
+      const recsDia = baseData.filter(r => r.Ano === ano && r.Mes === mes && r.Dia === dia);
+      const casa     = sum(recsDia.filter(r => r.Canal === 'CASA'));
+      const delivery = sum(recsDia.filter(r => r.Canal === 'DELIVERY'));
+      const total    = casa + delivery;
+
+      const pessoasCasa     = getPessoas(ano, mes, 'CASA', dia, null);
+      const pessoasDelivery = getPessoas(ano, mes, 'DELIVERY', dia, null);
+      const pessoasTotal    = pessoasCasa + pessoasDelivery;
+
+      return {
+        dia,
+        ticketCasa:     pessoasCasa     > 0 ? casa     / pessoasCasa     : null,
+        ticketDelivery: pessoasDelivery > 0 ? delivery / pessoasDelivery : null,
+        ticketTotal:    pessoasTotal    > 0 ? total    / pessoasTotal    : null,
+        pessoasCasa, pessoasDelivery, pessoasTotal,
+      };
+    }).filter(d => d.pessoasTotal > 0);
+  }, [baseData, periodo, getPessoas]);
 
   // ── YoY por mês (barras) ──────────────────────────────────────────────
   const yoyData = useMemo(() => {
@@ -599,6 +628,77 @@ export default function Trend() {
           </table>
         </div>
       </div>
+
+      {/* ── Ticket Médio dia a dia do mês ── */}
+      {ticketDiario.length > 0 && (
+        <div className="chart-card">
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="section-title">Ticket Médio — Dia a Dia</h3>
+            <InfoTip text={`Ticket médio (Faturamento ÷ Pessoas, via check-ins) de cada dia de ${periodo.label}. Ainda sem comparação com o ano anterior — os dados de check-ins começaram em agosto/2026.`} />
+          </div>
+          <p className="text-xs text-zinc-400 mb-5">
+            {periodo.label} · Total, Salão e Delivery
+          </p>
+          <ResponsiveContainer width="100%" height={220}>
+            <ComposedChart data={ticketDiario} margin={{ top: 12, right: 4, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#F0F0EC" vertical={false} />
+              <XAxis dataKey="dia" tick={{ fontSize: 11, fill: '#A1A1AA' }} axisLine={false} tickLine={false} />
+              <YAxis tickFormatter={v => formatBRL(v, true)} tick={{ fontSize: 11, fill: '#A1A1AA' }} axisLine={false} tickLine={false} width={70} />
+              <Tooltip
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null;
+                  const d = ticketDiario.find(x => x.dia === label);
+                  if (!d) return null;
+                  return (
+                    <div className="bg-white border border-surface-border rounded-xl shadow-card-hover p-3 min-w-[190px]">
+                      <p className="text-xs font-semibold text-zinc-500 mb-2 pb-2 border-b border-surface-border">Dia {d.dia}/{periodo.mes}</p>
+                      <div className="space-y-1.5 text-xs">
+                        <div className="flex justify-between gap-4">
+                          <span className="text-zinc-400">Total ({d.pessoasTotal} pessoas)</span>
+                          <span className="font-semibold text-brand-black">{d.ticketTotal !== null ? formatBRL(d.ticketTotal) : '—'}</span>
+                        </div>
+                        <div className="flex justify-between gap-4">
+                          <span className="text-zinc-400">Salão ({d.pessoasCasa} pessoas)</span>
+                          <span>{d.ticketCasa !== null ? formatBRL(d.ticketCasa) : '—'}</span>
+                        </div>
+                        <div className="flex justify-between gap-4">
+                          <span className="text-zinc-400">Delivery ({d.pessoasDelivery} pessoas)</span>
+                          <span>{d.ticketDelivery !== null ? formatBRL(d.ticketDelivery) : '—'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }}
+              />
+              <Line type="monotone" dataKey="ticketTotal"    name="Total"    stroke="#97A624" strokeWidth={2.5} dot={{ r: 3 }} connectNulls />
+              <Line type="monotone" dataKey="ticketCasa"     name="Salão"    stroke="#0D9488" strokeWidth={1.5} dot={{ r: 2 }} strokeDasharray="4 3" connectNulls />
+              <Line type="monotone" dataKey="ticketDelivery" name="Delivery" stroke="#D9B504" strokeWidth={1.5} dot={{ r: 2 }} strokeDasharray="4 3" connectNulls />
+            </ComposedChart>
+          </ResponsiveContainer>
+          <div className="mt-5 overflow-x-auto">
+            <table className="w-full min-w-[480px]">
+              <thead>
+                <tr className="border-b border-surface-border">
+                  <th className="table-header text-left py-2 pr-4">Dia</th>
+                  <th className="table-header text-right py-2 px-4">Ticket Total</th>
+                  <th className="table-header text-right py-2 px-4">Ticket Salão</th>
+                  <th className="table-header text-right py-2 pl-4">Ticket Delivery</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ticketDiario.map(d => (
+                  <tr key={d.dia} className="border-b border-surface-border/50 hover:bg-surface-muted/50 transition-colors">
+                    <td className="py-2.5 pr-4 font-medium text-brand-black">{d.dia}/{periodo.mes}</td>
+                    <td className="py-2.5 px-4 text-right font-mono text-sm font-semibold text-brand-black">{d.ticketTotal !== null ? formatBRL(d.ticketTotal) : '—'}</td>
+                    <td className="py-2.5 px-4 text-right font-mono text-sm text-zinc-500">{d.ticketCasa !== null ? formatBRL(d.ticketCasa) : '—'}</td>
+                    <td className="py-2.5 pl-4 text-right font-mono text-sm text-zinc-500">{d.ticketDelivery !== null ? formatBRL(d.ticketDelivery) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* ── TABELA DIÁRIA POR LOJA ── */}
       {tabelaDiaria && (
