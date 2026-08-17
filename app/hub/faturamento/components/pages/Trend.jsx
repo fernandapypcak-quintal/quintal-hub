@@ -54,7 +54,7 @@ export default function Trend() {
   const { rawData } = useFilters();
   const { getMeta } = useMetas();
   const { showLabels } = useLabels();
-  const { getPessoas } = useCompradores();
+  const { compradores } = useCompradores();
 
   const periodo = useMemo(() => getPeriodo(rawData), [rawData]);
 
@@ -65,6 +65,15 @@ export default function Trend() {
     if (filters.canal !== 'Todos' && r.Canal !== filters.canal)  return false;
     return true;
   }), [rawData, filters]);
+
+  // Mesma filtragem de loja/canal do baseData, aplicada aos check-ins —
+  // sem isso, o denominador (Pessoas) ficava sempre com a rede inteira,
+  // mesmo filtrando uma loja específica no faturamento (numerador).
+  const compradoresBase = useMemo(() => compradores.filter(r => {
+    if (filters.lojas.size > 0 && !filters.lojas.has(r.Loja)) return false;
+    if (filters.canal !== 'Todos' && r.Canal !== filters.canal)  return false;
+    return true;
+  }), [compradores, filters]);
 
   // ── Dados do mês atual ─────────────────────────────────────────────────
   const mesAtual = useMemo(() => {
@@ -158,8 +167,9 @@ export default function Trend() {
       const delivery = sum(recsDia.filter(r => r.Canal === 'DELIVERY'));
       const total    = casa + delivery;
 
-      const pessoasCasa     = getPessoas(ano, mes, 'CASA', dia, null);
-      const pessoasDelivery = getPessoas(ano, mes, 'DELIVERY', dia, null);
+      const compDia = compradoresBase.filter(r => r.Ano === ano && r.Mes === mes && r.Dia === dia);
+      const pessoasCasa     = compDia.filter(r => r.Canal === 'CASA').reduce((s, r) => s + (r.Pessoas || 0), 0);
+      const pessoasDelivery = compDia.filter(r => r.Canal === 'DELIVERY').reduce((s, r) => s + (r.Pessoas || 0), 0);
       const pessoasTotal    = pessoasCasa + pessoasDelivery;
 
       return {
@@ -170,7 +180,7 @@ export default function Trend() {
         pessoasCasa, pessoasDelivery, pessoasTotal,
       };
     }).filter(d => d.pessoasTotal > 0);
-  }, [baseData, periodo, getPessoas]);
+  }, [baseData, compradoresBase, periodo]);
 
   // ── YoY por mês (barras) ──────────────────────────────────────────────
   const yoyData = useMemo(() => {
