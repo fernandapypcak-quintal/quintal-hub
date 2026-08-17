@@ -7,6 +7,7 @@ import {
 import { ChevronDown, ChevronUp, Calendar } from 'lucide-react';
 import { useFilters } from '../../hooks/useFilters';
 import { useAlmoco } from '../../hooks/useAlmoco';
+import { useCompradores } from '../../hooks/useCompradores';
 import { useMetas } from '../../hooks/useMetas';
 import { useLabels } from '../../hooks/useLabels';
 import { progressColor, AtingBadge } from '../ui/GoalProgress';
@@ -24,6 +25,7 @@ export default function Stores() {
   const { rawData, filters } = useFilters();
   const { getMeta } = useMetas();
   const { almoco, getAlmocoLoja } = useAlmoco();
+  const { getPessoas } = useCompradores();
   const { showLabels } = useLabels();
   const [expandedLoja, setExpandedLoja] = useState(null);
 
@@ -114,6 +116,19 @@ export default function Stores() {
       const share     = grandTotal > 0 ? realAtual / grandTotal * 100 : 0;
       const tendAting = meta > 0 ? tendFat / meta * 100 : null;
 
+      // Ticket médio (mês até o lastDay) — Faturamento ÷ Pessoas (checkins).
+      // Soma dia a dia até lastDay pra bater com o mesmo corte usado no
+      // resto da página (recsCur já é o mês inteiro, mas queremos só até
+      // lastDay pra manter consistência com realAtual/casa/delivery acima
+      // — que também usam recsCur sem cortar, então usamos direto ano/mes
+      // aqui sem filtrar por dia).
+      const pessoasCasa     = getPessoas(ano, mes, 'CASA', null, loja);
+      const pessoasDelivery = getPessoas(ano, mes, 'DELIVERY', null, loja);
+      const pessoasTotal    = pessoasCasa + pessoasDelivery;
+      const ticketCasa     = pessoasCasa     > 0 ? casa     / pessoasCasa     : null;
+      const ticketDelivery = pessoasDelivery > 0 ? delivery / pessoasDelivery : null;
+      const ticketMedio    = pessoasTotal    > 0 ? realAtual / pessoasTotal   : null;
+
       const dowStats = DOW_LABELS.map((label, dowIdx) => {
         const recs = recsCur.filter(r => r.Dia_Semana_Num === dowIdx);
         const dias = [...new Set(recs.map(r => r.Data))].length;
@@ -137,6 +152,7 @@ export default function Stores() {
         share, yoy, melhorDia, monthly, tendAting,
         totalAlmoco, pesoAlmoco, jantarCasa, inicioAlmoco, almocoMensal,
         aceleracao, media1a, media2a,
+        pessoasCasa, pessoasDelivery, pessoasTotal, ticketCasa, ticketDelivery, ticketMedio,
       };
     }).sort((a, b) => {
       if (a.ating === null && b.ating === null) return b.realAtual - a.realAtual;
@@ -144,7 +160,7 @@ export default function Stores() {
       if (b.ating === null) return -1;
       return b.ating - a.ating;
     });
-  }, [lojas, rawData, periodo, getMeta]);
+  }, [lojas, rawData, periodo, getMeta, getPessoas]);
 
   if (!periodo) return null;
 
@@ -339,6 +355,9 @@ export default function Stores() {
                           ] : []),
                           { label: 'Delivery', value: formatBRL(l.delivery), accent: '#D9B504' },
                           { label: `Realizado total`, value: formatBRL(l.realAtual), bold: true },
+                          { label: 'Ticket Médio Salão', value: l.ticketCasa !== null ? formatBRL(l.ticketCasa) : '—', muted: true },
+                          { label: 'Ticket Médio Delivery', value: l.ticketDelivery !== null ? formatBRL(l.ticketDelivery) : '—', muted: true },
+                          { label: 'Ticket Médio Total', value: l.ticketMedio !== null ? formatBRL(l.ticketMedio) : '—', bold: true },
                           { label: `Mesmo período ${periodo.ano - 1} (dia ${periodo.lastDay})`, value: formatBRL(l.realAA), muted: true },
                           { label: `Mesmo mês ${periodo.ano - 1} (completo)`, value: formatBRL(l.prevAAfull), muted: true },
                           { label: 'Meta do mês', value: l.meta > 0 ? formatBRL(l.meta) : '—', muted: true },
