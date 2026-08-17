@@ -216,6 +216,20 @@ export function getDailyTotals(recs) {
 
 export const getDOWTotals = dowTotals;
 
+// Dado um mês/ano atual e o último dia considerado, devolve os registros do
+// ANO ANTERIOR correspondentes ao "dia comparável" de cada dia 1..lastDay
+// (mesma ocorrência do dia da semana, não o mesmo número de dia). Usado pra
+// somar um total "comparável" em vez de simplesmente Dia <= lastDay do ano
+// anterior (que ignora se os dias caem no mesmo dia da semana ou não).
+export function recsComparaveis(rawData, ano, mes, lastDay) {
+  const diasComp = [];
+  for (let dia = 1; dia <= lastDay; dia++) {
+    const comp = acharDiaComparavel(ano, mes, dia);
+    if (comp) diasComp.push(comp);
+  }
+  return rawData.filter(r => diasComp.some(c => r.Ano === c.ano && r.Mes === c.mes && r.Dia === c.dia));
+}
+
 // Acha o "dia comparável" do ano anterior: não é o mesmo dia do calendário
 // (ex: 15/08), é a mesma OCORRÊNCIA daquele dia da semana dentro do mês
 // (ex: 3º sábado de agosto/26 vs 3º sábado de agosto/25 — que pode cair em
