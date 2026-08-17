@@ -1,5 +1,5 @@
 // src/components/pages/Weekly.jsx
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine, Cell, LabelList
@@ -60,9 +60,54 @@ function getWeeksOfMonth(records, ano, mes) {
     });
 }
 
+// ── Semanas de Segunda a Domingo ────────────────────────────────────────
+// Diferente de getWeeksOfMonth (blocos fixos 1-7, 8-14...), aqui a semana
+// é uma semana de calendário de verdade (segunda a domingo), podendo
+// começar no mês anterior ou terminar no mês seguinte. Pra cada dia do mês
+// pedido, acha a segunda-feira da semana em que ele cai; o conjunto de
+// segundas distintas define as semanas mostradas.
+function getMondaySunday(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  const dow = dt.getDay(); // 0=Dom..6=Sáb
+  const diffParaSegunda = dow === 0 ? -6 : 1 - dow;
+  dt.setDate(dt.getDate() + diffParaSegunda);
+  const yy = dt.getFullYear(), mm = String(dt.getMonth() + 1).padStart(2, '0'), dd = String(dt.getDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
+function getWeeksMonSun(rawData, ano, mes) {
+  const totalDias = new Date(ano, mes, 0).getDate();
+  const diasDoMes = Array.from({ length: totalDias }, (_, i) =>
+    `${ano}-${String(mes).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`
+  );
+  const segundas = [...new Set(diasDoMes.map(getMondaySunday))].sort();
+
+  return segundas.map((segStr, i) => {
+    const [y, m, d] = segStr.split('-').map(Number);
+    const inicio = new Date(y, m - 1, d);
+    const fim = new Date(inicio); fim.setDate(fim.getDate() + 6);
+    const fimStr = `${fim.getFullYear()}-${String(fim.getMonth() + 1).padStart(2, '0')}-${String(fim.getDate()).padStart(2, '0')}`;
+
+    const recsSemana = rawData.filter(r => r.Data >= segStr && r.Data <= fimStr);
+    const pad = x => String(x).padStart(2, '0');
+
+    return {
+      label:     `S${i + 1}`,
+      labelFull: `${pad(inicio.getDate())}/${pad(inicio.getMonth() + 1)} – ${pad(fim.getDate())}/${pad(fim.getMonth() + 1)}/${String(fim.getFullYear()).slice(2)}`,
+      inicio:    segStr,
+      fim:       fimStr,
+      casa:      sum(recsSemana.filter(r => r.Canal === 'CASA')),
+      delivery:  sum(recsSemana.filter(r => r.Canal === 'DELIVERY')),
+      total:     sum(recsSemana),
+    };
+  });
+}
+
 export default function Weekly() {
   const { showLabels } = useLabels();
   const { filteredData, rawData } = useFilters();
+  const [modoSemana, setModoSemana] = useState('mes'); // 'mes' = blocos 1-7/8-14... | 'segdom' = segunda a domingo
 
   // ── Período atual ──────────────────────────────────────────────
   const periodo = useMemo(() => {
@@ -84,8 +129,13 @@ export default function Weekly() {
     if (!periodo) return [];
     const { ano, mes } = periodo;
 
-    const semanasAtual = getWeeksOfMonth(filteredData, ano, mes);
-    const semanasAnt   = getWeeksOfMonth(rawData, ano - 1, mes);
+    const getWeeks = modoSemana === 'segdom' ? getWeeksMonSun : getWeeksOfMonth;
+    // No modo segunda-domingo, uma semana pode começar no mês anterior —
+    // usa rawData (sem corte de mês) pra somar a semana inteira certinha,
+    // não só a parte que cai dentro do mês selecionado.
+    const fonteAtual   = modoSemana === 'segdom' ? rawData : filteredData;
+    const semanasAtual = getWeeks(fonteAtual, ano, mes);
+    const semanasAnt   = getWeeks(rawData, ano - 1, mes);
 
     return semanasAtual.map((s, i) => {
       const ant = semanasAnt[i];
@@ -99,7 +149,7 @@ export default function Weekly() {
         labelAnt:    ant?.labelFull || null,
       };
     });
-  }, [filteredData, rawData, periodo]);
+  }, [filteredData, rawData, periodo, modoSemana]);
 
   // ── KPIs ───────────────────────────────────────────────────────
   const kpis = useMemo(() => {
@@ -181,9 +231,14 @@ export default function Weekly() {
 
       {/* ── Gráfico de colunas: semanas do mês atual vs ano anterior ── */}
       <div className="chart-card">
-        <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
           <div>
-            <div className="flex items-center gap-1"><h3 className="section-title">Semanas de {periodo.label}</h3><InfoTip text="Cada semana do mês dividida em S1, S2, S3... Compara o faturamento desta semana com a mesma semana do ano anterior no mesmo mês." /></div>
+            <div className="flex items-center gap-1">
+              <h3 className="section-title">Semanas de {periodo.label}</h3>
+              <InfoTip text={modoSemana === 'segdom'
+                ? 'Semanas de calendário de verdade (segunda a domingo), podendo começar no mês anterior ou terminar no mês seguinte. Compara com a semana de mesma posição no ano anterior.'
+                : 'Cada semana do mês dividida em blocos fixos: S1=dias 1-7, S2=dias 8-14... Compara o faturamento desta semana com a mesma semana do ano anterior no mesmo mês.'} />
+            </div>
             <p className="text-xs text-zinc-400 mt-0.5">
               Colunas = {periodo.ano} · Linha tracejada = mesmo período {periodo.ano - 1}
             </p>
@@ -196,6 +251,17 @@ export default function Weekly() {
               <span className="w-3 h-3 rounded-sm inline-block" style={{ backgroundColor: '#D9B504' }} />Delivery {periodo.ano}
             </div>
           </div>
+        </div>
+
+        <div className="flex bg-surface-muted rounded-xl p-0.5 text-sm w-fit mb-5">
+          <button onClick={() => setModoSemana('mes')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${modoSemana === 'mes' ? 'bg-white shadow-sm text-brand-black' : 'text-zinc-500'}`}>
+            Semanas do Mês
+          </button>
+          <button onClick={() => setModoSemana('segdom')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${modoSemana === 'segdom' ? 'bg-white shadow-sm text-brand-black' : 'text-zinc-500'}`}>
+            Segunda a Domingo
+          </button>
         </div>
 
         <ResponsiveContainer width="100%" height={300}>
