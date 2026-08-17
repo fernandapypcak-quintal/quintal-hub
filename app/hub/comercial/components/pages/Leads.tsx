@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useLeadsDiarios, Deal } from '../../useComercial'
 import DealModal from '../ui/DealModal'
 
-const GAS_URL = '/api/pipedrive'
+const GAS_URL      = '/api/pipedrive'
+const LIVE_URL     = '/api/pipedrive-live'
 
 function fmtDate(s: string) {
   if (!s) return '—'
@@ -54,10 +55,10 @@ function LeadsHoje({ filtros }: { filtros: any }) {
 
   const buscar = useCallback(() => {
     setErro(null)
-    const p = new URLSearchParams({ tipo: 'leads_hoje' })
+    const p = new URLSearchParams()
     if (filtros.unidade)  p.set('unidade',  filtros.unidade)
     if (filtros.vendedor) p.set('vendedor', filtros.vendedor)
-    fetch(`${GAS_URL}?${p}`)
+    fetch(`${LIVE_URL}?${p}`)
       .then(r => r.json())
       .then(data => {
         if (data.erro) throw new Error(data.erro)
