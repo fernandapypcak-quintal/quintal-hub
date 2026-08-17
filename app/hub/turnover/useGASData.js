@@ -2,16 +2,31 @@ import { useState, useEffect } from 'react'
 
 const GAS_URL = "https://script.google.com/macros/s/AKfycby-QXglHGObJS1_YVTonnY0rXkrzkMBQZhwOqBMm2dZ46i53vdJuX7zM1SiEijtQ2H9/exec"
 
-// Meses disponíveis — adicionar conforme a planilha for sendo alimentada
-export const MESES     = ['Jan/26','Fev/26','Mar/26','Abr/26','Mai/26','Jun/26']
-export const MESES_API = ['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06']
-
-// Unidades alinhadas com a planilha 1_Ativos_TOTVS
-// Santo André = Figueiras (mesma casa)
 export const UNIDADES = [
   'Carinas','Chácara','Holding','Lapa','Madalena',
   'Mariana','Pavão','Perdizes','Santana','Santo André','Tatuapé'
 ]
+
+// Gera meses automaticamente de Jan/22 até o mês atual
+// Nunca mais precisa atualizar o código para adicionar meses
+function gerarMeses() {
+  const nomes   = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+  const hoje    = new Date()
+  const fimAno  = hoje.getFullYear()
+  const fimMes  = hoje.getMonth() + 1
+  const labels  = []
+  const apis    = []
+  let ano = 2022, mes = 1
+  while (ano < fimAno || (ano === fimAno && mes <= fimMes)) {
+    labels.push(`${nomes[mes-1]}/${String(ano).slice(2)}`)
+    apis.push(`${ano}-${String(mes).padStart(2,'0')}`)
+    mes++; if (mes > 12) { mes = 1; ano++ }
+  }
+  return { labels, apis }
+}
+
+const { labels: MESES, apis: MESES_API } = gerarMeses()
+export { MESES, MESES_API }
 
 export function useGASData(mesIdx, unidade) {
   const [data, setData]       = useState(null)
@@ -35,7 +50,6 @@ export function useGASData(mesIdx, unidade) {
       })
       .catch(e => { console.error('GAS erro:', e); setErro(e.message) })
       .finally(() => setLoading(false))
-
   }, [mesIdx, unidade])
 
   return { data, loading, erro }
@@ -44,10 +58,7 @@ export function useGASData(mesIdx, unidade) {
 export const CFG_DEFAULT = {
   meta_turnover:           5.0,
   custo_contratacao:       2514.32,
-  custo_demissao:          2724.00,
+  encargo_multiplicador:   1.6377,
   semaforo_verde_ambar:    5.0,
   semaforo_ambar_vermelho: 9.0,
 }
-
-// Mantido por compatibilidade com PageCustos
-export const CUSTO_IDEAL_KEY = {}
