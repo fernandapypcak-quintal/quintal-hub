@@ -129,10 +129,16 @@ export default function Hoje() {
         const totalO = o.salao + o.delivery;
         const pessoasH = getPessoas(anoH, mesH, null, diaH, lj);
         const pessoasO = getPessoas(anoO, mesO, null, diaO, lj);
+        const pessoasCasaH = getPessoas(anoH, mesH, 'CASA', diaH, lj);
+        const pessoasDelH  = getPessoas(anoH, mesH, 'DELIVERY', diaH, lj);
+        const pessoasCasaO = getPessoas(anoO, mesO, 'CASA', diaO, lj);
+        const pessoasDelO  = getPessoas(anoO, mesO, 'DELIVERY', diaO, lj);
         return {
           loja: lj,
-          hoje:  { total: totalH, salao: h.salao, delivery: h.delivery, pessoas: pessoasH, ticket: pessoasH > 0 ? totalH/pessoasH : null },
-          ontem: { total: totalO, salao: o.salao, delivery: o.delivery, pessoas: pessoasO, ticket: pessoasO > 0 ? totalO/pessoasO : null },
+          hoje:  { total: totalH, salao: h.salao, delivery: h.delivery, pessoas: pessoasH, ticket: pessoasH > 0 ? totalH/pessoasH : null,
+                   ticketCasa: pessoasCasaH > 0 ? h.salao/pessoasCasaH : null, ticketDelivery: pessoasDelH > 0 ? h.delivery/pessoasDelH : null },
+          ontem: { total: totalO, salao: o.salao, delivery: o.delivery, pessoas: pessoasO, ticket: pessoasO > 0 ? totalO/pessoasO : null,
+                   ticketCasa: pessoasCasaO > 0 ? o.salao/pessoasCasaO : null, ticketDelivery: pessoasDelO > 0 ? o.delivery/pessoasDelO : null },
           varOntem: totalO > 0 ? (totalH - totalO) / totalO * 100 : null,
           color: LOJA_COLORS[lj] || '#999',
         };
@@ -146,10 +152,16 @@ export default function Hoje() {
       const delO   = porLoja.reduce((s,l) => s + l.ontem.delivery,0);
       const pessoasTotalH = getPessoas(anoH, mesH, null, diaH, null);
       const pessoasTotalO = getPessoas(anoO, mesO, null, diaO, null);
+      const pessoasCasaTotalH = getPessoas(anoH, mesH, 'CASA', diaH, null);
+      const pessoasDelTotalH  = getPessoas(anoH, mesH, 'DELIVERY', diaH, null);
+      const pessoasCasaTotalO = getPessoas(anoO, mesO, 'CASA', diaO, null);
+      const pessoasDelTotalO  = getPessoas(anoO, mesO, 'DELIVERY', diaO, null);
 
       setDados({ porLoja, dtHoje, dtOntem,
-        hoje:  { total: totalH, salao: salaoH, delivery: delH, pessoas: pessoasTotalH, ticket: pessoasTotalH > 0 ? totalH/pessoasTotalH : null },
-        ontem: { total: totalO, salao: salaoO, delivery: delO, pessoas: pessoasTotalO, ticket: pessoasTotalO > 0 ? totalO/pessoasTotalO : null },
+        hoje:  { total: totalH, salao: salaoH, delivery: delH, pessoas: pessoasTotalH, ticket: pessoasTotalH > 0 ? totalH/pessoasTotalH : null,
+                 ticketCasa: pessoasCasaTotalH > 0 ? salaoH/pessoasCasaTotalH : null, ticketDelivery: pessoasDelTotalH > 0 ? delH/pessoasDelTotalH : null },
+        ontem: { total: totalO, salao: salaoO, delivery: delO, pessoas: pessoasTotalO, ticket: pessoasTotalO > 0 ? totalO/pessoasTotalO : null,
+                 ticketCasa: pessoasCasaTotalO > 0 ? salaoO/pessoasCasaTotalO : null, ticketDelivery: pessoasDelTotalO > 0 ? delO/pessoasDelTotalO : null },
         varTotal: totalO > 0 ? (totalH - totalO) / totalO * 100 : null,
       });
       setUltimaAtu(fmtHora());
@@ -251,7 +263,9 @@ export default function Hoje() {
                     <th className="text-right py-3 px-4 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Total</th>
                     <th className="text-right py-3 px-4 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Salão</th>
                     <th className="text-right py-3 px-4 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Delivery</th>
-                    <th className="text-right py-3 px-4 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Ticket Médio</th>
+                    <th className="text-right py-3 px-4 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Ticket Salão</th>
+                    <th className="text-right py-3 px-4 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Ticket Delivery</th>
+                    <th className="text-right py-3 px-4 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Ticket Total</th>
                     {d && <th className="text-right py-3 px-4 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Vs Ontem</th>}
                   </tr>
                 </thead>
@@ -285,6 +299,12 @@ export default function Hoje() {
                             {v.delivery > 0 ? formatBRL(v.delivery, true) : '—'}
                           </td>
                           <td className="py-3 px-4 text-right font-mono text-zinc-600">
+                            {v.ticketCasa !== null ? formatBRL(v.ticketCasa) : '—'}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono text-zinc-600">
+                            {v.ticketDelivery !== null ? formatBRL(v.ticketDelivery) : '—'}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono font-semibold text-brand-black">
                             {v.ticket !== null ? formatBRL(v.ticket) : '—'}
                           </td>
                           {d && (
@@ -307,7 +327,9 @@ export default function Hoje() {
                     <td className="py-3 px-4 text-right font-mono text-brand-black">{formatBRL(kd.total, true)}</td>
                     <td className="py-3 px-4 text-right font-mono text-zinc-600">{formatBRL(kd.salao, true)}</td>
                     <td className="py-3 px-4 text-right font-mono text-zinc-600">{formatBRL(kd.delivery, true)}</td>
-                    <td className="py-3 px-4 text-right font-mono text-zinc-600">{kd.ticket !== null ? formatBRL(kd.ticket) : '—'}</td>
+                    <td className="py-3 px-4 text-right font-mono text-zinc-600">{kd.ticketCasa !== null ? formatBRL(kd.ticketCasa) : '—'}</td>
+                    <td className="py-3 px-4 text-right font-mono text-zinc-600">{kd.ticketDelivery !== null ? formatBRL(kd.ticketDelivery) : '—'}</td>
+                    <td className="py-3 px-4 text-right font-mono font-semibold text-brand-black">{kd.ticket !== null ? formatBRL(kd.ticket) : '—'}</td>
                     {d && (
                       <td className="py-3 px-4 text-right">
                         {dados.varTotal !== null && (
