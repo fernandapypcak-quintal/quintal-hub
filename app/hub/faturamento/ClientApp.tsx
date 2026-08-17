@@ -15,6 +15,7 @@ import Trend from './components/pages/Trend'
 import Weekly from './components/pages/Weekly'
 import Stores from './components/pages/Stores'
 import History from './components/pages/History'
+import ComparableDays from './components/pages/ComparableDays'
 import LoadingScreen, { ErrorScreen } from './components/ui/LoadingScreen'
 import Link from 'next/link'
 
@@ -23,6 +24,7 @@ const PAGES: Record<string, React.ComponentType> = {
   overview: Overview,
   trend: Trend,
   weekly: Weekly,
+  comparable: ComparableDays,
   stores: Stores,
   history: History,
 }
