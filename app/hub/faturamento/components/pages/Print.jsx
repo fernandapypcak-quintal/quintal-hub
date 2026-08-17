@@ -2,7 +2,7 @@
 import { useMemo } from 'react';
 import { useFilters } from '../../hooks/useFilters';
 import { useMetas } from '../../hooks/useMetas';
-import { sum, variation, calcTendFat, daysInMonth, formatBRL, acharDiaComparavel } from '../../utils/formatters';
+import { sum, variation, calcTendFat, daysInMonth, formatBRL, acharDiaComparavel, recsComparaveis } from '../../utils/formatters';
 
 const MESES = ['','Janeiro','Fevereiro','Março','Abril','Maio','Junho',
                'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -29,7 +29,12 @@ export default function PrintReport({ onClose, mesAno }) {
     const recs      = rawData.filter(r => r.Ano_Mes === key);
     const lastDay   = Math.max(...recs.map(r => r.Dia));
     const totalDays = daysInMonth(ano, mes);
-    const recsAA     = rawData.filter(r => r.Ano === ano-1 && r.Mes === mes && r.Dia <= lastDay);
+    // FIX: em vez de simplesmente pegar Dia <= lastDay do ano anterior (que
+    // ignora se cada dia cai no mesmo dia da semana), usa o "dia comparável"
+    // — mesma ocorrência do dia da semana no mês do ano anterior — pra cada
+    // dia 1..lastDay. Assim um sábado é comparado com sábado, não com
+    // qualquer dia que caia no mesmo número.
+    const recsAA     = recsComparaveis(rawData, ano, mes, lastDay);
     const recsAAFull = rawData.filter(r => r.Ano === ano-1 && r.Mes === mes);
 
     const total    = sum(recs);
@@ -79,7 +84,13 @@ export default function PrintReport({ onClose, mesAno }) {
     const mesO    = ontemDate.getMonth() + 1;
     const anoO    = ontemDate.getFullYear();
     const recsO   = rawData.filter(r => r.Ano === anoO   && r.Mes === mesO && r.Dia === diaO);
-    const recsOAA = rawData.filter(r => r.Ano === anoO-1 && r.Mes === mesO && r.Dia === diaO);
+    // FIX: em vez do mesmo número de dia do ano anterior (que pode cair num
+    // dia da semana diferente), usa o "dia comparável" — mesma ocorrência
+    // do dia da semana no mês do ano anterior.
+    const compOntem = acharDiaComparavel(anoO, mesO, diaO);
+    const recsOAA = compOntem
+      ? rawData.filter(r => r.Ano === compOntem.ano && r.Mes === compOntem.mes && r.Dia === compOntem.dia)
+      : [];
     const totalO   = sum(recsO);
     const casaO    = sum(recsO.filter(r => r.Canal === 'CASA'));
     const delO     = sum(recsO.filter(r => r.Canal === 'DELIVERY'));
@@ -113,7 +124,10 @@ export default function PrintReport({ onClose, mesAno }) {
       ontem: { dow: DOW_NAMES[ontemDate.getDay()], dia:diaO, mes:mesO, ano:anoO,
                total:totalO, totalAA:totalOAA, yoy:yoyO,
                casa:casaO, delivery:delO, casaAA:casaOAA, deliveryAA:delOAA,
-               yoyCasa:yoyCasaO, yoyDelivery:yoyDelO, porLoja:porLojaO } };
+               yoyCasa:yoyCasaO, yoyDelivery:yoyDelO, porLoja:porLojaO,
+               compData: compOntem, compLabel: compOntem
+                 ? `${String(compOntem.dia).padStart(2,'0')}/${String(compOntem.mes).padStart(2,'0')}/${compOntem.ano}`
+                 : null } };
   }, [rawData, getMeta, mesAno]);
 
   if (!data) return null;
@@ -206,7 +220,7 @@ export default function PrintReport({ onClose, mesAno }) {
 </div>
 
 <div class="info-bar">
-  ⚠️ Dados até dia ${data.lastDay} de ${data.totalDays}. YoY e Tend Fat calculados com base nesse período.
+  ⚠️ Dados até dia ${data.lastDay} de ${data.totalDays}. YoY e Tend Fat calculados com base nesse período, comparando cada dia com o "dia comparável" do ano anterior (mesma ocorrência do dia da semana no mês, não a mesma data).
 </div>
 
 <!-- 1. VISÃO GERAL -->
@@ -235,12 +249,12 @@ export default function PrintReport({ onClose, mesAno }) {
 </div>
 
 <!-- 2. DIA ANTERIOR -->
-<div class="section-title">2. Dia Anterior — ${data.ontem.dow}, ${data.ontem.dia}/${data.ontem.mes}/${data.ontem.ano}</div>
+<div class="section-title">2. Dia Anterior — ${data.ontem.dow}, ${data.ontem.dia}/${data.ontem.mes}/${data.ontem.ano} <span style="font-weight:400;color:#888;font-size:12px">(comparado com ${data.ontem.compLabel || 'dia correspondente ' + (data.ontem.ano-1)})</span></div>
 <div class="kpi-grid">
   <div class="kpi">
     <div class="kpi-label">Faturamento Total</div>
     <div class="kpi-value">${fmt(data.ontem.total)}</div>
-    ${data.ontem.yoy !== null ? `<div class="kpi-var ${data.ontem.yoy>=0?'pos':'neg'}">${pct(data.ontem.yoy)} vs mesmo dia ${data.ontem.ano-1}</div>` : ''}
+    ${data.ontem.yoy !== null ? `<div class="kpi-var ${data.ontem.yoy>=0?'pos':'neg'}">${pct(data.ontem.yoy)} vs dia comparável ${data.ontem.compLabel || ''}</div>` : ''}
   </div>
   <div class="kpi">
     <div class="kpi-label">Salão</div>
@@ -253,7 +267,7 @@ export default function PrintReport({ onClose, mesAno }) {
     <div class="kpi-sub">${data.ontem.total>0?(data.ontem.delivery/data.ontem.total*100).toFixed(1).replace('.',',')+'%':''} do total</div>
   </div>
   <div class="kpi" style="border-left:3px solid #1F3D2E">
-    <div class="kpi-label">Mesmo dia ${data.ontem.ano-1}</div>
+    <div class="kpi-label">Dia Comparável ${data.ontem.compLabel || (data.ontem.ano-1)}</div>
     <div class="kpi-value" style="color:#999;font-size:19px">${fmt(data.ontem.totalAA)}</div>
     ${data.ontem.yoy !== null ? `<div class="kpi-var ${data.ontem.yoy>=0?'pos':'neg'}">${pct(data.ontem.yoy)}</div>` : '<div class="kpi-sub">sem dado anterior</div>'}
   </div>
