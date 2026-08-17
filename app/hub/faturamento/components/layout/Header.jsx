@@ -1,7 +1,7 @@
 // src/components/layout/Header.jsx
 import { useState } from 'react';
 import { SlidersHorizontal, Tag, X, ChevronDown, Filter, Printer, Zap } from 'lucide-react';
-import PrintReport, { PrintWeekend, PrintAnual, exportarExcelAnual } from '../pages/Print';
+import PrintReport, { PrintWeekend, PrintAnual, PrintComparableDays, exportarExcelAnual } from '../pages/Print';
 import { useFilters } from '../../hooks/useFilters';
 import { useMetas } from '../../hooks/useMetas';
 import { useLabels } from '../../hooks/useLabels';
@@ -29,6 +29,7 @@ export default function Header({ activePage }) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [printingWeekend, setPrintingWeekend] = useState(false);
+  const [printingComparable, setPrintingComparable] = useState(false);
   const [printingAnual, setPrintingAnual] = useState(null); // null | 2025 | 2026
 
   const mesesAtivos = [...filters.meses];
@@ -147,6 +148,13 @@ export default function Header({ activePage }) {
             className="hidden sm:flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-xl border border-surface-border text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 transition-colors">
             <Printer size={13}/>
             <span className="hidden lg:inline">FDS</span>
+          </button>
+          <button
+            onClick={() => setPrintingComparable(true)}
+            title="Dia Comparável — cada dia do mês vs mesma ocorrência do dia da semana no ano anterior"
+            className="hidden sm:flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-xl border border-surface-border text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 transition-colors">
+            <Printer size={13}/>
+            <span className="hidden lg:inline">Comparável</span>
           </button>
           <button
             onClick={() => setPrinting(true)}
@@ -331,6 +339,7 @@ export default function Header({ activePage }) {
       {/* Print trigger */}
       {printing && <PrintReport onClose={() => setPrinting(false)} mesAno={mesAnoParaImpressao} />}
       {printingWeekend && <PrintWeekend onClose={() => setPrintingWeekend(false)} />}
+      {printingComparable && <PrintComparableDays onClose={() => setPrintingComparable(false)} />}
       {typeof printingAnual === 'number' && <PrintAnual ano={printingAnual} onClose={() => setPrintingAnual(null)} />}
     </>
   );
