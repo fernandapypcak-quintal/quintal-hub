@@ -7,20 +7,19 @@ export const UNIDADES = [
   'Mariana','Pavão','Perdizes','Santana','Santo André','Tatuapé'
 ]
 
-// Gera meses automaticamente de Jan/22 até o mês atual
-// Nunca mais precisa atualizar o código para adicionar meses
+// Gera meses de Jan/26 até o mês atual — automaticamente
+// Quando virar Jan/27, aparece sozinho. Nunca mais precisa mexer no código.
 function gerarMeses() {
-  const nomes   = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
-  const hoje    = new Date()
-  const fimAno  = hoje.getFullYear()
-  const fimMes  = hoje.getMonth() + 1
-  const labels  = []
-  const apis    = []
-  let ano = 2022, mes = 1
-  while (ano < fimAno || (ano === fimAno && mes <= fimMes)) {
+  const nomes  = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+  const hoje   = new Date()
+  const labels = []
+  const apis   = []
+  let ano = 2026, mes = 1
+  while (ano < hoje.getFullYear() || (ano === hoje.getFullYear() && mes <= hoje.getMonth() + 1)) {
     labels.push(`${nomes[mes-1]}/${String(ano).slice(2)}`)
     apis.push(`${ano}-${String(mes).padStart(2,'0')}`)
-    mes++; if (mes > 12) { mes = 1; ano++ }
+    mes++
+    if (mes > 12) { mes = 1; ano++ }
   }
   return { labels, apis }
 }
