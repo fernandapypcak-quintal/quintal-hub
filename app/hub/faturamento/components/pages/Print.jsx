@@ -2,7 +2,7 @@
 import { useMemo } from 'react';
 import { useFilters } from '../../hooks/useFilters';
 import { useMetas } from '../../hooks/useMetas';
-import { sum, variation, calcTendFat, daysInMonth, formatBRL } from '../../utils/formatters';
+import { sum, variation, calcTendFat, daysInMonth, formatBRL, acharDiaComparavel } from '../../utils/formatters';
 
 const MESES = ['','Janeiro','Fevereiro','Março','Abril','Maio','Junho',
                'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -411,10 +411,13 @@ export function PrintWeekend({ onClose }) {
   const DOW_NAMES = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
 
   const dias = diasFds.map(({ data, dow, d }) => {
-    const recs   = rawData.filter(r => r.Data === data);
-    const dAA    = new Date(d); dAA.setFullYear(d.getFullYear() - 1);
-    const dataAA = dAA.getFullYear() + '-' + String(dAA.getMonth()+1).padStart(2,'0') + '-' + String(dAA.getDate()).padStart(2,'0');
-    const recsAA = rawData.filter(r => r.Data === dataAA);
+    const recs = rawData.filter(r => r.Data === data);
+    // FIX: em vez de simplesmente subtrair 1 ano da data (que pode cair num
+    // dia da semana diferente), usa o "dia comparável" — mesma ocorrência
+    // desse dia da semana no mês (ex: 3º sábado vs 3º sábado do ano anterior).
+    const comp = acharDiaComparavel(d.getFullYear(), d.getMonth() + 1, d.getDate());
+    const dataAA = comp ? `${comp.ano}-${String(comp.mes).padStart(2,'0')}-${String(comp.dia).padStart(2,'0')}` : null;
+    const recsAA = dataAA ? rawData.filter(r => r.Data === dataAA) : [];
     const porLoja = lojas.map(loja => {
       const lr   = recs.filter(r => r.Loja === loja);
       const lrAA = recsAA.filter(r => r.Loja === loja);
@@ -520,6 +523,135 @@ export function PrintWeekend({ onClose }) {
 }
 
 // ── IMPRESSÃO ANUAL ──────────────────────────────────────────────────────────
+// ── IMPRESSÃO DE DIA COMPARÁVEL ──────────────────────────────────────────────
+// Compara cada dia do mês selecionado com a mesma OCORRÊNCIA daquele dia da
+// semana no ano anterior (ex: 3º sábado de agosto/26 vs 3º sábado de
+// agosto/25), em vez do mesmo dia do calendário.
+export function PrintComparableDays({ onClose }) {
+  const { rawData } = useFilters();
+
+  if (!rawData.length) { onClose?.(); return null; }
+
+  const keys = [...new Set(rawData.map(r => r.Ano_Mes))].sort();
+  const key  = keys[keys.length - 1];
+  const [anoS, mesS] = key.split('-');
+  const ano = Number(anoS), mes = Number(mesS);
+  const recsMes = rawData.filter(r => r.Ano_Mes === key);
+  const lastDay = Math.max(...recsMes.map(r => r.Dia));
+  const label   = recsMes[0]?.Ano_Mes_Label || key;
+
+  const DOW_NAMES = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+
+  const dias = Array.from({ length: lastDay }, (_, i) => {
+    const dia = i + 1;
+    const dow = new Date(ano, mes - 1, dia).getDay();
+    const total = sum(rawData.filter(r => r.Ano === ano && r.Mes === mes && r.Dia === dia));
+
+    const comp = acharDiaComparavel(ano, mes, dia);
+    let totalComp = 0, compLabel = '—', ocorrenciaAproximada = false;
+    if (comp) {
+      totalComp = sum(rawData.filter(r => r.Ano === comp.ano && r.Mes === comp.mes && r.Dia === comp.dia));
+      compLabel = String(comp.dia).padStart(2,'0') + '/' + String(comp.mes).padStart(2,'0') + '/' + comp.ano;
+      ocorrenciaAproximada = comp.ocorrenciaAproximada;
+    }
+
+    return {
+      dia, dow, dowLabel: DOW_NAMES[dow],
+      total, totalComp, compLabel, ocorrenciaAproximada,
+      var: variation(total, totalComp),
+    };
+  });
+
+  const totalAtual = dias.reduce((s, d) => s + d.total, 0);
+  const totalComparavel = dias.reduce((s, d) => s + d.totalComp, 0);
+  const varTotal = variation(totalAtual, totalComparavel);
+
+  const css = `
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: Arial, sans-serif; font-size: 13px; color: #1a1a1a; background: white; padding: 14px; line-height:1.25; }
+    .no-print { margin-bottom: 14px; display: flex; gap: 8px; }
+    @media print { .no-print { display: none; } body { padding: 8mm; } @page { size: A4 landscape; margin: 8mm; } }
+    .header { display:flex; justify-content:space-between; align-items:center; border-bottom: 3px solid #1F3D2E; padding-bottom: 7px; margin-bottom: 10px; }
+    .header h1 { font-size: 20px; font-weight: 800; color: #1F3D2E; }
+    .header .sub { font-size: 11px; color: #666; margin-top: 1px; }
+    .header .badge { background:#1F3D2E; color:white; padding:4px 11px; border-radius:6px; font-size:12px; font-weight:700; }
+    .kpi-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; }
+    .kpi { border:1px solid #e5e5e5; border-radius:8px; padding:9px 13px; }
+    .kpi-label { font-size:10px; font-weight:700; color:#888; text-transform:uppercase; margin-bottom:3px; }
+    .kpi-value { font-size:20px; font-weight:800; }
+    .kpi-var { font-size:12px; font-weight:700; margin-top:2px; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid; }
+    th { background:#1F3D2E; color:white; font-weight:700; padding:5px 8px; text-align:right; font-size:10px; text-transform:uppercase; }
+    th:first-child, th:nth-child(2) { text-align:left; }
+    td { padding:4px 8px; text-align:right; border-bottom:1px solid #f0f0f0; }
+    td:first-child, td:nth-child(2) { text-align:left; font-weight:600; }
+    tr:nth-child(even) td { background:#fafafa; }
+    .tfoot td { background:#f0f4ec !important; font-weight:700; border-top:2px solid #1F3D2E; }
+    .pos { color:#16a34a; } .neg { color:#dc2626; }
+    .aprox { color:#d97706; font-size:10px; }
+    .footer { margin-top:14px; padding-top:8px; border-top:1px solid #e5e5e5; font-size:10px; color:#999; display:flex; justify-content:space-between; }
+  `;
+
+  const rows = dias.map(d => `
+    <tr>
+      <td>${String(d.dia).padStart(2,'0')}/${String(mes).padStart(2,'0')}</td>
+      <td>${d.dowLabel}</td>
+      <td style="font-weight:700">${d.total>0?fmt(d.total):'—'}</td>
+      <td style="font-weight:400;color:#666">${d.compLabel}${d.ocorrenciaAproximada?' <span class="aprox">≈</span>':''}</td>
+      <td style="color:#999">${d.totalComp>0?fmt(d.totalComp):'—'}</td>
+      <td class="${d.var>=0?'pos':'neg'}">${(d.total>0&&d.totalComp>0)?pct(d.var):'—'}</td>
+    </tr>`).join('');
+
+  function fmt(v) { return formatBRL(v, true); }
+  function pct(v) { if (v===null||v===undefined) return '—'; return (v>=0?'+':'') + v.toFixed(1).replace('.',',') + '%'; }
+
+  const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>
+    <title>Dia Comparável ${label} — Quintal do Espeto</title>
+    <style>${css}</style></head><body>
+    <div class="no-print">
+      <button onclick="window.print()" style="background:#1F3D2E;color:white;border:none;padding:7px 18px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Imprimir / Salvar PDF</button>
+      <button onclick="window.close()" style="background:#f5f5f5;color:#333;border:1px solid #ddd;padding:7px 14px;border-radius:6px;font-size:12px;cursor:pointer;">Fechar</button>
+    </div>
+    <div class="header">
+      <div>
+        <h1>Quintal do Espeto — Dia Comparável</h1>
+        <div class="sub">Cada dia comparado com a mesma ocorrência do dia da semana no ano anterior (ex: 3º sábado vs 3º sábado) · Gerado em ${new Date().toLocaleString('pt-BR')}</div>
+      </div>
+      <div class="badge">${label}</div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-label">${label}</div><div class="kpi-value">${fmt(totalAtual)}</div></div>
+      <div class="kpi"><div class="kpi-label">Comparável ${ano-1}</div><div class="kpi-value" style="color:#888">${fmt(totalComparavel)}</div></div>
+      <div class="kpi"><div class="kpi-label">Variação</div><div class="kpi-value ${varTotal>=0?'pos':'neg'}">${pct(varTotal)}</div></div>
+    </div>
+    <table>
+      <thead><tr>
+        <th>Dia</th><th>Dia da Semana</th><th>Faturamento ${ano}</th>
+        <th>Dia Correspondente ${ano-1}</th><th>Faturamento ${ano-1}</th><th>Variação</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr class="tfoot">
+        <td>TOTAL</td><td></td>
+        <td>${fmt(totalAtual)}</td><td></td>
+        <td>${fmt(totalComparavel)}</td>
+        <td class="${varTotal>=0?'pos':'neg'}">${pct(varTotal)}</td>
+      </tr></tfoot>
+    </table>
+    <div class="footer">
+      <span>Quintal do Espeto · Dia Comparável</span>
+      <span>${new Date().toLocaleString('pt-BR')}</span>
+    </div>
+    </body></html>`;
+
+  const blob = new Blob([html], { type: 'text/html' });
+  const url  = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+  onClose?.();
+  return null;
+}
+
 export function PrintAnual({ ano, onClose }) {
   const { rawData } = useFilters();
   const { getMeta } = useMetas();
