@@ -8,6 +8,7 @@ import { DollarSign, Home, Truck, Target, Calendar, TrendingUp, TrendingDown } f
 import { useFilters } from '../../hooks/useFilters';
 import { useAlmoco } from '../../hooks/useAlmoco';
 import { useTicket } from '../../hooks/useTicket';
+import { useCompradores } from '../../hooks/useCompradores';
 import { useMetas } from '../../hooks/useMetas';
 import { useLabels } from '../../hooks/useLabels';
 import KpiCard from '../ui/KpiCard';
@@ -60,7 +61,27 @@ export default function Overview() {
   const { getMetaTotal } = useMetas();
   const { showLabels } = useLabels();
   const { getAlmoco } = useAlmoco();
-  const { getTicket, getDesconto } = useTicket();
+  const { getDesconto } = useTicket();
+  const { compradores } = useCompradores();
+
+  // Ticket médio via check-ins (fonte corrigida) — substitui o getTicket()
+  // antigo, que vinha da planilha ticket_manual (preenchida à mão, sujeita
+  // a ficar desatualizada). Mesma assinatura de filtro pra não mudar o
+  // resto do código: canal null = Salão+Delivery juntos, lojasFilter é um
+  // Set (vazio/null = todas as lojas).
+  function getTicketChk(ano, mes, canal, lojasFilter) {
+    let comp = compradores.filter(r => r.Ano === ano && r.Mes === mes);
+    if (canal) comp = comp.filter(r => r.Canal === canal);
+    if (lojasFilter && lojasFilter.size > 0) comp = comp.filter(r => lojasFilter.has(r.Loja));
+    const pessoas = comp.reduce((s, r) => s + (r.Pessoas || 0), 0);
+
+    let recs = rawData.filter(r => r.Ano === ano && r.Mes === mes);
+    if (canal) recs = recs.filter(r => r.Canal === canal);
+    if (lojasFilter && lojasFilter.size > 0) recs = recs.filter(r => lojasFilter.has(r.Loja));
+    const faturamento = sum(recs);
+
+    return { pessoas, ticket: pessoas > 0 ? faturamento / pessoas : 0 };
+  }
 
   const lojas   = useMemo(() => [...new Set(rawData.map(r => r.Loja))].sort(), [rawData]);
 
@@ -325,9 +346,9 @@ export default function Overview() {
       {/* ── TICKET MÉDIO + DESCONTO ── */}
       {periodo && (() => {
         const lojasF = filters.lojas;
-        const tk     = getTicket(periodo.ano, periodo.mes, null,       lojasF);
-        const tkSal  = getTicket(periodo.ano, periodo.mes, 'CASA',     lojasF);
-        const tkDel  = getTicket(periodo.ano, periodo.mes, 'DELIVERY', lojasF);
+        const tk     = getTicketChk(periodo.ano, periodo.mes, null,       lojasF);
+        const tkSal  = getTicketChk(periodo.ano, periodo.mes, 'CASA',     lojasF);
+        const tkDel  = getTicketChk(periodo.ano, periodo.mes, 'DELIVERY', lojasF);
         const dsc    = getDesconto(periodo.ano, periodo.mes, lojasF);
         if (tk.pessoas === 0) return null;
         return (
