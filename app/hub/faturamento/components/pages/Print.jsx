@@ -2,7 +2,7 @@
 import { useMemo } from 'react';
 import { useFilters } from '../../hooks/useFilters';
 import { useMetas } from '../../hooks/useMetas';
-import { sum, variation, calcTendFat, daysInMonth, formatBRL } from '../../utils/formatters';
+import { sum, variation, calcTendFat, daysInMonth, formatBRL, acharDiaComparavel } from '../../utils/formatters';
 
 const MESES = ['','Janeiro','Fevereiro','Março','Abril','Maio','Junho',
                'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -15,7 +15,7 @@ function pct(v) {
 }
 function clr(v) { return v >= 0 ? '#16a34a' : '#dc2626'; }
 
-export default function PrintReport({ onClose }) {
+export default function PrintReport({ onClose, mesAno }) {
   const { rawData } = useFilters();
   const { getMeta } = useMetas();
 
@@ -23,7 +23,7 @@ export default function PrintReport({ onClose }) {
     if (!rawData.length) return null;
 
     const keys = [...new Set(rawData.map(r => r.Ano_Mes))].sort();
-    const key  = keys[keys.length - 1];
+    const key  = (mesAno && keys.includes(mesAno)) ? mesAno : keys[keys.length - 1];
     const [anoS, mesS] = key.split('-');
     const ano = Number(anoS), mes = Number(mesS);
     const recs      = rawData.filter(r => r.Ano_Mes === key);
@@ -35,7 +35,12 @@ export default function PrintReport({ onClose }) {
     const total    = sum(recs);
     const casa     = sum(recs.filter(r => r.Canal === 'CASA'));
     const delivery = sum(recs.filter(r => r.Canal === 'DELIVERY'));
-    const yoy      = variation(total, sum(recsAA));
+    const totalAA  = sum(recsAA);
+    const casaAA     = sum(recsAA.filter(r => r.Canal === 'CASA'));
+    const deliveryAA = sum(recsAA.filter(r => r.Canal === 'DELIVERY'));
+    const yoy      = variation(total, totalAA);
+    const yoyCasa     = variation(casa, casaAA);
+    const yoyDelivery = variation(delivery, deliveryAA);
     const tendFat  = calcTendFat(recs, lastDay, totalDays, ano, mes);
     const tendVsAA = variation(tendFat, sum(recsAAFull));
 
@@ -46,11 +51,20 @@ export default function PrintReport({ onClose }) {
       const lrAA     = recsAA.filter(r => r.Loja === loja);
       const lrAAFull = recsAAFull.filter(r => r.Loja === loja);
       const real = sum(lr);
+      const casaLoja     = sum(lr.filter(r => r.Canal === 'CASA'));
+      const deliveryLoja = sum(lr.filter(r => r.Canal === 'DELIVERY'));
+      const realAA       = sum(lrAA);
+      const casaAALoja     = sum(lrAA.filter(r => r.Canal === 'CASA'));
+      const deliveryAALoja = sum(lrAA.filter(r => r.Canal === 'DELIVERY'));
       const tend = calcTendFat(lr, lastDay, totalDays, ano, mes);
       const meta = getMeta(key, loja);
       return {
         loja, real, tend, meta,
-        yoy:      variation(real, sum(lrAA)),
+        casa: casaLoja, delivery: deliveryLoja, realAA,
+        casaAA: casaAALoja, deliveryAA: deliveryAALoja,
+        yoy:      variation(real, realAA),
+        yoyCasa:     variation(casaLoja, casaAALoja),
+        yoyDelivery: variation(deliveryLoja, deliveryAALoja),
         tendVsAA: variation(tend, sum(lrAAFull)),
         ating:    meta > 0 ? real/meta*100 : null,
         share:    total > 0 ? real/total*100 : 0,
@@ -66,26 +80,41 @@ export default function PrintReport({ onClose }) {
     const anoO    = ontemDate.getFullYear();
     const recsO   = rawData.filter(r => r.Ano === anoO   && r.Mes === mesO && r.Dia === diaO);
     const recsOAA = rawData.filter(r => r.Ano === anoO-1 && r.Mes === mesO && r.Dia === diaO);
-    const totalO  = sum(recsO);
-    const casaO   = sum(recsO.filter(r => r.Canal === 'CASA'));
-    const delO    = sum(recsO.filter(r => r.Canal === 'DELIVERY'));
-    const yoyO    = variation(totalO, sum(recsOAA));
+    const totalO   = sum(recsO);
+    const casaO    = sum(recsO.filter(r => r.Canal === 'CASA'));
+    const delO     = sum(recsO.filter(r => r.Canal === 'DELIVERY'));
+    const totalOAA = sum(recsOAA);
+    const casaOAA  = sum(recsOAA.filter(r => r.Canal === 'CASA'));
+    const delOAA   = sum(recsOAA.filter(r => r.Canal === 'DELIVERY'));
+    const yoyO    = variation(totalO, totalOAA);
+    const yoyCasaO = variation(casaO, casaOAA);
+    const yoyDelO  = variation(delO, delOAA);
     const porLojaO = lojas.map(loja => {
-      const v26 = sum(recsO.filter(r => r.Loja === loja));
-      const v25 = sum(recsOAA.filter(r => r.Loja === loja));
-      return { loja, v26, v25, var: variation(v26, v25) };
+      const lrO   = recsO.filter(r => r.Loja === loja);
+      const lrOAA = recsOAA.filter(r => r.Loja === loja);
+      const v26   = sum(lrO);
+      const casa26 = sum(lrO.filter(r => r.Canal === 'CASA'));
+      const del26  = sum(lrO.filter(r => r.Canal === 'DELIVERY'));
+      const v25   = sum(lrOAA);
+      const casa25 = sum(lrOAA.filter(r => r.Canal === 'CASA'));
+      const del25  = sum(lrOAA.filter(r => r.Canal === 'DELIVERY'));
+      return { loja, v26, casa26, del26, v25, casa25, del25,
+        var: variation(v26, v25),
+        varCasa: variation(casa26, casa25),
+        varDel:  variation(del26, del25) };
     }).filter(l => l.v26 > 0).sort((a,b) => b.v26 - a.v26);
 
     return { ano, mes, lastDay, totalDays, key,
       label: `${MESES[mes]}/${ano}`,
-      total, casa, delivery, yoy, tendFat, tendVsAA,
+      total, casa, delivery, totalAA, casaAA, deliveryAA, yoy, yoyCasa, yoyDelivery, tendFat, tendVsAA,
       pctCasa: total>0?casa/total*100:0,
       pctDel:  total>0?delivery/total*100:0,
       porLoja,
-      ontem: { dow: DOW_NAMES[ontem.getDay()], dia:diaO, mes:mesO, ano:anoO,
-               total:totalO, totalAA:sum(recsOAA), yoy:yoyO,
-               casa:casaO, delivery:delO, porLoja:porLojaO } };
-  }, [rawData, getMeta]);
+      ontem: { dow: DOW_NAMES[ontemDate.getDay()], dia:diaO, mes:mesO, ano:anoO,
+               total:totalO, totalAA:totalOAA, yoy:yoyO,
+               casa:casaO, delivery:delO, casaAA:casaOAA, deliveryAA:delOAA,
+               yoyCasa:yoyCasaO, yoyDelivery:yoyDelO, porLoja:porLojaO } };
+  }, [rawData, getMeta, mesAno]);
 
   if (!data) return null;
 
@@ -98,44 +127,52 @@ export default function PrintReport({ onClose }) {
 <title>Relatório ${data.label} — Quintal do Espeto</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: Arial, sans-serif; font-size: 10px; color: #1a1a1a;
-         background: white; padding: 16px; }
+  body { font-family: Arial, sans-serif; font-size: 14px; color: #1a1a1a;
+         background: white; padding: 14px; line-height:1.25; }
 
   .header { display:flex; justify-content:space-between; align-items:center;
-    border-bottom: 3px solid #1F3D2E; padding-bottom: 10px; margin-bottom: 14px; }
-  .header h1 { font-size: 17px; font-weight: 800; color: #1F3D2E; }
-  .header .sub { font-size: 9px; color: #666; margin-top: 2px; }
-  .header .badge { background:#1F3D2E; color:white; padding:4px 10px;
-    border-radius:6px; font-size:10px; font-weight:700; }
+    border-bottom: 3px solid #1F3D2E; padding-bottom: 7px; margin-bottom: 10px; }
+  .header h1 { font-size: 22px; font-weight: 800; color: #1F3D2E; }
+  .header .sub { font-size: 12px; color: #666; margin-top: 1px; }
+  .header .badge { background:#1F3D2E; color:white; padding:4px 11px;
+    border-radius:6px; font-size:13px; font-weight:700; }
 
   .info-bar { background:#fffbeb; border:1px solid #fde68a; border-radius:6px;
-    padding:5px 10px; font-size:9px; color:#92400e; margin-bottom:12px; }
+    padding:4px 12px; font-size:12px; color:#92400e; margin-bottom:9px; }
 
-  .section-title { font-size:12px; font-weight:700; color:#1F3D2E;
-    border-left:4px solid #97A624; padding-left:8px; margin:14px 0 8px; }
+  .section-title { font-size:15px; font-weight:700; color:#1F3D2E;
+    border-left:4px solid #97A624; padding-left:8px; margin:11px 0 6px;
+    page-break-after: avoid; break-after: avoid-page;
+    page-break-inside: avoid; break-inside: avoid; }
 
-  .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:12px; }
-  .kpi { border:1px solid #e5e5e5; border-radius:8px; padding:9px 11px; }
-  .kpi-label { font-size:8px; font-weight:700; color:#888; text-transform:uppercase;
-    letter-spacing:0.5px; margin-bottom:3px; }
-  .kpi-value { font-size:17px; font-weight:800; }
-  .kpi-sub { font-size:8px; color:#888; margin-top:2px; }
-  .kpi-var { font-size:9px; font-weight:700; margin-top:3px; }
+  .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:7px; margin-bottom:9px; }
+  .kpi { border:1px solid #e5e5e5; border-radius:7px; padding:7px 11px; }
+  .kpi-label { font-size:10px; font-weight:700; color:#888; text-transform:uppercase;
+    letter-spacing:0.5px; margin-bottom:2px; }
+  .kpi-value { font-size:21px; font-weight:800; }
+  .kpi-sub { font-size:10px; color:#888; margin-top:1px; }
+  .kpi-var { font-size:12px; font-weight:700; margin-top:2px; }
 
-  table { width:100%; border-collapse:collapse; font-size:10px; margin-bottom:14px; }
-  th { background:#1F3D2E; color:white; font-weight:700; padding:5px 8px;
-    text-align:right; font-size:8px; text-transform:uppercase; }
+  table { width:100%; border-collapse:collapse; font-size:14px; margin-bottom:10px; }
+  thead { display: table-header-group; }
+  tr { page-break-inside: avoid; break-inside: avoid; }
+  th { background:#1F3D2E; color:white; font-weight:700; padding:4px 8px;
+    text-align:right; font-size:10px; text-transform:uppercase; }
   th:first-child { text-align:left; }
-  td { padding:4px 8px; text-align:right; border-bottom:1px solid #f0f0f0; }
+  td { padding:3px 8px; text-align:right; border-bottom:1px solid #f0f0f0; }
   td:first-child { text-align:left; font-weight:600; }
   tr:nth-child(even) td { background:#fafafa; }
   .tfoot td { background:#f0f4ec !important; font-weight:700;
     border-top:2px solid #1F3D2E; }
 
+  .subrow td { background:#fcfcfc !important; text-align:left; font-size:11px;
+    color:#666; padding:1px 8px 4px 24px; border-bottom:1px solid #f0f0f0; }
+  .subrow b { color:#444; }
+
   .pos { color:#16a34a; } .neg { color:#dc2626; }
 
   .footer { margin-top:14px; padding-top:8px; border-top:1px solid #e5e5e5;
-    font-size:8px; color:#999; display:flex; justify-content:space-between; }
+    font-size:10px; color:#999; display:flex; justify-content:space-between; }
 
   @media print {
     body { padding:8mm; }
@@ -217,7 +254,7 @@ export default function PrintReport({ onClose }) {
   </div>
   <div class="kpi" style="border-left:3px solid #1F3D2E">
     <div class="kpi-label">Mesmo dia ${data.ontem.ano-1}</div>
-    <div class="kpi-value" style="color:#999;font-size:15px">${fmt(data.ontem.totalAA)}</div>
+    <div class="kpi-value" style="color:#999;font-size:19px">${fmt(data.ontem.totalAA)}</div>
     ${data.ontem.yoy !== null ? `<div class="kpi-var ${data.ontem.yoy>=0?'pos':'neg'}">${pct(data.ontem.yoy)}</div>` : '<div class="kpi-sub">sem dado anterior</div>'}
   </div>
 </div>
@@ -226,9 +263,15 @@ export default function PrintReport({ onClose }) {
   <thead>
     <tr>
       <th style="text-align:left">Loja</th>
-      <th>${data.ontem.ano}</th>
-      <th>${data.ontem.ano-1}</th>
-      <th>Variação YoY</th>
+      <th>Salão ${data.ontem.ano}</th>
+      <th>Salão ${data.ontem.ano-1}</th>
+      <th>YoY Salão</th>
+      <th>Delivery ${data.ontem.ano}</th>
+      <th>Delivery ${data.ontem.ano-1}</th>
+      <th>YoY Delivery</th>
+      <th>Total ${data.ontem.ano}</th>
+      <th>Total ${data.ontem.ano-1}</th>
+      <th>YoY Total</th>
       <th>Share</th>
     </tr>
   </thead>
@@ -236,6 +279,12 @@ export default function PrintReport({ onClose }) {
     ${data.ontem.porLoja.map(l => `
     <tr>
       <td>${l.loja}</td>
+      <td>${fmt(l.casa26)}</td>
+      <td style="color:#999">${l.casa25>0?fmt(l.casa25):'—'}</td>
+      <td class="${l.varCasa>=0?'pos':'neg'}">${l.casa25>0?pct(l.varCasa):'—'}</td>
+      <td>${fmt(l.del26)}</td>
+      <td style="color:#999">${l.del25>0?fmt(l.del25):'—'}</td>
+      <td class="${l.varDel>=0?'pos':'neg'}">${l.del25>0?pct(l.varDel):'—'}</td>
       <td style="font-weight:700">${fmt(l.v26)}</td>
       <td style="color:#999">${l.v25>0?fmt(l.v25):'—'}</td>
       <td class="${l.var>=0?'pos':'neg'}">${l.v25>0?pct(l.var):'—'}</td>
@@ -245,6 +294,12 @@ export default function PrintReport({ onClose }) {
   <tfoot>
     <tr class="tfoot">
       <td>TOTAL</td>
+      <td>${fmt(data.ontem.casa)}</td>
+      <td style="color:#666">${fmt(data.ontem.casaAA)}</td>
+      <td class="${data.ontem.yoyCasa>=0?'pos':'neg'}">${pct(data.ontem.yoyCasa)}</td>
+      <td>${fmt(data.ontem.delivery)}</td>
+      <td style="color:#666">${fmt(data.ontem.deliveryAA)}</td>
+      <td class="${data.ontem.yoyDelivery>=0?'pos':'neg'}">${pct(data.ontem.yoyDelivery)}</td>
       <td>${fmt(data.ontem.total)}</td>
       <td style="color:#666">${fmt(data.ontem.totalAA)}</td>
       <td class="${data.ontem.yoy>=0?'pos':'neg'}">${pct(data.ontem.yoy)}</td>
@@ -259,20 +314,33 @@ export default function PrintReport({ onClose }) {
   <thead>
     <tr>
       <th style="text-align:left"># Loja</th>
-      <th>Realizado</th>
-      <th>YoY (dia ${data.lastDay})</th>
+      <th>Salão ${data.ano}</th>
+      <th>Salão ${data.ano-1}</th>
+      <th>YoY Salão</th>
+      <th>Delivery ${data.ano}</th>
+      <th>Delivery ${data.ano-1}</th>
+      <th>YoY Delivery</th>
+      <th>Total ${data.ano}</th>
+      <th>Total ${data.ano-1}</th>
+      <th>YoY Total</th>
       <th>Meta</th>
       <th>% Ating.</th>
       <th>Tend Fat</th>
       <th>Tend vs AA</th>
-      <th>Peso</th>
     </tr>
   </thead>
   <tbody>
     ${data.porLoja.map((l,i) => `
     <tr>
       <td>#${i+1} ${l.loja}</td>
+      <td>${fmt(l.casa)}</td>
+      <td style="color:#999">${l.casaAA>0?fmt(l.casaAA):'—'}</td>
+      <td class="${l.yoyCasa>=0?'pos':'neg'}">${l.casaAA>0?pct(l.yoyCasa):'—'}</td>
+      <td>${fmt(l.delivery)}</td>
+      <td style="color:#999">${l.deliveryAA>0?fmt(l.deliveryAA):'—'}</td>
+      <td class="${l.yoyDelivery>=0?'pos':'neg'}">${l.deliveryAA>0?pct(l.yoyDelivery):'—'}</td>
       <td style="font-weight:700">${fmt(l.real)}</td>
+      <td style="color:#999">${l.realAA>0?fmt(l.realAA):'—'}</td>
       <td class="${l.yoy>=0?'pos':'neg'}">${pct(l.yoy)}</td>
       <td>${l.meta > 0 ? fmt(l.meta) : '—'}</td>
       <td style="font-weight:800;color:${l.ating===null?'#999':l.ating>=100?'#16a34a':l.ating>=80?'#d97706':'#dc2626'}">
@@ -280,13 +348,19 @@ export default function PrintReport({ onClose }) {
       </td>
       <td style="font-weight:700">${fmt(l.tend)}</td>
       <td class="${l.tendVsAA>=0?'pos':'neg'}">${pct(l.tendVsAA)}</td>
-      <td>${l.share.toFixed(1).replace('.',',')}%</td>
     </tr>`).join('')}
   </tbody>
   <tfoot>
     <tr class="tfoot">
       <td>TOTAL</td>
+      <td>${fmt(data.casa)}</td>
+      <td style="color:#666">${fmt(data.casaAA)}</td>
+      <td class="${data.yoyCasa>=0?'pos':'neg'}">${pct(data.yoyCasa)}</td>
+      <td>${fmt(data.delivery)}</td>
+      <td style="color:#666">${fmt(data.deliveryAA)}</td>
+      <td class="${data.yoyDelivery>=0?'pos':'neg'}">${pct(data.yoyDelivery)}</td>
       <td>${fmt(data.total)}</td>
+      <td style="color:#666">${fmt(data.totalAA)}</td>
       <td class="${data.yoy>=0?'pos':'neg'}">${pct(data.yoy)}</td>
       <td>${totalMeta > 0 ? fmt(totalMeta) : '—'}</td>
       <td style="font-weight:800;color:${totalMeta>0&&data.total/totalMeta>=1?'#16a34a':totalMeta>0&&data.total/totalMeta>=0.8?'#d97706':'#dc2626'}">
@@ -294,7 +368,6 @@ export default function PrintReport({ onClose }) {
       </td>
       <td style="font-weight:700">${fmt(data.tendFat)}</td>
       <td class="${data.tendVsAA>=0?'pos':'neg'}">${pct(data.tendVsAA)}</td>
-      <td>100%</td>
     </tr>
   </tfoot>
 </table>
@@ -338,20 +411,38 @@ export function PrintWeekend({ onClose }) {
   const DOW_NAMES = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
 
   const dias = diasFds.map(({ data, dow, d }) => {
-    const recs   = rawData.filter(r => r.Data === data);
-    const dAA    = new Date(d); dAA.setFullYear(d.getFullYear() - 1);
-    const dataAA = dAA.getFullYear() + '-' + String(dAA.getMonth()+1).padStart(2,'0') + '-' + String(dAA.getDate()).padStart(2,'0');
-    const recsAA = rawData.filter(r => r.Data === dataAA);
-    const porLoja = lojas.map(loja => ({
-      loja,
-      v26: sum(recs.filter(r => r.Loja === loja)),
-      v25: sum(recsAA.filter(r => r.Loja === loja)),
-    })).filter(l => l.v26 > 0 || l.v25 > 0);
-    porLoja.forEach(l => { l.yoy = variation(l.v26, l.v25); });
+    const recs = rawData.filter(r => r.Data === data);
+    // FIX: em vez de simplesmente subtrair 1 ano da data (que pode cair num
+    // dia da semana diferente), usa o "dia comparável" — mesma ocorrência
+    // desse dia da semana no mês (ex: 3º sábado vs 3º sábado do ano anterior).
+    const comp = acharDiaComparavel(d.getFullYear(), d.getMonth() + 1, d.getDate());
+    const dataAA = comp ? `${comp.ano}-${String(comp.mes).padStart(2,'0')}-${String(comp.dia).padStart(2,'0')}` : null;
+    const recsAA = dataAA ? rawData.filter(r => r.Data === dataAA) : [];
+    const porLoja = lojas.map(loja => {
+      const lr   = recs.filter(r => r.Loja === loja);
+      const lrAA = recsAA.filter(r => r.Loja === loja);
+      const v26 = sum(lr), v25 = sum(lrAA);
+      const casa26 = sum(lr.filter(r => r.Canal === 'CASA'));
+      const del26  = sum(lr.filter(r => r.Canal === 'DELIVERY'));
+      const casa25 = sum(lrAA.filter(r => r.Canal === 'CASA'));
+      const del25  = sum(lrAA.filter(r => r.Canal === 'DELIVERY'));
+      return { loja, v26, v25, casa26, del26, casa25, del25 };
+    }).filter(l => l.v26 > 0 || l.v25 > 0);
+    porLoja.forEach(l => {
+      l.yoy = variation(l.v26, l.v25);
+      l.yoyCasa = variation(l.casa26, l.casa25);
+      l.yoyDel  = variation(l.del26, l.del25);
+    });
     const total26 = sum(recs), total25 = sum(recsAA);
+    const casaTot26 = sum(recs.filter(r => r.Canal === 'CASA'));
+    const delTot26  = sum(recs.filter(r => r.Canal === 'DELIVERY'));
+    const casaTot25 = sum(recsAA.filter(r => r.Canal === 'CASA'));
+    const delTot25  = sum(recsAA.filter(r => r.Canal === 'DELIVERY'));
     return { data, dow, label: DOW_NAMES[dow],
       dataFmt: d.toLocaleDateString('pt-BR',{day:'numeric',month:'short',year:'numeric'}),
-      ano: d.getFullYear(), porLoja, total26, total25, yoy: variation(total26, total25) };
+      ano: d.getFullYear(), porLoja, total26, total25, yoy: variation(total26, total25),
+      casaTot26, delTot26, casaTot25, delTot25,
+      yoyCasaTot: variation(casaTot26, casaTot25), yoyDelTot: variation(delTot26, delTot25) };
   });
 
   const geradoEm = new Date().toLocaleString('pt-BR');
@@ -362,7 +453,7 @@ export function PrintWeekend({ onClose }) {
     return (v >= 0 ? '+' : '') + v.toFixed(1).replace('.', ',') + '%';
   }
 
-  const css = '* { margin:0; padding:0; box-sizing:border-box; } body { font-family: Arial, sans-serif; font-size: 10px; color: #1a1a1a; background: white; padding: 16px; } .header { display:flex; justify-content:space-between; align-items:center; border-bottom: 3px solid #1F3D2E; padding-bottom: 10px; margin-bottom: 14px; } .header h1 { font-size: 17px; font-weight: 800; color: #1F3D2E; } .header .sub { font-size: 9px; color: #666; margin-top: 2px; } .kpi-row { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; } .kpi { border:1px solid #e5e5e5; border-radius:8px; padding:9px 11px; } .kpi-label { font-size:8px; font-weight:700; color:#888; text-transform:uppercase; margin-bottom:3px; } .kpi-value { font-size:20px; font-weight:800; } .kpi-var { font-size:9px; font-weight:700; margin-top:3px; } .section-title { font-size:12px; font-weight:700; color:#1F3D2E; border-left:4px solid #97A624; padding-left:8px; margin:14px 0 8px; } table { width:100%; border-collapse:collapse; font-size:10px; margin-bottom:16px; } th { background:#1F3D2E; color:white; font-weight:700; padding:5px 8px; text-align:right; font-size:8px; text-transform:uppercase; } th:first-child { text-align:left; } td { padding:4px 8px; text-align:right; border-bottom:1px solid #f0f0f0; } td:first-child { text-align:left; font-weight:600; } tr:nth-child(even) td { background:#fafafa; } .tfoot td { background:#f0f4ec !important; font-weight:700; border-top:2px solid #1F3D2E; } .pos { color:#16a34a; } .neg { color:#dc2626; } .no-print { margin-bottom:14px; display:flex; gap:8px; } .footer { margin-top:14px; padding-top:8px; border-top:1px solid #e5e5e5; font-size:8px; color:#999; display:flex; justify-content:space-between; } @media print { body { padding:8mm; } .no-print { display:none !important; } @page { size: A4 landscape; margin:8mm; } }';
+  const css = '* { margin:0; padding:0; box-sizing:border-box; } body { font-family: Arial, sans-serif; font-size: 11px; color: #1a1a1a; background: white; padding: 14px; line-height:1.25; } .header { display:flex; justify-content:space-between; align-items:center; border-bottom: 3px solid #1F3D2E; padding-bottom: 7px; margin-bottom: 10px; } .header h1 { font-size: 17px; font-weight: 800; color: #1F3D2E; } .header .sub { font-size: 9px; color: #666; margin-top: 2px; } .kpi-row { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; margin-bottom:9px; } .kpi { border:1px solid #e5e5e5; border-radius:7px; padding:7px 11px; } .kpi-label { font-size:8px; font-weight:700; color:#888; text-transform:uppercase; margin-bottom:2px; } .kpi-value { font-size:19px; font-weight:800; } .kpi-var { font-size:9px; font-weight:700; margin-top:2px; } .section-title { font-size:12px; font-weight:700; color:#1F3D2E; border-left:4px solid #97A624; padding-left:8px; margin:11px 0 6px; page-break-after: avoid; break-after: avoid-page; page-break-inside: avoid; break-inside: avoid; } table { width:100%; border-collapse:collapse; font-size:11px; margin-bottom:10px; } thead { display: table-header-group; } tr { page-break-inside: avoid; break-inside: avoid; } th { background:#1F3D2E; color:white; font-weight:700; padding:4px 7px; text-align:right; font-size:8px; text-transform:uppercase; } th:first-child { text-align:left; } td { padding:3px 7px; text-align:right; border-bottom:1px solid #f0f0f0; } td:first-child { text-align:left; font-weight:600; } tr:nth-child(even) td { background:#fafafa; } .tfoot td { background:#f0f4ec !important; font-weight:700; border-top:2px solid #1F3D2E; } .pos { color:#16a34a; } .neg { color:#dc2626; } .no-print { margin-bottom:14px; display:flex; gap:8px; } .footer { margin-top:14px; padding-top:8px; border-top:1px solid #e5e5e5; font-size:8px; color:#999; display:flex; justify-content:space-between; } @media print { body { padding:8mm; } .no-print { display:none !important; } @page { size: A4 landscape; margin:8mm; } }';
 
   const kpiCards = dias.map(function(d) {
     return '<div class="kpi">' +
@@ -375,6 +466,12 @@ export function PrintWeekend({ onClose }) {
   const tables = dias.map(function(d) {
     const rows = d.porLoja.map(function(l) {
       return '<tr><td>' + l.loja + '</td>' +
+        '<td>' + fmt(l.casa26) + '</td>' +
+        '<td style="color:#999">' + (l.casa25>0?fmt(l.casa25):'—') + '</td>' +
+        '<td class="' + (l.yoyCasa>=0?'pos':'neg') + '">' + (l.casa25>0?pct(l.yoyCasa):'—') + '</td>' +
+        '<td>' + fmt(l.del26) + '</td>' +
+        '<td style="color:#999">' + (l.del25>0?fmt(l.del25):'—') + '</td>' +
+        '<td class="' + (l.yoyDel>=0?'pos':'neg') + '">' + (l.del25>0?pct(l.yoyDel):'—') + '</td>' +
         '<td style="font-weight:700">' + fmt(l.v26) + '</td>' +
         '<td style="color:#999">' + (l.v25>0?fmt(l.v25):'—') + '</td>' +
         '<td class="' + (l.yoy>=0?'pos':'neg') + '">' + (l.v25>0?pct(l.yoy):'—') + '</td>' +
@@ -382,10 +479,20 @@ export function PrintWeekend({ onClose }) {
     }).join('');
     return '<div class="section-title">' + d.label + ' — ' + d.dataFmt + '</div>' +
       '<table><thead><tr>' +
-      '<th style="text-align:left">Loja</th><th>' + d.ano + '</th><th>' + (d.ano-1) + '</th><th>Var. YoY</th><th>Share</th>' +
+      '<th style="text-align:left">Loja</th>' +
+      '<th>Salão ' + d.ano + '</th><th>Salão ' + (d.ano-1) + '</th><th>YoY Salão</th>' +
+      '<th>Delivery ' + d.ano + '</th><th>Delivery ' + (d.ano-1) + '</th><th>YoY Delivery</th>' +
+      '<th>Total ' + d.ano + '</th><th>Total ' + (d.ano-1) + '</th><th>YoY Total</th><th>Share</th>' +
       '</tr></thead><tbody>' + rows + '</tbody>' +
       '<tfoot><tr class="tfoot">' +
-      '<td>TOTAL</td><td>' + fmt(d.total26) + '</td>' +
+      '<td>TOTAL</td>' +
+      '<td>' + fmt(d.casaTot26) + '</td>' +
+      '<td style="color:#666">' + (d.casaTot25>0?fmt(d.casaTot25):'—') + '</td>' +
+      '<td class="' + (d.yoyCasaTot>=0?'pos':'neg') + '">' + pct(d.yoyCasaTot) + '</td>' +
+      '<td>' + fmt(d.delTot26) + '</td>' +
+      '<td style="color:#666">' + (d.delTot25>0?fmt(d.delTot25):'—') + '</td>' +
+      '<td class="' + (d.yoyDelTot>=0?'pos':'neg') + '">' + pct(d.yoyDelTot) + '</td>' +
+      '<td>' + fmt(d.total26) + '</td>' +
       '<td style="color:#666">' + (d.total25>0?fmt(d.total25):'—') + '</td>' +
       '<td class="' + (d.yoy>=0?'pos':'neg') + '">' + pct(d.yoy) + '</td>' +
       '<td>100%</td></tr></tfoot></table>';
@@ -416,6 +523,135 @@ export function PrintWeekend({ onClose }) {
 }
 
 // ── IMPRESSÃO ANUAL ──────────────────────────────────────────────────────────
+// ── IMPRESSÃO DE DIA COMPARÁVEL ──────────────────────────────────────────────
+// Compara cada dia do mês selecionado com a mesma OCORRÊNCIA daquele dia da
+// semana no ano anterior (ex: 3º sábado de agosto/26 vs 3º sábado de
+// agosto/25), em vez do mesmo dia do calendário.
+export function PrintComparableDays({ onClose }) {
+  const { rawData } = useFilters();
+
+  if (!rawData.length) { onClose?.(); return null; }
+
+  const keys = [...new Set(rawData.map(r => r.Ano_Mes))].sort();
+  const key  = keys[keys.length - 1];
+  const [anoS, mesS] = key.split('-');
+  const ano = Number(anoS), mes = Number(mesS);
+  const recsMes = rawData.filter(r => r.Ano_Mes === key);
+  const lastDay = Math.max(...recsMes.map(r => r.Dia));
+  const label   = recsMes[0]?.Ano_Mes_Label || key;
+
+  const DOW_NAMES = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+
+  const dias = Array.from({ length: lastDay }, (_, i) => {
+    const dia = i + 1;
+    const dow = new Date(ano, mes - 1, dia).getDay();
+    const total = sum(rawData.filter(r => r.Ano === ano && r.Mes === mes && r.Dia === dia));
+
+    const comp = acharDiaComparavel(ano, mes, dia);
+    let totalComp = 0, compLabel = '—', ocorrenciaAproximada = false;
+    if (comp) {
+      totalComp = sum(rawData.filter(r => r.Ano === comp.ano && r.Mes === comp.mes && r.Dia === comp.dia));
+      compLabel = String(comp.dia).padStart(2,'0') + '/' + String(comp.mes).padStart(2,'0') + '/' + comp.ano;
+      ocorrenciaAproximada = comp.ocorrenciaAproximada;
+    }
+
+    return {
+      dia, dow, dowLabel: DOW_NAMES[dow],
+      total, totalComp, compLabel, ocorrenciaAproximada,
+      var: variation(total, totalComp),
+    };
+  });
+
+  const totalAtual = dias.reduce((s, d) => s + d.total, 0);
+  const totalComparavel = dias.reduce((s, d) => s + d.totalComp, 0);
+  const varTotal = variation(totalAtual, totalComparavel);
+
+  const css = `
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: Arial, sans-serif; font-size: 13px; color: #1a1a1a; background: white; padding: 14px; line-height:1.25; }
+    .no-print { margin-bottom: 14px; display: flex; gap: 8px; }
+    @media print { .no-print { display: none; } body { padding: 8mm; } @page { size: A4 landscape; margin: 8mm; } }
+    .header { display:flex; justify-content:space-between; align-items:center; border-bottom: 3px solid #1F3D2E; padding-bottom: 7px; margin-bottom: 10px; }
+    .header h1 { font-size: 20px; font-weight: 800; color: #1F3D2E; }
+    .header .sub { font-size: 11px; color: #666; margin-top: 1px; }
+    .header .badge { background:#1F3D2E; color:white; padding:4px 11px; border-radius:6px; font-size:12px; font-weight:700; }
+    .kpi-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; }
+    .kpi { border:1px solid #e5e5e5; border-radius:8px; padding:9px 13px; }
+    .kpi-label { font-size:10px; font-weight:700; color:#888; text-transform:uppercase; margin-bottom:3px; }
+    .kpi-value { font-size:20px; font-weight:800; }
+    .kpi-var { font-size:12px; font-weight:700; margin-top:2px; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid; }
+    th { background:#1F3D2E; color:white; font-weight:700; padding:5px 8px; text-align:right; font-size:10px; text-transform:uppercase; }
+    th:first-child, th:nth-child(2) { text-align:left; }
+    td { padding:4px 8px; text-align:right; border-bottom:1px solid #f0f0f0; }
+    td:first-child, td:nth-child(2) { text-align:left; font-weight:600; }
+    tr:nth-child(even) td { background:#fafafa; }
+    .tfoot td { background:#f0f4ec !important; font-weight:700; border-top:2px solid #1F3D2E; }
+    .pos { color:#16a34a; } .neg { color:#dc2626; }
+    .aprox { color:#d97706; font-size:10px; }
+    .footer { margin-top:14px; padding-top:8px; border-top:1px solid #e5e5e5; font-size:10px; color:#999; display:flex; justify-content:space-between; }
+  `;
+
+  const rows = dias.map(d => `
+    <tr>
+      <td>${String(d.dia).padStart(2,'0')}/${String(mes).padStart(2,'0')}</td>
+      <td>${d.dowLabel}</td>
+      <td style="font-weight:700">${d.total>0?fmt(d.total):'—'}</td>
+      <td style="font-weight:400;color:#666">${d.compLabel}${d.ocorrenciaAproximada?' <span class="aprox">≈</span>':''}</td>
+      <td style="color:#999">${d.totalComp>0?fmt(d.totalComp):'—'}</td>
+      <td class="${d.var>=0?'pos':'neg'}">${(d.total>0&&d.totalComp>0)?pct(d.var):'—'}</td>
+    </tr>`).join('');
+
+  function fmt(v) { return formatBRL(v, true); }
+  function pct(v) { if (v===null||v===undefined) return '—'; return (v>=0?'+':'') + v.toFixed(1).replace('.',',') + '%'; }
+
+  const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>
+    <title>Dia Comparável ${label} — Quintal do Espeto</title>
+    <style>${css}</style></head><body>
+    <div class="no-print">
+      <button onclick="window.print()" style="background:#1F3D2E;color:white;border:none;padding:7px 18px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Imprimir / Salvar PDF</button>
+      <button onclick="window.close()" style="background:#f5f5f5;color:#333;border:1px solid #ddd;padding:7px 14px;border-radius:6px;font-size:12px;cursor:pointer;">Fechar</button>
+    </div>
+    <div class="header">
+      <div>
+        <h1>Quintal do Espeto — Dia Comparável</h1>
+        <div class="sub">Cada dia comparado com a mesma ocorrência do dia da semana no ano anterior (ex: 3º sábado vs 3º sábado) · Gerado em ${new Date().toLocaleString('pt-BR')}</div>
+      </div>
+      <div class="badge">${label}</div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-label">${label}</div><div class="kpi-value">${fmt(totalAtual)}</div></div>
+      <div class="kpi"><div class="kpi-label">Comparável ${ano-1}</div><div class="kpi-value" style="color:#888">${fmt(totalComparavel)}</div></div>
+      <div class="kpi"><div class="kpi-label">Variação</div><div class="kpi-value ${varTotal>=0?'pos':'neg'}">${pct(varTotal)}</div></div>
+    </div>
+    <table>
+      <thead><tr>
+        <th>Dia</th><th>Dia da Semana</th><th>Faturamento ${ano}</th>
+        <th>Dia Correspondente ${ano-1}</th><th>Faturamento ${ano-1}</th><th>Variação</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr class="tfoot">
+        <td>TOTAL</td><td></td>
+        <td>${fmt(totalAtual)}</td><td></td>
+        <td>${fmt(totalComparavel)}</td>
+        <td class="${varTotal>=0?'pos':'neg'}">${pct(varTotal)}</td>
+      </tr></tfoot>
+    </table>
+    <div class="footer">
+      <span>Quintal do Espeto · Dia Comparável</span>
+      <span>${new Date().toLocaleString('pt-BR')}</span>
+    </div>
+    </body></html>`;
+
+  const blob = new Blob([html], { type: 'text/html' });
+  const url  = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+  onClose?.();
+  return null;
+}
+
 export function PrintAnual({ ano, onClose }) {
   const { rawData } = useFilters();
   const { getMeta } = useMetas();
