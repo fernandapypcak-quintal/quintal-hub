@@ -6,33 +6,38 @@ const fmt = v => (v == null || isNaN(Number(v))) ? '—' : Math.round(Number(v))
 export default function PageCustos({ mesIdx, unidade, gas, loading }) {
   const cfg  = gas?.configuracoes ?? CFG_DEFAULT
   const CADM = cfg.custo_contratacao ?? 2514
+  const ENC  = cfg.encargo_multiplicador ?? 1.6377
 
-  function custo(u, campo) {
-    const c = gas?.custos?.[u]
-    if (!c || typeof c !== 'object') return 0
-    return Number(c[campo]) || 0
+  // Dados vêm de gas.resumo (não mais gas.custos)
+  function r(u, campo, def = 0) {
+    if (!gas?.resumo?.[u]) return def
+    const v = gas.resumo[u][campo]
+    return v == null ? def : Number(v)
   }
-  function custoTotal(u)   { return custo(u, 'total') }
-  function custoFolha(u)   { return custo(u, 'folha_encargo') }
-  function custoResc(u)    { return custo(u, 'rescisao_real') }
-  function custoFolhaBruta(u) { return custo(u, 'folha_bruta') }
-  function hcReal(u)       { return gas?.resumo?.[u]?.hc_real        ?? 0 }
-  function hcIdeal(u)      { return gas?.hc_ideal?.[u]               ?? 0 }
-  function adms(u)         { return gas?.resumo?.[u]?.admissoes       ?? 0 }
-  function desls(u)        { return gas?.resumo?.[u]?.desligamentos   ?? 0 }
+
+  function hcIdeal(u) { return gas?.hc_ideal?.[u] ?? 0 }
+
   function custoIdeal(u) {
-    const cr = custoTotal(u); const hcR = hcReal(u); const hcI = hcIdeal(u)
-    if (!hcR || !cr) return 0
+    const cr  = r(u, 'custo_total')
+    const hcR = r(u, 'hc_real')
+    const hcI = hcIdeal(u)
+    if (!hcR || !cr || !hcI) return 0
     return Math.round((cr / hcR) * hcI)
   }
 
   const uns = unidade === 'Todas' ? UNIDADES : [unidade]
-  let cr=0, ci=0, adm=0, des=0, hcAt=0, hcId=0, resc=0, folha=0
+
+  let cr=0, ci=0, adm=0, des=0, hcAt=0, hcId=0, resc=0, folha=0, folhaBruta=0
   uns.forEach(u => {
-    cr    += custoTotal(u);   ci    += custoIdeal(u)
-    adm   += adms(u);        des   += desls(u)
-    hcAt  += hcReal(u);      hcId  += hcIdeal(u)
-    resc  += custoResc(u);   folha += custoFolha(u)
+    cr         += r(u, 'custo_total')
+    ci         += custoIdeal(u)
+    adm        += r(u, 'admissoes')
+    des        += r(u, 'desligamentos')
+    hcAt       += r(u, 'hc_real')
+    hcId       += hcIdeal(u)
+    resc       += r(u, 'custo_rescisao')
+    folha      += r(u, 'custo_folha')
+    folhaBruta += r(u, 'custo_folha_bruta')
   })
 
   const cpp      = hcAt > 0 ? Math.round(cr / hcAt) : 0
@@ -40,37 +45,37 @@ export default function PageCustos({ mesIdx, unidade, gas, loading }) {
 
   const rankCusto = UNIDADES.map(u => ({
     u,
-    folhaBruta: custoFolhaBruta(u),
-    folha:      custoFolha(u),
-    resc:       custoResc(u),
-    cr:         custoTotal(u),
+    folhaBruta: r(u, 'custo_folha_bruta'),
+    folha:      r(u, 'custo_folha'),
+    resc:       r(u, 'custo_rescisao'),
+    cr:         r(u, 'custo_total'),
     ci:         custoIdeal(u),
-    hcR:        hcReal(u),
+    hcR:        r(u, 'hc_real'),
     hcI:        hcIdeal(u),
-    cpp:        hcReal(u) > 0 ? Math.round(custoTotal(u) / hcReal(u)) : 0,
-    gap:        custoIdeal(u) - custoTotal(u),
-  })).sort((a,b) => b.cr - a.cr)
-  const rankFilt = unidade === 'Todas' ? rankCusto : rankCusto.filter(r => r.u === unidade)
+    cpp:        r(u, 'custo_por_pessoa'),
+    gap:        custoIdeal(u) - r(u, 'custo_total'),
+  })).sort((a, b) => b.cr - a.cr)
+
+  const rankFilt = unidade === 'Todas' ? rankCusto : rankCusto.filter(x => x.u === unidade)
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:20, paddingBottom:40 }}>
       {loading && <Aviso msg="⏳ Carregando dados..." />}
 
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16 }}>
-        <KpiCard label="Custo Total Mensal"        valor={`R$ ${fmt(cr)}`}  cor="preto"  sub="Folha c/ encargos + rescisões" />
-        <KpiCard label="Custo se HC Completo"      valor={`R$ ${fmt(ci)}`}  cor="ambar"  sub={`Gap de R$ ${fmt(Math.abs(gapCusto))}`} />
-        <KpiCard label="Custo Médio / Colaborador" valor={`R$ ${fmt(cpp)}`} cor="preto"  sub={`${hcAt} colaboradores ativos`} />
+        <KpiCard label="Custo Total Mensal"        valor={`R$ ${fmt(cr)}`}   cor="preto"  sub="Folha c/ encargos + rescisões" />
+        <KpiCard label="Custo se HC Completo"      valor={`R$ ${fmt(ci)}`}   cor="ambar"  sub={`Gap de R$ ${fmt(Math.abs(gapCusto))}`} />
+        <KpiCard label="Custo Médio / Colaborador" valor={`R$ ${fmt(cpp)}`}  cor="preto"  sub={`${hcAt} colaboradores ativos`} />
         <KpiCard label="Rescisões no Mês"          valor={`R$ ${fmt(resc)}`} cor={resc > 0 ? 'vermelho' : 'verde'} sub={resc > 0 ? 'Valores reais TOTVS' : 'Sem rescisões no período'} />
       </div>
 
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16 }}>
-        <KpiCard label="Folha Bruta (salários)"    valor={`R$ ${fmt(uns.reduce((s,u)=>s+custoFolhaBruta(u),0))}`} cor="preto" sub="Soma dos salários dos ativos" />
-        <KpiCard label="Encargos sobre Folha"      valor={`R$ ${fmt(folha - uns.reduce((s,u)=>s+custoFolhaBruta(u),0))}`} cor="preto" sub={`Fator ${cfg.encargo_multiplicador ?? 1.6377}×`} />
-        <KpiCard label="Admissões no Mês"          valor={adm} cor={adm > 0 ? 'ambar' : 'cinza'} sub={`Custo est.: R$ ${fmt(adm * CADM)}`} />
-        <KpiCard label="Desligamentos no Mês"      valor={des} cor={des > 0 ? 'vermelho' : 'verde'} sub={des === 0 ? 'Sem desligamentos' : `Rescisão: R$ ${fmt(resc)}`} />
+        <KpiCard label="Folha Bruta (salários)"  valor={`R$ ${fmt(folhaBruta)}`} cor="preto" sub="Soma dos salários dos ativos" />
+        <KpiCard label="Encargos sobre Folha"    valor={`R$ ${fmt(folha - folhaBruta)}`} cor="preto" sub={`Fator ${ENC}×`} />
+        <KpiCard label="Admissões no Mês"        valor={adm} cor={adm > 0 ? 'ambar' : 'cinza'} sub={`Custo est.: R$ ${fmt(adm * CADM)}`} />
+        <KpiCard label="Desligamentos no Mês"    valor={des} cor={des > 0 ? 'vermelho' : 'verde'} sub={des === 0 ? 'Sem desligamentos' : `Rescisão: R$ ${fmt(resc)}`} />
       </div>
 
-      {/* Tabela */}
       <div style={{ background:'#fff', border:'1px solid #E8E8E2', borderRadius:8, overflow:'hidden' }}>
         <div style={{ padding:'14px 20px', borderBottom:'1px solid #E8E8E2' }}>
           <div style={{ fontWeight:600, fontSize:14, color:'#0D0D0D' }}>Custos por Unidade</div>
@@ -101,7 +106,7 @@ export default function PageCustos({ mesIdx, unidade, gas, loading }) {
 
         <div style={{ display:'grid', gridTemplateColumns:'1.4fr 100px 110px 90px 90px 90px 80px', padding:'11px 20px', background:'#F5F5F0', borderTop:'2px solid #0D0D0D' }}>
           <div style={{ fontWeight:700, fontSize:13 }}>TOTAL</div>
-          <div style={{ textAlign:'center', fontWeight:700, fontSize:12, color:'#888', fontFamily:"'DM Mono',monospace" }}>R$ {fmt(uns.reduce((s,u)=>s+custoFolhaBruta(u),0))}</div>
+          <div style={{ textAlign:'center', fontWeight:700, fontSize:12, color:'#888', fontFamily:"'DM Mono',monospace" }}>R$ {fmt(folhaBruta)}</div>
           <div style={{ textAlign:'center', fontWeight:700, fontSize:12, fontFamily:"'DM Mono',monospace" }}>R$ {fmt(folha)}</div>
           <div style={{ textAlign:'center', fontWeight:700, fontSize:12, color:'#8C1414', fontFamily:"'DM Mono',monospace" }}>{resc>0?`R$ ${fmt(resc)}`:'—'}</div>
           <div style={{ textAlign:'center', fontWeight:700, fontSize:12, fontFamily:"'DM Mono',monospace" }}>R$ {fmt(cr)}</div>
