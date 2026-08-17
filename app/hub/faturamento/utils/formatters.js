@@ -215,3 +215,31 @@ export function getDailyTotals(recs) {
 }
 
 export const getDOWTotals = dowTotals;
+
+// Acha o "dia comparável" do ano anterior: não é o mesmo dia do calendário
+// (ex: 15/08), é a mesma OCORRÊNCIA daquele dia da semana dentro do mês
+// (ex: 3º sábado de agosto/26 vs 3º sábado de agosto/25 — que pode cair em
+// datas diferentes). Isso é o que faz sentido pro negócio, já que sábado
+// se comporta como sábado independente da data exata.
+// Se o mês do ano anterior tiver menos ocorrências daquele dia da semana
+// (ex: precisa do 5º domingo mas só teve 4), cai pra última ocorrência
+// disponível e sinaliza isso em `ocorrenciaAproximada`.
+export function acharDiaComparavel(ano, mes, dia) {
+  const dow = new Date(ano, mes - 1, dia).getDay();
+  const ocorrencia = Math.ceil(dia / 7); // 1ª, 2ª, 3ª... ocorrência desse dia da semana no mês
+
+  const anoAnt = ano - 1;
+  const diasNoMesAnt = new Date(anoAnt, mes, 0).getDate(); // último dia do mês no ano anterior
+  const candidatos = [];
+  for (let dd = 1; dd <= diasNoMesAnt; dd++) {
+    if (new Date(anoAnt, mes - 1, dd).getDay() === dow) candidatos.push(dd);
+  }
+  if (!candidatos.length) return null;
+
+  const idx = Math.min(ocorrencia - 1, candidatos.length - 1);
+  return {
+    ano: anoAnt, mes, dia: candidatos[idx],
+    dow, ocorrencia,
+    ocorrenciaAproximada: idx !== ocorrencia - 1,
+  };
+}
