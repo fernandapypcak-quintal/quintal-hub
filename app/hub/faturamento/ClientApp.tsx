@@ -6,6 +6,7 @@ import { MetasProvider } from './hooks/useMetas'
 import { LabelsProvider } from './hooks/useLabels'
 import { AlmocoProvider } from './hooks/useAlmoco'
 import { TicketProvider } from './hooks/useTicket'
+import { CompradoresProvider } from './hooks/useCompradores'
 import Sidebar from './components/layout/Sidebar'
 import BottomNav from './components/layout/BottomNav'
 import Header from './components/layout/Header'
@@ -80,7 +81,9 @@ export default function FaturamentoClientApp({ allowedLojas = '*' }: { allowedLo
         <LabelsProvider>
           <AlmocoProvider>
             <TicketProvider>
-              <Dashboard />
+              <CompradoresProvider allowedLojas={allowedLojas as any}>
+                <Dashboard />
+              </CompradoresProvider>
             </TicketProvider>
           </AlmocoProvider>
         </LabelsProvider>
