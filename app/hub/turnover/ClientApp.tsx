@@ -27,7 +27,7 @@ function selStyle(active: boolean): React.CSSProperties {
 
 export default function TurnoverClientApp({ allowedLojas = '*' }: { allowedLojas?: string[] | '*' }) {
   const [pagina, setPagina] = useState('rh')
-  const [mesIdx, setMesIdx] = useState(5)
+  const [mesIdx, setMesIdx] = useState(MESES.length - 1)
 
   const lojasPermitidas = allowedNativeLabels(allowedLojas as any, 'turnoverLabel')
   const unidadesPermitidas = lojasPermitidas === '*' ? UNIDADES : UNIDADES.filter(u => lojasPermitidas.includes(u))
