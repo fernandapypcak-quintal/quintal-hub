@@ -1,4 +1,3 @@
-// Barra de alertas no topo — aparece só quando há unidades fora da meta
 export default function AlertasBanner({ gas, cfg }) {
   if (!gas?.resumo) return null
 
@@ -7,33 +6,26 @@ export default function AlertasBanner({ gas, cfg }) {
 
   const alertas = []
 
-  // Turnover crítico
   Object.entries(gas.resumo).forEach(([u, r]) => {
-    if (r.turnover >= CRIT) {
-      alertas.push({ tipo: 'critico', msg: `${u}: turnover ${r.turnover}% — crítico`, icone: '🔴' })
-    } else if (r.turnover > META) {
-      alertas.push({ tipo: 'atencao', msg: `${u}: turnover ${r.turnover}% — acima da meta`, icone: '🟡' })
-    }
+    if (r.turnover >= CRIT)
+      alertas.push({ tipo:'critico', msg:`${u}: turnover ${r.turnover}% — crítico` })
+    else if (r.turnover > META)
+      alertas.push({ tipo:'atencao', msg:`${u}: turnover ${r.turnover}% — acima da meta` })
   })
 
-  // HC muito abaixo do ideal (ocupação < 75%)
   Object.entries(gas.resumo).forEach(([u, r]) => {
-    if (r.hc_ideal > 0 && r.hc_real / r.hc_ideal < 0.75) {
-      const pct = Math.round((r.hc_real / r.hc_ideal) * 100)
-      alertas.push({ tipo: 'atencao', msg: `${u}: apenas ${pct}% do quadro ideal (${r.hc_real}/${r.hc_ideal})`, icone: '⚠️' })
-    }
+    if (r.hc_ideal > 0 && r.hc_real / r.hc_ideal < 0.75)
+      alertas.push({ tipo:'atencao', msg:`${u}: ${Math.round((r.hc_real/r.hc_ideal)*100)}% do quadro ideal (${r.hc_real}/${r.hc_ideal})` })
   })
 
-  // Em experiência > 25%
   Object.entries(gas.resumo).forEach(([u, r]) => {
-    if (r.pct_experiencia > 25) {
-      alertas.push({ tipo: 'atencao', msg: `${u}: ${Math.round(r.pct_experiencia)}% do time em experiência`, icone: '🟡' })
-    }
+    if (r.pct_experiencia > 25)
+      alertas.push({ tipo:'atencao', msg:`${u}: ${Math.round(r.pct_experiencia)}% do time em experiência` })
   })
 
   if (alertas.length === 0) return (
     <div style={{ background:'#F0F5E0', border:'1px solid #97A624', borderRadius:8, padding:'10px 20px', display:'flex', alignItems:'center', gap:10 }}>
-      <span style={{ fontSize:14 }}>✅</span>
+      <span>✅</span>
       <span style={{ fontSize:12, color:'#97A624', fontWeight:600 }}>Todas as unidades dentro das metas</span>
     </div>
   )
@@ -49,10 +41,8 @@ export default function AlertasBanner({ gas, cfg }) {
             🔴 {criticos.length} {criticos.length === 1 ? 'alerta crítico' : 'alertas críticos'}
           </div>
           <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
-            {criticos.map((a, i) => (
-              <span key={i} style={{ fontSize:12, color:'#8C1414', background:'#fff', border:'1px solid #8C1414', borderRadius:99, padding:'3px 10px' }}>
-                {a.msg}
-              </span>
+            {criticos.map((a,i) => (
+              <span key={i} style={{ fontSize:12, color:'#8C1414', background:'#fff', border:'1px solid #8C1414', borderRadius:99, padding:'3px 10px' }}>{a.msg}</span>
             ))}
           </div>
         </div>
@@ -63,10 +53,8 @@ export default function AlertasBanner({ gas, cfg }) {
             ⚠️ {atencao.length} {atencao.length === 1 ? 'ponto de atenção' : 'pontos de atenção'}
           </div>
           <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
-            {atencao.map((a, i) => (
-              <span key={i} style={{ fontSize:12, color:'#8C6800', background:'#fff', border:'1px solid #D9B504', borderRadius:99, padding:'3px 10px' }}>
-                {a.msg}
-              </span>
+            {atencao.map((a,i) => (
+              <span key={i} style={{ fontSize:12, color:'#8C6800', background:'#fff', border:'1px solid #D9B504', borderRadius:99, padding:'3px 10px' }}>{a.msg}</span>
             ))}
           </div>
         </div>
