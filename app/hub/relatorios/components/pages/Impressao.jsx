@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Printer, RefreshCw } from 'lucide-react'
 import { useRelatorios, paretoPorChave, contarDistintos, somar } from '../../hooks/useRelatorios.jsx'
 import { formatarReais, formatarData } from '../ui/Tabela.jsx'
@@ -143,27 +143,66 @@ function BlocoUnidade({ nome, linhas, cfg, limite, destaque, quebrarPagina, comG
   )
 }
 
+const CHAVE_COOLDOWN_ATUALIZAR = 'quintalHub_ultimoPedidoAtualizacao'
+const COOLDOWN_ATUALIZAR_MS = 5 * 60 * 1000 // 5 min -- mesmo tempo do cooldown no Apps Script
+
 export default function Impressao() {
-  const { descontos, estornos, desperdicio, unidadeFiltro, dataInicio, dataFim } = useRelatorios()
+  const { descontos, estornos, desperdicio, unidadeFiltro, dataInicio, dataFim, avisoDadosDesatualizados } = useRelatorios()
   const [tipo, setTipo] = useState('descontos')
   const [mostrarTodos, setMostrarTodos] = useState(false)
   const [atualizando, setAtualizando] = useState(false)
   const [mensagemAtualizacao, setMensagemAtualizacao] = useState('')
+  const [emCooldown, setEmCooldown] = useState(false)
+
+  useEffect(() => {
+    const ultimo = Number(localStorage.getItem(CHAVE_COOLDOWN_ATUALIZAR) || 0)
+    const restante = COOLDOWN_ATUALIZAR_MS - (Date.now() - ultimo)
+    setEmCooldown(restante > 0)
+    if (restante > 0) {
+      const timer = setTimeout(() => setEmCooldown(false), restante)
+      return () => clearTimeout(timer)
+    }
+  }, [])
 
   async function handleAtualizar() {
     setAtualizando(true)
     setMensagemAtualizacao('')
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 15000)
+
     try {
-      const res = await fetch('/api/relatorios?tipo=atualizar')
-      const data = await res.json()
+      const res = await fetch('/api/relatorios?tipo=atualizar', { signal: controller.signal })
+      clearTimeout(timer)
+
+      if (!res.ok) {
+        setMensagemAtualizacao(`O Apps Script não respondeu a tempo (erro ${res.status}). Provavelmente já tem uma atualização rodando -- espera uns minutos e tenta de novo.`)
+        return
+      }
+
+      let data
+      try {
+        data = await res.json()
+      } catch {
+        setMensagemAtualizacao('O Apps Script não devolveu uma resposta válida -- provavelmente está ocupado rodando uma atualização anterior. Espera uns minutos e tenta de novo.')
+        return
+      }
+
       setMensagemAtualizacao(
         data.mensagem || (data.ok ? 'Atualização iniciada — recarregue a página em alguns minutos.' : 'Não foi possível atualizar agora.')
       )
+
+      if (data.ok) {
+        localStorage.setItem(CHAVE_COOLDOWN_ATUALIZAR, String(Date.now()))
+        setEmCooldown(true)
+        setTimeout(() => setEmCooldown(false), COOLDOWN_ATUALIZAR_MS)
+      }
     } catch (e) {
-      setMensagemAtualizacao('Erro ao pedir atualização: ' + e.message)
+      clearTimeout(timer)
+      setMensagemAtualizacao('Não deu pra falar com o Apps Script agora (demorou demais pra responder). Provavelmente já tem uma atualização rodando -- espera uns minutos.')
     } finally {
       setAtualizando(false)
-      setTimeout(() => setMensagemAtualizacao(''), 10000)
+      setTimeout(() => setMensagemAtualizacao(''), 15000)
     }
   }
 
@@ -217,19 +256,19 @@ export default function Impressao() {
           ))}
           <button
             onClick={handleAtualizar}
-            disabled={atualizando}
+            disabled={atualizando || emCooldown}
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
               height: 32, padding: '0 14px', borderRadius: 99,
               border: '1px solid #E8E8E8', background: '#fff',
               color: '#333', fontSize: 12.5, fontWeight: 500,
-              cursor: atualizando ? 'default' : 'pointer', fontFamily: 'inherit',
-              opacity: atualizando ? 0.6 : 1,
+              cursor: (atualizando || emCooldown) ? 'default' : 'pointer', fontFamily: 'inherit',
+              opacity: (atualizando || emCooldown) ? 0.6 : 1,
             }}
-            title="Busca os dados mais recentes do ZIG (leva alguns minutos)"
+            title={emCooldown ? 'Já foi pedida uma atualização há pouco -- aguarde alguns minutos' : 'Busca os dados mais recentes do ZIG (leva alguns minutos)'}
           >
             <RefreshCw size={13} style={atualizando ? { animation: 'girar 1s linear infinite' } : undefined} />
-            {atualizando ? 'Pedindo atualização...' : 'Atualizar Dados'}
+            {atualizando ? 'Pedindo atualização...' : emCooldown ? 'Atualização recente...' : 'Atualizar Dados'}
           </button>
           <button onClick={() => window.print()} style={{
             display: 'flex', alignItems: 'center', gap: 6,
@@ -245,6 +284,12 @@ export default function Impressao() {
       {mensagemAtualizacao && (
         <div className="no-print" style={{ padding: '8px 28px', fontSize: 11.5, color: '#B45309', background: '#FFF7ED' }}>
           {mensagemAtualizacao}
+        </div>
+      )}
+
+      {avisoDadosDesatualizados && (
+        <div className="no-print" style={{ padding: '8px 28px', fontSize: 11.5, color: '#B45309', background: '#FFF7ED', borderBottom: '1px solid #FDE0B8' }}>
+          ⚠️ {avisoDadosDesatualizados}
         </div>
       )}
 
