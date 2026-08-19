@@ -199,45 +199,80 @@ export function RelatoriosProvider({ children, allowedLojas = '*' }) {
   const [bonusUtilizado, setBonusUtilizado] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [avisoDadosDesatualizados, setAvisoDadosDesatualizados] = useState('')
+  const [ultimaAtualizacaoOk, setUltimaAtualizacaoOk] = useState(null)
 
   const [unidadeFiltro, setUnidadeFiltro] = useState('Todas')
-  const [dataInicio, setDataInicio] = useState('')
-  const [dataFim, setDataFim] = useState('')
+  // Filtro de data já vem preenchido com "mês atual até hoje" por padrão --
+  // ajuda a tela a carregar mais leve (menos linha pra processar/renderizar
+  // de cara). Quem quiser ver tudo é só clicar em "limpar".
+  const padraoInicial = periodoMesAtual()
+  const [dataInicio, setDataInicio] = useState(padraoInicial.inicio)
+  const [dataFim, setDataFim] = useState(padraoInicial.fim)
 
   useEffect(() => {
     loadTudo()
-      .then(d => {
+      .then(({ dados: d, sucesso }) => {
         const porUnidade = arr => filterRowsByUnit(arr || [], 'unidade', allowedLojas)
 
-        const descontosF      = porUnidade(d.descontos)
-        const estornosF       = porUnidade(d.estornos)
-        const contasAbertoF   = porUnidade(d.contasAberto)
-        const bonusConcedidoF = porUnidade(d.bonusConcedido)
-        const bonusUtilizadoF = porUnidade(d.bonusUtilizado)
+        // Só substitui o estado de um tipo se ele veio com sucesso --
+        // se falhou, mantém o que já estava carregado (nunca zera o
+        // dashboard por causa de uma falha passageira de rede/Apps Script).
+        const nomesPorChave = {
+          descontos: 'Descontos', estornos: 'Estornos', contasAberto: 'Contas em Aberto',
+          bonusConcedido: 'Bônus Concedido', bonusUtilizado: 'Bônus Utilizado',
+        }
+        const setters = {
+          descontos: setDescontos, estornos: setEstornos, contasAberto: setContasAberto,
+          bonusConcedido: setBonusConcedido, bonusUtilizado: setBonusUtilizado,
+        }
 
-        setDescontos(descontosF)
-        setEstornos(estornosF)
-        setContasAberto(contasAbertoF)
-        setBonusConcedido(bonusConcedidoF)
-        setBonusUtilizado(bonusUtilizadoF)
+        const falharam = []
+        Object.keys(setters).forEach(chave => {
+          if (sucesso[chave]) {
+            setters[chave](porUnidade(d[chave]))
+          } else {
+            falharam.push(nomesPorChave[chave])
+          }
+        })
 
-        const unicas = new Set(
-          [...descontosF, ...estornosF, ...contasAbertoF, ...bonusConcedidoF, ...bonusUtilizadoF]
-            .map(l => l.unidade).filter(Boolean)
-        )
+        if (falharam.length > 0) {
+          setAvisoDadosDesatualizados(
+            `Não consegui atualizar: ${falharam.join(', ')}. Mostrando os últimos dados carregados com sucesso.`
+          )
+        } else {
+          setAvisoDadosDesatualizados('')
+        }
+        setUltimaAtualizacaoOk(falharam.length === 0)
+
+        // Filtro automático de unidade única (permissão) -- usa os dados
+        // que efetivamente vieram (novos ou antigos, tanto faz).
+        const todasAsLinhas = [
+          ...(sucesso.descontos ? porUnidade(d.descontos) : descontos),
+          ...(sucesso.estornos ? porUnidade(d.estornos) : estornos),
+          ...(sucesso.contasAberto ? porUnidade(d.contasAberto) : contasAberto),
+          ...(sucesso.bonusConcedido ? porUnidade(d.bonusConcedido) : bonusConcedido),
+          ...(sucesso.bonusUtilizado ? porUnidade(d.bonusUtilizado) : bonusUtilizado),
+        ]
+        const unicas = new Set(todasAsLinhas.map(l => l.unidade).filter(Boolean))
         if (allowedLojas !== '*' && unicas.size === 1) {
           setUnidadeFiltro([...unicas][0])
         }
 
         console.log('[Relatorios] OK —', {
-          descontos: descontosF.length,
-          estornos: estornosF.length,
-          contasAberto: contasAbertoF.length,
-          bonusConcedido: bonusConcedidoF.length,
-          bonusUtilizado: bonusUtilizadoF.length,
+          descontos: d.descontos.length,
+          estornos: d.estornos.length,
+          contasAberto: d.contasAberto.length,
+          bonusConcedido: d.bonusConcedido.length,
+          bonusUtilizado: d.bonusUtilizado.length,
+          sucesso,
         })
       })
-      .catch(e => { console.error('[Relatorios] Erro:', e); setError(e.message) })
+      .catch(e => {
+        console.error('[Relatorios] Erro:', e)
+        setError(e.message)
+        setAvisoDadosDesatualizados('Não consegui carregar os dados agora. Tenta recarregar a página em alguns minutos.')
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -380,7 +415,7 @@ export function RelatoriosProvider({ children, allowedLojas = '*' }) {
 
   return (
     <RelatoriosCtx.Provider value={{
-      loading, error,
+      loading, error, avisoDadosDesatualizados, ultimaAtualizacaoOk,
       unidadeFiltro, setUnidadeFiltro, unidadesDisponiveis,
       dataInicio, setDataInicio, dataFim, setDataFim,
       descontos: descontosSemDesperdicio,
