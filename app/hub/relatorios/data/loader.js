@@ -1,5 +1,13 @@
 import { APPS_SCRIPT_URL } from './config.js'
 
+function esperar(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+// Devolve { ok, dados } em vez de só o array -- assim dá pra distinguir
+// "deu certo e não tinha nada" de "falhou e por isso veio vazio". Isso é
+// essencial pro dashboard nunca mostrar zero por engano quando na
+// verdade é uma falha de rede/Apps Script.
 async function fetchTipo(tipo) {
   const url = `${APPS_SCRIPT_URL}?tipo=${tipo}`
   const controller = new AbortController()
@@ -9,19 +17,18 @@ async function fetchTipo(tipo) {
     clearTimeout(timer)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
-    if (data && data.erro) { console.warn(`[loader] ${tipo}:`, data.erro); return [] }
-    return Array.isArray(data) ? data : []
+    if (data && data.erro) { console.warn(`[loader] ${tipo}:`, data.erro); return { ok: false, dados: [] } }
+    return { ok: true, dados: Array.isArray(data) ? data : [] }
   } catch (e) {
     clearTimeout(timer)
     console.error(`[loader] fetchTipo(${tipo}) falhou:`, e.message)
-    return []
+    return { ok: false, dados: [] }
   }
 }
 
-// Busca as 5 abas numa unica chamada (tipo=tudo) -- evita 5 requests
-// concorrentes disputando lock na mesma planilha, que e o que causava
-// descontos/bonus_concedido sumirem aleatoriamente (a mesma race condition
-// que ja resolvemos no dashboard de Custos).
+// Busca as 5 abas numa unica chamada (tipo=tudo) -- evita chamadas
+// concorrentes disputando lock/quota na mesma planilha, que e o que causava
+// descontos/bonus_concedido sumirem aleatoriamente.
 async function fetchObjeto(tipo) {
   const url = `${APPS_SCRIPT_URL}?tipo=${tipo}`
   const controller = new AbortController()
@@ -135,16 +142,16 @@ const parseBonusUtilizado = rows => rows.map(r => ({
   valorUtilizado: num(r.valor_utilizado_r),
 }))
 
-function esperar(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
-
-// Carrega os 5 relatórios numa chamada só (tipo=tudo). Se falhar, tenta de
-// novo uma vez (dá um tempo pro Apps Script desafogar) antes de cair pro
-// modo antigo -- e mesmo nesse modo antigo, busca UMA aba por vez, nunca
-// em paralelo, pra não somar mais chamadas concorrentes em cima do que já
-// pode estar sobrecarregado (foi isso que causou os dados sumirem: até 6
-// chamadas simultâneas pro mesmo Apps Script -- 1 tudo + 5 individuais).
+// Carrega os 5 relatórios. Tenta tipo=tudo (com 1 retry); se não rolar,
+// cai pro modo sequencial (uma aba por vez, nunca em paralelo, pra não
+// somar chamadas concorrentes em cima do que já pode estar sobrecarregado).
+//
+// IMPORTANTE: sempre devolve `sucesso` por tipo -- {descontos: true/false,
+// ...} -- pra quem usa isso (useRelatorios.jsx) saber que tipos realmente
+// vieram atualizados e quais falharam. Isso é o que permite ao HUB nunca
+// zerar um relatório por causa de uma falha passageira: se falhou, quem
+// chama simplesmente mantém os dados antigos daquele tipo em vez de
+// substituir por um array vazio.
 export async function loadTudo() {
   let raw = await fetchObjeto('tudo')
 
@@ -153,27 +160,43 @@ export async function loadTudo() {
     raw = await fetchObjeto('tudo')
   }
 
-  if (!raw) {
-    console.warn('[loader] tudo falhou 2x -- caindo pro modo sequencial (uma aba por vez, evita sobrecarregar o Apps Script)')
-    const descontosRaw = await fetchTipo('descontos')
-    const estornosRaw = await fetchTipo('estornos')
-    const contasRaw = await fetchTipo('contas_aberto')
-    const bonusConcRaw = await fetchTipo('bonus_concedido')
-    const bonusUtilRaw = await fetchTipo('bonus_utilizado')
+  if (raw) {
     return {
-      descontos: parseDescontos(descontosRaw),
-      estornos: parseEstornos(estornosRaw),
-      contasAberto: parseContasAberto(contasRaw),
-      bonusConcedido: parseBonusConcedido(bonusConcRaw),
-      bonusUtilizado: parseBonusUtilizado(bonusUtilRaw),
+      dados: {
+        descontos: parseDescontos(raw.descontos || []),
+        estornos: parseEstornos(raw.estornos || []),
+        contasAberto: parseContasAberto(raw.contas_aberto || []),
+        bonusConcedido: parseBonusConcedido(raw.bonus_concedido || []),
+        bonusUtilizado: parseBonusUtilizado(raw.bonus_utilizado || []),
+      },
+      sucesso: {
+        descontos: true, estornos: true, contasAberto: true,
+        bonusConcedido: true, bonusUtilizado: true,
+      },
     }
   }
 
+  console.warn('[loader] tudo falhou 2x -- caindo pro modo sequencial (uma aba por vez, evita sobrecarregar o Apps Script)')
+  const descontosR = await fetchTipo('descontos')
+  const estornosR = await fetchTipo('estornos')
+  const contasR = await fetchTipo('contas_aberto')
+  const bonusConcR = await fetchTipo('bonus_concedido')
+  const bonusUtilR = await fetchTipo('bonus_utilizado')
+
   return {
-    descontos: parseDescontos(raw.descontos || []),
-    estornos: parseEstornos(raw.estornos || []),
-    contasAberto: parseContasAberto(raw.contas_aberto || []),
-    bonusConcedido: parseBonusConcedido(raw.bonus_concedido || []),
-    bonusUtilizado: parseBonusUtilizado(raw.bonus_utilizado || []),
+    dados: {
+      descontos: parseDescontos(descontosR.dados),
+      estornos: parseEstornos(estornosR.dados),
+      contasAberto: parseContasAberto(contasR.dados),
+      bonusConcedido: parseBonusConcedido(bonusConcR.dados),
+      bonusUtilizado: parseBonusUtilizado(bonusUtilR.dados),
+    },
+    sucesso: {
+      descontos: descontosR.ok,
+      estornos: estornosR.ok,
+      contasAberto: contasR.ok,
+      bonusConcedido: bonusConcR.ok,
+      bonusUtilizado: bonusUtilR.ok,
+    },
   }
 }
