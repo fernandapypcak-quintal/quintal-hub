@@ -135,20 +135,31 @@ const parseBonusUtilizado = rows => rows.map(r => ({
   valorUtilizado: num(r.valor_utilizado_r),
 }))
 
-// Carrega os 5 relatórios numa chamada só (tipo=tudo). Se o Apps Script
-// publicado ainda for uma versão anterior sem esse tipo, cai pro modo
-// antigo (5 chamadas em paralelo) pra não deixar o dashboard vazio.
+function esperar(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+// Carrega os 5 relatórios numa chamada só (tipo=tudo). Se falhar, tenta de
+// novo uma vez (dá um tempo pro Apps Script desafogar) antes de cair pro
+// modo antigo -- e mesmo nesse modo antigo, busca UMA aba por vez, nunca
+// em paralelo, pra não somar mais chamadas concorrentes em cima do que já
+// pode estar sobrecarregado (foi isso que causou os dados sumirem: até 6
+// chamadas simultâneas pro mesmo Apps Script -- 1 tudo + 5 individuais).
 export async function loadTudo() {
-  const raw = await fetchObjeto('tudo')
+  let raw = await fetchObjeto('tudo')
 
   if (!raw) {
-    const [descontosRaw, estornosRaw, contasRaw, bonusConcRaw, bonusUtilRaw] = await Promise.all([
-      fetchTipo('descontos'),
-      fetchTipo('estornos'),
-      fetchTipo('contas_aberto'),
-      fetchTipo('bonus_concedido'),
-      fetchTipo('bonus_utilizado'),
-    ])
+    await esperar(4000)
+    raw = await fetchObjeto('tudo')
+  }
+
+  if (!raw) {
+    console.warn('[loader] tudo falhou 2x -- caindo pro modo sequencial (uma aba por vez, evita sobrecarregar o Apps Script)')
+    const descontosRaw = await fetchTipo('descontos')
+    const estornosRaw = await fetchTipo('estornos')
+    const contasRaw = await fetchTipo('contas_aberto')
+    const bonusConcRaw = await fetchTipo('bonus_concedido')
+    const bonusUtilRaw = await fetchTipo('bonus_utilizado')
     return {
       descontos: parseDescontos(descontosRaw),
       estornos: parseEstornos(estornosRaw),
