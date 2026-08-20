@@ -1,9 +1,13 @@
 'use client'
 
 const PAGES = [
-  { id: 'funil',     icon: '📊', label: 'Funil' },
-  { id: 'eventos',   icon: '📋', label: 'Eventos' },
-  { id: 'calendario',icon: '📅', label: 'Calendário' },
+  { id: 'funil',      icon: '📊', label: 'Funil' },
+  { id: 'eventos',    icon: '📋', label: 'Eventos' },
+  { id: 'calendario', icon: '📅', label: 'Calendário' },
+  { id: 'leads',      icon: '📥', label: 'Leads diários' },
+  { id: 'conversoes', icon: '🏆', label: 'Conversões' },
+  { id: 'por_loja',   icon: '🏪', label: 'Por loja' },
+  { id: 'taxa',        icon: '📈', label: 'Taxa de conversão' },
 ]
 
 export default function Sidebar({ activePage, onPageChange }: {
@@ -19,7 +23,6 @@ export default function Sidebar({ activePage, onPageChange }: {
           <div style={{ fontSize: 10, color: '#9a9c9f' }}>Eventos B2B</div>
         </div>
       </div>
-
       <nav style={{ padding: '12px 8px', flex: 1 }}>
         {PAGES.map(p => (
           <button key={p.id} onClick={() => onPageChange(p.id)}
@@ -32,8 +35,7 @@ export default function Sidebar({ activePage, onPageChange }: {
               fontWeight: activePage === p.id ? 500 : 400,
               marginBottom: 2,
             }}>
-            <span>{p.icon}</span>
-            {p.label}
+            <span>{p.icon}</span>{p.label}
           </button>
         ))}
       </nav>
