@@ -61,7 +61,7 @@ export default function Overview() {
   const { getMetaTotal } = useMetas();
   const { showLabels } = useLabels();
   const { getAlmoco } = useAlmoco();
-  const { getDesconto } = useTicket();
+  const { getTicket, getDesconto } = useTicket();
   const { compradores } = useCompradores();
 
   // Ticket médio via check-ins (fonte corrigida) — substitui o getTicket()
@@ -351,31 +351,61 @@ export default function Overview() {
         const tkDel  = getTicketChk(periodo.ano, periodo.mes, 'DELIVERY', lojasF);
         const dsc    = getDesconto(periodo.ano, periodo.mes, lojasF);
         if (tk.pessoas === 0) return null;
+
+        // Comparação com o mês anterior (ex: se período = Ago/26, compara
+        // com Jul/26). Só vai ter dado a partir de quando o mês anterior
+        // também tiver check-ins (a base começou em ago/2026).
+        const mesAnt    = periodo.mes === 1 ? 12 : periodo.mes - 1;
+        const anoMesAnt = periodo.mes === 1 ? periodo.ano - 1 : periodo.ano;
+        const mesAntLabel = `${['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][mesAnt]}/${String(anoMesAnt).slice(2)}`;
+        const tkMesAntChk    = getTicketChk(anoMesAnt, mesAnt, null,       lojasF);
+        const tkSalMesAntChk = getTicketChk(anoMesAnt, mesAnt, 'CASA',     lojasF);
+        const tkDelMesAntChk = getTicketChk(anoMesAnt, mesAnt, 'DELIVERY', lojasF);
+        // Fallback: meses anteriores a ago/2026 não têm check-ins — usa o
+        // ticket_manual (planilha preenchida à mão) só pra esses casos.
+        const tkMesAnt    = tkMesAntChk.pessoas    > 0 ? tkMesAntChk    : getTicket(anoMesAnt, mesAnt, null,       lojasF);
+        const tkSalMesAnt = tkSalMesAntChk.pessoas > 0 ? tkSalMesAntChk : getTicket(anoMesAnt, mesAnt, 'CASA',     lojasF);
+        const tkDelMesAnt = tkDelMesAntChk.pessoas > 0 ? tkDelMesAntChk : getTicket(anoMesAnt, mesAnt, 'DELIVERY', lojasF);
+        const varTk    = tkMesAnt.pessoas    > 0 ? variation(tk.ticket,    tkMesAnt.ticket)    : null;
+        const varTkSal = tkSalMesAnt.pessoas > 0 ? variation(tkSal.ticket, tkSalMesAnt.ticket) : null;
+        const varTkDel = tkDelMesAnt.pessoas > 0 ? variation(tkDel.ticket, tkDelMesAnt.ticket) : null;
+
+        const VarLine = ({ v }) => v === null ? (
+          <p className="text-xs text-zinc-300 mt-1">sem dado de {mesAntLabel}</p>
+        ) : (
+          <p className={`text-xs font-semibold mt-1 ${v >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            {v >= 0 ? '▲' : '▼'} {Math.abs(v).toFixed(1).replace('.', ',')}% vs {mesAntLabel}
+          </p>
+        );
+
         return (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white border border-surface-border rounded-2xl p-5">
               <div className="flex items-center gap-1 mb-1">
                 <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Ticket Médio</p>
-                <InfoTip text="Faturamento total dividido pelo número de compradores no período." />
+                <InfoTip text={`Faturamento total dividido pelo número de compradores no período. Comparado com ${mesAntLabel}.`} />
               </div>
               <p className="text-2xl font-bold font-display text-brand-black">{formatBRL(tk.ticket)}</p>
               <p className="text-xs text-zinc-400 mt-1">{tk.pessoas.toLocaleString('pt-BR')} pessoas</p>
+              <VarLine v={varTk} />
             </div>
             <div className="bg-white border border-surface-border rounded-2xl p-5">
               <div className="flex items-center gap-1 mb-1">
                 <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Ticket Salão</p>
-                <InfoTip text="Ticket médio por pessoa no canal Salão." />
+                <InfoTip text={`Ticket médio por pessoa no canal Salão. Comparado com ${mesAntLabel}.`} />
               </div>
               <p className="text-2xl font-bold font-display text-brand-black">{formatBRL(tkSal.ticket)}</p>
               <p className="text-xs text-zinc-400 mt-1">{tkSal.pessoas.toLocaleString('pt-BR')} pessoas</p>
+              <VarLine v={varTkSal} />
             </div>
             <div className="bg-white border border-surface-border rounded-2xl p-5">
               <div className="flex items-center gap-1 mb-1">
                 <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Ticket Delivery</p>
-                <InfoTip text="Ticket médio por pedido no canal Delivery." />
+                <InfoTip text={`Ticket médio por pedido no canal Delivery. Comparado com ${mesAntLabel}.`} />
               </div>
               <p className="text-2xl font-bold font-display text-brand-black">{formatBRL(tkDel.ticket)}</p>
               <p className="text-xs text-zinc-400 mt-1">{tkDel.pessoas.toLocaleString('pt-BR')} pedidos</p>
+              <VarLine v={varTkDel} />
             </div>
             <div className="bg-white border border-surface-border rounded-2xl p-5">
               <div className="flex items-center gap-1 mb-1">
