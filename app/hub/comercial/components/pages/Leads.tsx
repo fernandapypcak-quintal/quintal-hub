@@ -31,9 +31,17 @@ const PERIODOS = [
   { label: 'Personalizado',   inicio: '', fim: '' },
 ]
 
+function traduzirStatus(s: string) {
+  return s === 'won' ? 'Ganho' : s === 'lost' ? 'Perdido' : 'Em aberto'
+}
+
 function exportarCSV(leads: Deal[], inicio: string, fim: string) {
-  const headers = ['Empresa','Etapa','Data Criação','Data Evento','Unidade','Vendedor','Status']
-  const rows = leads.map(d => [d.empresa||d.titulo, d.stage_nome, fmtDate(d.add_time), fmtDate(d.data_evento), d.unidade_nome, d.vendedor, d.status])
+  const headers = ['Empresa','Etapa','Data Criação','Data Evento','Unidade','Vendedor','Qtd Pessoas','Status']
+  const rows = leads.map(d => [
+    d.empresa||d.titulo, d.stage_nome, fmtDate(d.add_time),
+    fmtDate(d.data_evento), d.unidade_nome, d.vendedor,
+    d.qtd_pessoas || '', traduzirStatus(d.status),
+  ])
   const csv = [headers,...rows].map(r=>r.map(c=>`"${String(c||'').replace(/"/g,'""')}"`).join(',')).join('\n')
   const blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'})
   const url = URL.createObjectURL(blob)
