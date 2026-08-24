@@ -8,6 +8,7 @@ import { ChevronDown, ChevronUp, Calendar } from 'lucide-react';
 import { useFilters } from '../../hooks/useFilters';
 import { useAlmoco } from '../../hooks/useAlmoco';
 import { useCompradores } from '../../hooks/useCompradores';
+import { useAreas } from '../../hooks/useAreas';
 import { useMetas } from '../../hooks/useMetas';
 import { useLabels } from '../../hooks/useLabels';
 import { progressColor, AtingBadge } from '../ui/GoalProgress';
@@ -26,6 +27,7 @@ export default function Stores() {
   const { getMeta } = useMetas();
   const { almoco, getAlmocoLoja } = useAlmoco();
   const { getPessoas } = useCompradores();
+  const { getArea } = useAreas();
   const { showLabels } = useLabels();
   const [expandedLoja, setExpandedLoja] = useState(null);
 
@@ -129,6 +131,14 @@ export default function Stores() {
       const ticketDelivery = pessoasDelivery > 0 ? delivery / pessoasDelivery : null;
       const ticketMedio    = pessoasTotal    > 0 ? realAtual / pessoasTotal   : null;
 
+      // Faturamento por m² — duas versões lado a lado: total (Salão +
+      // Delivery) e só Salão (já que Delivery não usa o espaço físico do
+      // mesmo jeito). area vem null se a loja ainda não tem área cadastrada
+      // (ex: Chácara, até a planta certa chegar).
+      const areaM2 = getArea(loja);
+      const fatPorM2Total = areaM2 > 0 ? realAtual / areaM2 : null;
+      const fatPorM2Salao = areaM2 > 0 ? casa      / areaM2 : null;
+
       const dowStats = DOW_LABELS.map((label, dowIdx) => {
         const recs = recsCur.filter(r => r.Dia_Semana_Num === dowIdx);
         const dias = [...new Set(recs.map(r => r.Data))].length;
@@ -153,6 +163,7 @@ export default function Stores() {
         totalAlmoco, pesoAlmoco, jantarCasa, inicioAlmoco, almocoMensal,
         aceleracao, media1a, media2a,
         pessoasCasa, pessoasDelivery, pessoasTotal, ticketCasa, ticketDelivery, ticketMedio,
+        areaM2, fatPorM2Total, fatPorM2Salao,
       };
     }).sort((a, b) => {
       if (a.ating === null && b.ating === null) return b.realAtual - a.realAtual;
@@ -160,7 +171,7 @@ export default function Stores() {
       if (b.ating === null) return -1;
       return b.ating - a.ating;
     });
-  }, [lojas, rawData, periodo, getMeta, getPessoas]);
+  }, [lojas, rawData, periodo, getMeta, getPessoas, getArea]);
 
   if (!periodo) return null;
 
@@ -177,6 +188,49 @@ export default function Stores() {
 
   return (
     <div className="p-6 space-y-4 animate-fade-in">
+
+      {/* ── RANKING FATURAMENTO POR M² ── */}
+      {lojaStats.some(l => l.areaM2 > 0) && (
+        <div className="bg-white border border-surface-border rounded-2xl p-5">
+          <div className="flex items-center gap-1 mb-1">
+            <h3 className="section-title">Faturamento por m²</h3>
+            <InfoTip text="Faturamento do mês dividido pela área construída de cada loja. Total = Salão+Delivery ÷ área; Salão = só faturamento de Salão ÷ área. Lojas sem área cadastrada não aparecem aqui." />
+          </div>
+          <p className="text-xs text-zinc-400 mb-4">{periodo.label} · ordenado por Total/m²</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-surface-border">
+                  <th className="table-header text-left py-2 pr-4">Loja</th>
+                  <th className="table-header text-right py-2 px-4">Área (m²)</th>
+                  <th className="table-header text-right py-2 px-4">R$/m² Total</th>
+                  <th className="table-header text-right py-2 pl-4">R$/m² Salão</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...lojaStats]
+                  .filter(l => l.areaM2 > 0)
+                  .sort((a, b) => (b.fatPorM2Total || 0) - (a.fatPorM2Total || 0))
+                  .map((l, i) => (
+                    <tr key={l.loja} className="border-b border-surface-border/50 hover:bg-surface-muted/50 transition-colors">
+                      <td className="py-2.5 pr-4 font-medium text-brand-black">
+                        <span className="inline-block w-5 text-zinc-400">{i + 1}º</span> {l.loja}
+                      </td>
+                      <td className="py-2.5 px-4 text-right text-zinc-500">{l.areaM2.toLocaleString('pt-BR')} m²</td>
+                      <td className="py-2.5 px-4 text-right font-mono font-semibold text-brand-black">{l.fatPorM2Total !== null ? formatBRL(l.fatPorM2Total) : '—'}</td>
+                      <td className="py-2.5 pl-4 text-right font-mono text-zinc-500">{l.fatPorM2Salao !== null ? formatBRL(l.fatPorM2Salao) : '—'}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+          {lojaStats.some(l => !l.areaM2) && (
+            <p className="text-xs text-zinc-400 mt-3">
+              Sem área cadastrada: {lojaStats.filter(l => !l.areaM2).map(l => l.loja).join(', ')}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Aviso de corte */}
       <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">
@@ -358,6 +412,8 @@ export default function Stores() {
                           { label: 'Ticket Médio Salão', value: l.ticketCasa !== null ? formatBRL(l.ticketCasa) : '—', muted: true },
                           { label: 'Ticket Médio Delivery', value: l.ticketDelivery !== null ? formatBRL(l.ticketDelivery) : '—', muted: true },
                           { label: 'Ticket Médio Total', value: l.ticketMedio !== null ? formatBRL(l.ticketMedio) : '—', bold: true },
+                          { label: 'Faturamento/m² Total', value: l.fatPorM2Total !== null ? `${formatBRL(l.fatPorM2Total)}/m²` : (l.areaM2 ? '—' : 'área não cadastrada'), muted: true },
+                          { label: 'Faturamento/m² Salão', value: l.fatPorM2Salao !== null ? `${formatBRL(l.fatPorM2Salao)}/m²` : (l.areaM2 ? '—' : 'área não cadastrada'), muted: true },
                           { label: `Mesmo período ${periodo.ano - 1} (dia ${periodo.lastDay})`, value: formatBRL(l.realAA), muted: true },
                           { label: `Mesmo mês ${periodo.ano - 1} (completo)`, value: formatBRL(l.prevAAfull), muted: true },
                           { label: 'Meta do mês', value: l.meta > 0 ? formatBRL(l.meta) : '—', muted: true },
