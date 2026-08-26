@@ -369,7 +369,7 @@ function AgendaView({ filtros }: { filtros: any }) {
             <option value="lost">Perdidos</option>
           </select>
 
-          <button onClick={buscar} disabled={loading}
+          <button onClick={() => buscar()} disabled={loading}
             style={{ padding:'7px 20px',borderRadius:8,border:'none',background:'#97A624',color:'#fff',fontSize:13,fontWeight:600,cursor:loading?'not-allowed':'pointer',opacity:loading?0.7:1 }}>
             {loading?'Buscando...':'Buscar'}
           </button>
