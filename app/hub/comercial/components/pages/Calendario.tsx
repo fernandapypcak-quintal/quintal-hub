@@ -289,17 +289,19 @@ function AgendaView({ filtros }: { filtros: any }) {
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
   })
 
-  function buscar() {
+  function buscar(unidadeOverride?: string, vendedorOverride?: string) {
     setLoading(true); setFetched(false)
     const dataIni = tipoData==='mes' ? `${mesSel}-01` : inicio
-    const dataFim = tipoData==='mes'
+    const dataFimStr = tipoData==='mes'
       ? `${mesSel}-${new Date(parseInt(mesSel.split('-')[0]), parseInt(mesSel.split('-')[1]), 0).getDate()}`
       : fim
 
-    const p = new URLSearchParams({ tipo: 'agenda', dataInicio: dataIni, dataFim, limit: '1000' })
+    const p = new URLSearchParams({ tipo: 'agenda', dataInicio: dataIni, dataFim: dataFimStr, limit: '1000' })
     if (statusFiltro) p.set('status_evento', statusFiltro)
-    if (filtros.unidade)  p.set('unidade',  filtros.unidade)
-    if (filtros.vendedor) p.set('vendedor', filtros.vendedor)
+    const unid = unidadeOverride !== undefined ? unidadeOverride : filtros.unidade
+    const vend = vendedorOverride !== undefined ? vendedorOverride : filtros.vendedor
+    if (unid)  p.set('unidade',  unid)
+    if (vend)  p.set('vendedor', vend)
 
     fetch(`/api/pipedrive?${p}`)
       .then(r=>r.json())
@@ -307,6 +309,12 @@ function AgendaView({ filtros }: { filtros: any }) {
       .catch(e=>console.error(e))
       .finally(()=>setLoading(false))
   }
+
+  // Rebusca automaticamente quando filtros globais mudam (se já buscou antes)
+  useEffect(() => {
+    if (fetched) buscar()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtros.unidade, filtros.vendedor])
 
   const titulo = tipoData==='mes'
     ? `${MONTHS_SHORT[parseInt(mesSel.split('-')[1])-1]}/${mesSel.split('-')[0]}`
