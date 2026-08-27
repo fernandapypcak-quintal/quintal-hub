@@ -123,7 +123,7 @@ function LeadsHoje({ filtros }: { filtros: any }) {
           { label:'Leads hoje', value:loading?'…':String(deals.length), sub:toDateStr(today), color:'#0D0F14' },
           { label:'Em aberto',  value:loading?'…':String(deals.filter(d=>d.status==='open').length), color:'#185FA5' },
           { label:'Ganhos',     value:loading?'…':String(deals.filter(d=>d.status==='won').length), color:'#3B6D11' },
-          { label:'Por vendedor', value:loading?'…':String(new Set(deals.map(d=>d.vendedor).filter(Boolean)).size), sub:'vendedores ativos', color:'#D9B504' },
+          { label:'% Conversão', value:loading?'…':(deals.length>0?((deals.filter(d=>d.status==='won').length/deals.length)*100).toFixed(1)+'%':'—'), sub:'ganhos ÷ leads', color:'#97A624' },
         ].map(k => (
           <div key={k.label} style={{ background:'#fff',border:'0.5px solid #E8E8E2',borderRadius:12,padding:'12px 14px',borderTop:`3px solid ${k.color}` }}>
             <div style={{ fontSize:10,fontWeight:600,color:'#9a9c9f',textTransform:'uppercase',marginBottom:4 }}>{k.label}</div>
@@ -229,7 +229,7 @@ function LeadsHistorico({ filtros }: { filtros: any }) {
           { label:'Ontem',         value:String(porDia[ontemStr]?.length||0), sub:fmtDate(ontemStr), color:'#0D0F14' },
           { label:'Total período', value:String(leads.length), sub:`${dias.length} dias`, color:'#97A624' },
           { label:'Média diária',  value:mediaDiaria, sub:'leads/dia', color:'#185FA5' },
-          { label:'Pico',          value:String(dias.length?Math.max(...dias.map(d=>porDia[d].length)):0), sub:'maior dia', color:'#D9B504' },
+          { label:'% Conversão',   value:leads.length>0?((leads.filter(d=>d.status==='won').length/leads.length)*100).toFixed(1)+'%':'—', sub:`${leads.filter(d=>d.status==='won').length} ganhos`, color:'#3B6D11' },
         ].map(k => (
           <div key={k.label} style={{ background:'#fff',border:'0.5px solid #E8E8E2',borderRadius:14,padding:'14px 18px',borderTop:`3px solid ${k.color}` }}>
             <div style={{ fontSize:10,fontWeight:600,color:'#9a9c9f',textTransform:'uppercase',marginBottom:6 }}>{k.label}</div>
