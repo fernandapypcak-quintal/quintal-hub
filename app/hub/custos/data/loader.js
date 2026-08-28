@@ -179,6 +179,37 @@ const parseDetalheLancamentosBU = rows => (!rows||!Array.isArray(rows)) ? [] : r
   dt_baixa:     r.dt_baixa     || '',
 }))
 
+// Registra a divergência de BU reportada pelo gestor (ex: "esse fornecedor
+// não é da minha BU, acho que é de tal BU"). Fica pendente de revisão numa
+// aba separada da planilha — não reclassifica nada sozinho.
+export async function reportarDivergenciaBU({ fornecedor, descricao, buAtual, buSugerido, mes, loja, valor, observacao } = {}) {
+  const params = new URLSearchParams({ tipo: 'registrar_divergencia_bu' })
+  if (fornecedor)  params.set('fornecedor', fornecedor)
+  if (descricao)   params.set('descricao', descricao)
+  if (buAtual)      params.set('bu_atual', buAtual)
+  if (buSugerido)   params.set('bu_sugerido', buSugerido)
+  if (mes)         params.set('mes', mes)
+  if (loja)        params.set('loja', loja)
+  if (valor !== undefined) params.set('valor', valor)
+  if (observacao)  params.set('observacao', observacao)
+  const url = `${APPS_SCRIPT_URL}?${params.toString()}`
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 15000)
+  try {
+    const res = await fetch(url, { method:'GET', signal:controller.signal, redirect:'follow' })
+    clearTimeout(timer)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    if (data && data.erro) throw new Error(data.erro)
+    return data && data.ok === true
+  } catch(e) {
+    clearTimeout(timer)
+    console.error('[loader] reportarDivergenciaBU falhou:', e.message)
+    return false
+  }
+}
+
 // Busca sob demanda (não faz parte do loadTudo) — só quando o usuário
 // seleciona uma BU específica na página "Por BU", pra não pesar o
 // carregamento inicial do dashboard.
