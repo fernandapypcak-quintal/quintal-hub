@@ -4,7 +4,8 @@ import { loadDetalheLancamentosPorBU } from '../../data/loader.js'
 import Header from '../layout/Header.jsx'
 import { fmt, fmtPct } from '../../utils.js'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LineChart, Line, Legend } from 'recharts'
-import { X, Loader2, ChevronRight, ChevronDown } from 'lucide-react'
+import { X, Loader2, ChevronRight, ChevronDown, Download, Search, Flag } from 'lucide-react'
+import { reportarDivergenciaBU } from '../../data/loader.js'
 
 const CORES = ['#1a1a1a','#97A624','#D9B504','#3b82f6','#8C1414','#8b5cf6','#ec4899','#14b8a6','#f59e0b','#22c55e']
 const TH = ({ ch, right }) => (
@@ -22,11 +23,100 @@ function TabBtn({ label, ativo, onClick }) {
   return <button onClick={onClick} style={{ padding:'6px 16px', borderRadius:8, border:ativo?'none':'1px solid #E8E8E8', background:ativo?'#1a1a1a':'#fff', color:ativo?'#fff':'#666', fontSize:13, fontWeight:ativo?600:400, cursor:'pointer', fontFamily:'inherit' }}>{label}</button>
 }
 
+// Exporta uma lista de lançamentos como CSV e dispara o download no navegador
+function exportarCSV(linhas, nomeArquivo) {
+  if (!linhas || linhas.length === 0) return
+  const colunas = ['mes','loja','fornecedor','descricao','categoria','tipo','centro_custo','valor','vencto','dt_baixa']
+  const escapar = v => `"${String(v ?? '').replace(/"/g,'""')}"`
+  const cabecalho = ['Mês','Loja','Fornecedor','Descrição','Categoria','Tipo','BU','Valor','Vencimento','Dt. Baixa']
+  const linhasCsv = [
+    cabecalho.join(';'),
+    ...linhas.map(l => colunas.map(c => escapar(l[c])).join(';')),
+  ]
+  const csv = '\uFEFF' + linhasCsv.join('\r\n') // BOM pro Excel abrir acentuação certa
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = nomeArquivo
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+// Botão "🚩 Reportar" — abre um mini-formulário inline pra dizer que aquele
+// lançamento não é da BU que está sendo mostrada, e sugerir a BU certa.
+// Autocontido (cada linha tem seu próprio estado de aberto/fechado).
+function BotaoReportarDivergencia({ item, busDisponiveis, mesAtual }) {
+  const [aberto, setAberto] = useState(false)
+  const [buSugerida, setBuSugerida] = useState('')
+  const [observacao, setObservacao] = useState('')
+  const [enviando, setEnviando] = useState(false)
+  const [enviado, setEnviado] = useState(false)
+
+  const opcoesBu = busDisponiveis.filter(b => b !== 'Todas' && b !== item.centro_custo)
+
+  const enviar = async () => {
+    if (!buSugerida) return
+    setEnviando(true)
+    const ok = await reportarDivergenciaBU({
+      fornecedor: item.fornecedor,
+      descricao: item.descricao,
+      buAtual: item.centro_custo,
+      buSugerido: buSugerida,
+      mes: item.mes || mesAtual,
+      loja: item.loja,
+      valor: item.valor,
+      observacao,
+    })
+    setEnviando(false)
+    if (ok) { setEnviado(true); setTimeout(() => setAberto(false), 1500) }
+  }
+
+  if (enviado) {
+    return <span style={{ fontSize:12, color:'#16a34a', fontWeight:600 }}>✓ Reportado</span>
+  }
+
+  if (!aberto) {
+    return (
+      <button onClick={() => setAberto(true)} title="Essa conta não é dessa BU?"
+        style={{ border:'none', background:'transparent', cursor:'pointer', display:'flex', alignItems:'center', padding:4, opacity:0.5 }}>
+        <Flag size={14} color="#8C1414"/>
+      </button>
+    )
+  }
+
+  return (
+    <div onClick={e => e.stopPropagation()} style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap', background:'#FFF9E8', padding:'6px 8px', borderRadius:8 }}>
+      <select value={buSugerida} onChange={e => setBuSugerida(e.target.value)}
+        style={{ fontSize:12, padding:'4px 6px', borderRadius:6, border:'1px solid #E8E8E8', fontFamily:'inherit' }}>
+        <option value="">Qual BU é a certa?</option>
+        {opcoesBu.map(bu => <option key={bu} value={bu}>{bu}</option>)}
+      </select>
+      <input value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Observação (opcional)"
+        style={{ fontSize:12, padding:'4px 6px', borderRadius:6, border:'1px solid #E8E8E8', width:140, fontFamily:'inherit' }}/>
+      <button onClick={enviar} disabled={!buSugerida || enviando}
+        style={{ fontSize:12, padding:'4px 10px', borderRadius:6, border:'none', background: buSugerida ? '#1a1a1a' : '#DDD', color:'#fff', cursor: buSugerida ? 'pointer' : 'default', fontFamily:'inherit' }}>
+        {enviando ? '...' : 'Enviar'}
+      </button>
+      <button onClick={() => setAberto(false)} style={{ border:'none', background:'transparent', cursor:'pointer', display:'flex' }}>
+        <X size={13} color="#999"/>
+      </button>
+    </div>
+  )
+}
+
 export default function PorBU() {
   const { historicoBUFiltrado, mesFiltro, lojaFiltro } = useFinanceiro()
   const [topMode, setTopMode] = useState('todos')
   const [modo, setModo] = useState('geral') // geral | porloja
   const [tipoView, setTipoView] = useState('tudo') // tudo | Fixo | Variável — afeta os gráficos
+  const [buscaFornecedor, setBuscaFornecedor] = useState('')
+  const [buscaFornecedorAtiva, setBuscaFornecedorAtiva] = useState('') // termo que efetivamente disparou a busca
+  const [resultadoBusca, setResultadoBusca] = useState([])
+  const [buscandoFornecedor, setBuscandoFornecedor] = useState(false)
+
   const [buSelecionada, setBuSelecionada] = useState(null)   // >>> NOVO — BU escolhida pro detalhe
   const [buFiltroLocal, setBuFiltroLocal] = useState('Todas') // >>> NOVO — filtro de BU dentro da própria página
   const [detalhe, setDetalhe] = useState([])                  // >>> NOVO
@@ -66,8 +156,6 @@ export default function PorBU() {
   }, [dadosBase, mesAtual])
 
   // Por BU — mês atual vs anterior, já com o comparativo Fixo x Variável
-  // (a tabela sempre mostra os dois tipos separados, independente do
-  // seletor de tipo dos gráficos abaixo — é o comparativo que ela pediu).
   const porBU = useMemo(() => {
     const bus = [...new Set(dadosBase.map(h => h.centro_custo))]
     return bus.map(bu => {
@@ -157,6 +245,25 @@ export default function PorBU() {
     return () => { cancelado = true }
   }, [buSelecionada, mesAtual, lojaFiltro])
 
+  // Busca geral por fornecedor — independe da BU selecionada, varre todas
+  // as BUs do mês atual e filtra pelo nome digitado.
+  useEffect(() => {
+    const termo = buscaFornecedorAtiva.trim()
+    if (!termo) { setResultadoBusca([]); return }
+    let cancelado = false
+    setBuscandoFornecedor(true)
+    loadDetalheLancamentosPorBU({
+      centroCusto: 'Todas',
+      mes: mesAtual,
+      loja: lojaFiltro !== 'Todas' ? lojaFiltro : undefined,
+    }).then(rows => {
+      if (cancelado) return
+      const termoNorm = termo.toLowerCase()
+      setResultadoBusca(rows.filter(r => (r.fornecedor||'').toLowerCase().includes(termoNorm)))
+    }).finally(() => { if (!cancelado) setBuscandoFornecedor(false) })
+    return () => { cancelado = true }
+  }, [buscaFornecedorAtiva, mesAtual, lojaFiltro])
+
   // Agrupa o detalhe por Categoria — é a camada intermediária antes de
   // chegar nos lançamentos individuais.                                   // >>> NOVO
   const detalhePorCategoria = useMemo(() => {
@@ -184,6 +291,84 @@ export default function PorBU() {
             ))}
           </div>
         </div>
+
+        {/* Busca geral por fornecedor — varre todas as BUs do mês atual */}
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <div style={{ position:'relative', flex:'0 1 320px' }}>
+            <Search size={14} color="#999" style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)' }}/>
+            <input
+              value={buscaFornecedor}
+              onChange={e => setBuscaFornecedor(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') setBuscaFornecedorAtiva(buscaFornecedor) }}
+              placeholder={`Buscar fornecedor em todas as BUs — ${mesAtual||''}`}
+              style={{ width:'100%', fontSize:13, padding:'8px 10px 8px 30px', borderRadius:8, border:'1px solid #E8E8E8', fontFamily:'inherit' }}
+            />
+          </div>
+          <button onClick={() => setBuscaFornecedorAtiva(buscaFornecedor)}
+            style={{ padding:'8px 16px', borderRadius:8, border:'none', background:'#1a1a1a', color:'#fff', fontSize:13, cursor:'pointer', fontFamily:'inherit' }}>
+            Buscar
+          </button>
+          {buscaFornecedorAtiva && (
+            <button onClick={() => { setBuscaFornecedor(''); setBuscaFornecedorAtiva('') }}
+              style={{ padding:'8px 12px', borderRadius:8, border:'1px solid #E8E8E8', background:'#fff', color:'#666', fontSize:13, cursor:'pointer', fontFamily:'inherit' }}>
+              Limpar
+            </button>
+          )}
+        </div>
+
+        {/* Resultado da busca geral por fornecedor */}
+        {buscaFornecedorAtiva && (
+          <div style={{ border:'1px solid #F0F0F0', borderRadius:12, overflow:'hidden' }}>
+            <div style={{ padding:'14px 20px', borderBottom:'1px solid #F7F7F7', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <div>
+                <div style={{ fontSize:13, fontWeight:600 }}>Resultado — "{buscaFornecedorAtiva}"</div>
+                <div style={{ fontSize:12, color:'#999', marginTop:2 }}>
+                  {buscandoFornecedor ? 'Buscando…' : `${resultadoBusca.length} lançamento${resultadoBusca.length===1?'':'s'} · ${fmt(resultadoBusca.reduce((s,d)=>s+d.valor,0))}`}
+                </div>
+              </div>
+              {resultadoBusca.length > 0 && (
+                <button onClick={() => exportarCSV(resultadoBusca, `busca-${buscaFornecedorAtiva}-${mesAtual}.csv`)}
+                  style={{ display:'flex', alignItems:'center', gap:6, border:'1px solid #E8E8E8', background:'#fff', borderRadius:8, padding:'6px 12px', cursor:'pointer', fontSize:12, fontFamily:'inherit' }}>
+                  <Download size={13}/> Exportar CSV
+                </button>
+              )}
+            </div>
+            {buscandoFornecedor ? (
+              <div style={{ padding:40, display:'flex', justifyContent:'center', color:'#999' }}><Loader2 size={20} className="animate-spin"/></div>
+            ) : resultadoBusca.length === 0 ? (
+              <div style={{ padding:30, textAlign:'center', color:'#999', fontSize:13 }}>Nenhum lançamento encontrado pra esse fornecedor nesse mês.</div>
+            ) : (
+              <div style={{ maxHeight:'420px', overflowY:'auto' }}>
+                <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                  <thead><tr>
+                    <TH ch="Fornecedor"/>
+                    <TH ch="Descrição"/>
+                    <TH ch="BU"/>
+                    <TH ch="Loja"/>
+                    <TH ch="Vencimento"/>
+                    <TH ch="Valor" right/>
+                    <TH ch=""/>
+                  </tr></thead>
+                  <tbody>
+                    {resultadoBusca.sort((a,b)=>b.valor-a.valor).map((d,i) => (
+                      <tr key={i}>
+                        <TD ch={d.fornecedor}/>
+                        <TD ch={d.descricao} muted/>
+                        <TD ch={d.centro_custo} color={d.centro_custo==='Revisar' ? '#D9B504' : undefined}/>
+                        <TD ch={d.loja} muted/>
+                        <TD ch={d.vencto} muted/>
+                        <TD ch={fmt(d.valor)} mono right/>
+                        <td style={{ padding:'6px 10px', borderBottom:'1px solid #F7F7F7' }}>
+                          <BotaoReportarDivergencia item={d} busDisponiveis={busParaFiltro} mesAtual={mesAtual}/>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* KPIs */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14 }}>
@@ -319,9 +504,17 @@ export default function PorBU() {
                   {carregandoDetalhe ? 'Carregando…' : `${detalhePorCategoria.length} categoria${detalhePorCategoria.length===1?'':'s'} · ${detalhe.length} lançamento${detalhe.length===1?'':'s'} · ${fmt(detalhe.reduce((s,d)=>s+d.valor,0))}`}
                 </div>
               </div>
-              <button onClick={()=>setBuSelecionada(null)} style={{ border:'none', background:'#F5F5F5', borderRadius:8, padding:6, cursor:'pointer', display:'flex' }}>
-                <X size={16} color="#666"/>
-              </button>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                {detalhe.length > 0 && (
+                  <button onClick={() => exportarCSV(detalhe, `${buSelecionada}-${mesAtual}.csv`)}
+                    style={{ display:'flex', alignItems:'center', gap:6, border:'1px solid #E8E8E8', background:'#fff', borderRadius:8, padding:'6px 12px', cursor:'pointer', fontSize:12, fontFamily:'inherit' }}>
+                    <Download size={13}/> Exportar CSV
+                  </button>
+                )}
+                <button onClick={()=>setBuSelecionada(null)} style={{ border:'none', background:'#F5F5F5', borderRadius:8, padding:6, cursor:'pointer', display:'flex' }}>
+                  <X size={16} color="#666"/>
+                </button>
+              </div>
             </div>
 
             {carregandoDetalhe ? (
@@ -358,6 +551,7 @@ export default function PorBU() {
                             {lojaFiltro==='Todas' && <TH ch="Loja"/>}
                             <TH ch="Vencimento"/>
                             <TH ch="Valor" right/>
+                            <TH ch=""/>
                           </tr></thead>
                           <tbody>
                             {cat.itens.map((d,i)=>(
@@ -367,6 +561,9 @@ export default function PorBU() {
                                 {lojaFiltro==='Todas' && <TD ch={d.loja} muted/>}
                                 <TD ch={d.vencto} muted/>
                                 <TD ch={fmt(d.valor)} mono right/>
+                                <td style={{ padding:'6px 10px', borderBottom:'1px solid #F7F7F7' }}>
+                                  <BotaoReportarDivergencia item={{...d, centro_custo: buSelecionada}} busDisponiveis={busParaFiltro} mesAtual={mesAtual}/>
+                                </td>
                               </tr>
                             ))}
                           </tbody>
