@@ -123,6 +123,19 @@ export default function Overview() {
   }, [mixProdutos, periodo, filters]);
   const mixCategoriaTotal = useMemo(() => mixCategoriaData.reduce((s, d) => s + d.valor, 0), [mixCategoriaData]);
 
+  // Só as top 8 categorias no gráfico — o resto vira "Outros", pra dar pra
+  // bater o olho sem rolar uma lista de 20+ linhas do mesmo tamanho/cor.
+  const MIX_TOP_N = 8;
+  const mixCategoriaChart = useMemo(() => {
+    if (mixCategoriaData.length <= MIX_TOP_N) return mixCategoriaData;
+    const top = mixCategoriaData.slice(0, MIX_TOP_N);
+    const resto = mixCategoriaData.slice(MIX_TOP_N);
+    const outros = resto.reduce((acc, d) => ({
+      categoria: `Outros (${resto.length})`, valor: acc.valor + d.valor, qtd: acc.qtd + d.qtd,
+    }), { categoria: '', valor: 0, qtd: 0 });
+    return [...top, outros];
+  }, [mixCategoriaData]);
+
   // ── KPIs do mês atual — sempre usando rawData filtrado por ano atual ──
   const kpis = useMemo(() => {
     if (!periodo) return null;
@@ -821,13 +834,28 @@ export default function Overview() {
         <div className="chart-card">
           <div className="flex items-center gap-1 mb-1">
             <h3 className="section-title">Mix de Produtos por Categoria</h3>
-            <InfoTip text={`Faturamento líquido (já descontado) por categoria de produto, no mesmo recorte de loja/canal/período da página. ${periodo.label}.`} />
+            <InfoTip text={`Faturamento líquido (já descontado) por categoria de produto, no mesmo recorte de loja/canal/período da página. Mostrando as ${MIX_TOP_N} maiores — o resto agrupado em "Outros". ${periodo.label}.`} />
           </div>
-          <p className="text-xs text-zinc-400 mb-5">{periodo.label} · ordenado por faturamento</p>
-          <ResponsiveContainer width="100%" height={Math.max(180, mixCategoriaData.length * 34)}>
-            <BarChart data={mixCategoriaData} layout="vertical" margin={{ top: 4, right: 40, left: 8, bottom: 4 }}>
+          <p className="text-xs text-zinc-400 mb-4">{periodo.label} · ordenado por faturamento</p>
+
+          {/* Top 3 — resumo rápido de bater o olho */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+            {mixCategoriaData.slice(0, 3).map((d, i) => (
+              <div key={d.categoria} className="bg-surface-muted/40 border border-surface-border rounded-xl px-4 py-3">
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <span className="text-[10px] font-bold text-white bg-brand-olive rounded-full w-4 h-4 flex items-center justify-center">{i + 1}</span>
+                  <span className="text-xs font-semibold text-zinc-600 truncate">{d.categoria}</span>
+                </div>
+                <p className="text-lg font-bold font-display text-brand-black">{formatBRL(d.valor, true)}</p>
+                <p className="text-xs text-zinc-400">{mixCategoriaTotal > 0 ? formatPctPlain(d.valor / mixCategoriaTotal * 100) : '0%'} do mix</p>
+              </div>
+            ))}
+          </div>
+
+          <ResponsiveContainer width="100%" height={Math.max(180, mixCategoriaChart.length * 32)}>
+            <BarChart data={mixCategoriaChart} layout="vertical" margin={{ top: 4, right: 90, left: 8, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#F0F0EC" horizontal={false} />
-              <XAxis type="number" tickFormatter={v => formatBRL(v, true)} tick={{ fontSize: 11, fill: '#A1A1AA' }} axisLine={false} tickLine={false} />
+              <XAxis type="number" hide />
               <YAxis type="category" dataKey="categoria" width={140} tick={{ fontSize: 12, fill: '#3F3F46' }} axisLine={false} tickLine={false} />
               <Tooltip
                 content={({ active, payload }) => {
@@ -845,8 +873,24 @@ export default function Overview() {
                   );
                 }}
               />
-              <Bar dataKey="valor" fill="#97A624" radius={[0, 4, 4, 0]} maxBarSize={22}>
-                {showLabels && <LabelList dataKey="valor" position="right" formatter={v => formatBRL(v, true)} style={{ fontSize: 11, fill: '#52525B', fontWeight: 500 }} />}
+              <Bar dataKey="valor" radius={[0, 4, 4, 0]} maxBarSize={20}>
+                {mixCategoriaChart.map((d, i) => (
+                  <Cell key={d.categoria} fill={d.categoria.startsWith('Outros') ? '#D4D4D8' : '#97A624'} />
+                ))}
+                <LabelList
+                  dataKey="valor"
+                  position="right"
+                  content={({ x, y, width, height, value, index }) => {
+                    const d = mixCategoriaChart[index];
+                    const pct = mixCategoriaTotal > 0 ? (value / mixCategoriaTotal * 100) : 0;
+                    return (
+                      <text x={(x||0) + (width||0) + 8} y={(y||0) + (height||0)/2} dominantBaseline="middle"
+                        fontSize={11} fontWeight={600} fill="#3F3F46" fontFamily="DM Sans">
+                        {formatBRL(value, true)} <tspan fill="#A1A1AA" fontWeight={400}>({pct.toFixed(0)}%)</tspan>
+                      </text>
+                    );
+                  }}
+                />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
