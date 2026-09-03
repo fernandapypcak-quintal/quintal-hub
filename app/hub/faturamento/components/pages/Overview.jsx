@@ -9,6 +9,7 @@ import { useFilters } from '../../hooks/useFilters';
 import { useAlmoco } from '../../hooks/useAlmoco';
 import { useTicket } from '../../hooks/useTicket';
 import { useCompradores } from '../../hooks/useCompradores';
+import { useMixProdutos } from '../../hooks/useMixProdutos';
 import { useMetas } from '../../hooks/useMetas';
 import { useLabels } from '../../hooks/useLabels';
 import KpiCard from '../ui/KpiCard';
@@ -63,6 +64,7 @@ export default function Overview() {
   const { getAlmoco } = useAlmoco();
   const { getTicket, getDesconto } = useTicket();
   const { compradores } = useCompradores();
+  const { mixProdutos } = useMixProdutos();
 
   // Ticket médio via check-ins (fonte corrigida) — substitui o getTicket()
   // antigo, que vinha da planilha ticket_manual (preenchida à mão, sujeita
@@ -103,6 +105,23 @@ export default function Overview() {
     if (filters.canal !== 'Todos' && r.Canal !== filters.canal)  return false;
     return true;
   }), [rawData, filters]);
+
+  // ── Mix de Produtos por Categoria — mesmo recorte (loja/canal/período) ──
+  const mixCategoriaData = useMemo(() => {
+    if (!periodo) return [];
+    let rows = mixProdutos.filter(r => r.Ano === periodo.ano && r.Mes === periodo.mes);
+    if (filters.lojas.size > 0) rows = rows.filter(r => filters.lojas.has(r.Loja));
+    if (filters.canal !== 'Todos') rows = rows.filter(r => r.Canal === filters.canal);
+
+    const porCategoria = {};
+    rows.forEach(r => {
+      if (!porCategoria[r.Categoria]) porCategoria[r.Categoria] = { categoria: r.Categoria, valor: 0, qtd: 0 };
+      porCategoria[r.Categoria].valor += r.Valor;
+      porCategoria[r.Categoria].qtd   += r.Quantidade;
+    });
+    return Object.values(porCategoria).sort((a, b) => b.valor - a.valor);
+  }, [mixProdutos, periodo, filters]);
+  const mixCategoriaTotal = useMemo(() => mixCategoriaData.reduce((s, d) => s + d.valor, 0), [mixCategoriaData]);
 
   // ── KPIs do mês atual — sempre usando rawData filtrado por ano atual ──
   const kpis = useMemo(() => {
@@ -796,6 +815,43 @@ export default function Overview() {
           </div>
         </div>
       </div>
+
+      {/* Mix de Produtos por Categoria */}
+      {mixCategoriaData.length > 0 && (
+        <div className="chart-card">
+          <div className="flex items-center gap-1 mb-1">
+            <h3 className="section-title">Mix de Produtos por Categoria</h3>
+            <InfoTip text={`Faturamento líquido (já descontado) por categoria de produto, no mesmo recorte de loja/canal/período da página. ${periodo.label}.`} />
+          </div>
+          <p className="text-xs text-zinc-400 mb-5">{periodo.label} · ordenado por faturamento</p>
+          <ResponsiveContainer width="100%" height={Math.max(180, mixCategoriaData.length * 34)}>
+            <BarChart data={mixCategoriaData} layout="vertical" margin={{ top: 4, right: 40, left: 8, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#F0F0EC" horizontal={false} />
+              <XAxis type="number" tickFormatter={v => formatBRL(v, true)} tick={{ fontSize: 11, fill: '#A1A1AA' }} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="categoria" width={140} tick={{ fontSize: 12, fill: '#3F3F46' }} axisLine={false} tickLine={false} />
+              <Tooltip
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  const d = payload[0].payload;
+                  return (
+                    <div className="bg-white border border-surface-border rounded-xl shadow-card-hover p-3 min-w-[170px]">
+                      <p className="text-xs font-semibold text-zinc-700 mb-1">{d.categoria}</p>
+                      <div className="text-xs text-zinc-500 space-y-0.5">
+                        <div className="flex justify-between gap-4"><span>Faturamento</span><span className="font-semibold text-brand-black">{formatBRL(d.valor, true)}</span></div>
+                        <div className="flex justify-between gap-4"><span>Quantidade</span><span>{d.qtd.toLocaleString('pt-BR')}</span></div>
+                        <div className="flex justify-between gap-4"><span>% do mix</span><span>{mixCategoriaTotal > 0 ? formatPctPlain(d.valor / mixCategoriaTotal * 100) : '0%'}</span></div>
+                      </div>
+                    </div>
+                  );
+                }}
+              />
+              <Bar dataKey="valor" fill="#97A624" radius={[0, 4, 4, 0]} maxBarSize={22}>
+                {showLabels && <LabelList dataKey="valor" position="right" formatter={v => formatBRL(v, true)} style={{ fontSize: 11, fill: '#52525B', fontWeight: 500 }} />}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   );
 }
