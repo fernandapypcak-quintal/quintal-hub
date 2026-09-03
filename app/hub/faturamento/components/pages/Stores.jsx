@@ -9,6 +9,7 @@ import { useFilters } from '../../hooks/useFilters';
 import { useAlmoco } from '../../hooks/useAlmoco';
 import { useCompradores } from '../../hooks/useCompradores';
 import { useAreas } from '../../hooks/useAreas';
+import { useMixProdutos } from '../../hooks/useMixProdutos';
 import { useMetas } from '../../hooks/useMetas';
 import { useLabels } from '../../hooks/useLabels';
 import { progressColor, AtingBadge } from '../ui/GoalProgress';
@@ -28,6 +29,7 @@ export default function Stores() {
   const { almoco, getAlmocoLoja } = useAlmoco();
   const { getPessoas } = useCompradores();
   const { getArea } = useAreas();
+  const { mixProdutos } = useMixProdutos();
   const { showLabels } = useLabels();
   const [expandedLoja, setExpandedLoja] = useState(null);
 
@@ -155,6 +157,20 @@ export default function Stores() {
         return { ...m, prevYear: prevRecs.length > 0 ? sum(prevRecs) : null };
       });
 
+      // Mix de produtos por categoria dessa loja no mês — mesmo recorte
+      // (ano/mes do período), sem filtro de canal aqui (Stores.jsx já
+      // mostra Casa/Delivery separados em outros campos).
+      const mixLoja = (() => {
+        const rows = mixProdutos.filter(r => r.Ano === ano && r.Mes === mes && r.Loja === loja);
+        const porCategoria = {};
+        rows.forEach(r => {
+          if (!porCategoria[r.Categoria]) porCategoria[r.Categoria] = { categoria: r.Categoria, valor: 0, qtd: 0 };
+          porCategoria[r.Categoria].valor += r.Valor;
+          porCategoria[r.Categoria].qtd   += r.Quantidade;
+        });
+        return Object.values(porCategoria).sort((a, b) => b.valor - a.valor);
+      })();
+
       return {
         loja, color, idx,
         realAtual, realAA, casa, delivery,
@@ -164,6 +180,7 @@ export default function Stores() {
         aceleracao, media1a, media2a,
         pessoasCasa, pessoasDelivery, pessoasTotal, ticketCasa, ticketDelivery, ticketMedio,
         areaM2, fatPorM2Total, fatPorM2Salao,
+        mixLoja,
       };
     }).sort((a, b) => {
       if (a.ating === null && b.ating === null) return b.realAtual - a.realAtual;
@@ -171,7 +188,7 @@ export default function Stores() {
       if (b.ating === null) return -1;
       return b.ating - a.ating;
     });
-  }, [lojas, rawData, periodo, getMeta, getPessoas, getArea]);
+  }, [lojas, rawData, periodo, getMeta, getPessoas, getArea, mixProdutos]);
 
   if (!periodo) return null;
 
@@ -430,6 +447,31 @@ export default function Stores() {
                           </div>
                         ))}
                       </div>
+
+                      {l.mixLoja.length > 0 && (
+                        <div className="mt-4 pt-3 border-t border-surface-border">
+                          <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+                            Mix de Produtos — {periodo.label}
+                          </p>
+                          <div className="space-y-1.5">
+                            {l.mixLoja.slice(0, 6).map(m => {
+                              const totalMix = l.mixLoja.reduce((s, x) => s + x.valor, 0);
+                              const pct = totalMix > 0 ? m.valor / totalMix * 100 : 0;
+                              return (
+                                <div key={m.categoria}>
+                                  <div className="flex items-center justify-between text-xs mb-0.5">
+                                    <span className="text-zinc-600">{m.categoria}</span>
+                                    <span className="font-semibold text-zinc-700">{formatBRL(m.valor, true)}</span>
+                                  </div>
+                                  <div className="w-full h-1.5 bg-surface-muted rounded-full overflow-hidden">
+                                    <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: l.color }} />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
 
                       {l.totalAlmoco > 0 && (
                         <div className="mt-4 pt-3 border-t border-surface-border">
