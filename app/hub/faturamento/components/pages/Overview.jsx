@@ -1,5 +1,5 @@
 // src/components/pages/Overview.jsx
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ComposedChart, Bar, Line, BarChart, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LabelList
@@ -65,6 +65,7 @@ export default function Overview() {
   const { getTicket, getDesconto } = useTicket();
   const { compradores } = useCompradores();
   const { mixProdutos } = useMixProdutos();
+  const [mostrarOutros, setMostrarOutros] = useState(false);
 
   // Ticket médio via check-ins (fonte corrigida) — substitui o getTicket()
   // antigo, que vinha da planilha ticket_manual (preenchida à mão, sujeita
@@ -126,15 +127,17 @@ export default function Overview() {
   // Só as top 8 categorias no gráfico — o resto vira "Outros", pra dar pra
   // bater o olho sem rolar uma lista de 20+ linhas do mesmo tamanho/cor.
   const MIX_TOP_N = 8;
+  const mixOutrosDetalhe = useMemo(() =>
+    mixCategoriaData.length > MIX_TOP_N ? mixCategoriaData.slice(MIX_TOP_N) : []
+  , [mixCategoriaData]);
   const mixCategoriaChart = useMemo(() => {
     if (mixCategoriaData.length <= MIX_TOP_N) return mixCategoriaData;
     const top = mixCategoriaData.slice(0, MIX_TOP_N);
-    const resto = mixCategoriaData.slice(MIX_TOP_N);
-    const outros = resto.reduce((acc, d) => ({
-      categoria: `Outros (${resto.length})`, valor: acc.valor + d.valor, qtd: acc.qtd + d.qtd,
+    const outros = mixOutrosDetalhe.reduce((acc, d) => ({
+      categoria: `Outros (${mixOutrosDetalhe.length})`, valor: acc.valor + d.valor, qtd: acc.qtd + d.qtd,
     }), { categoria: '', valor: 0, qtd: 0 });
     return [...top, outros];
-  }, [mixCategoriaData]);
+  }, [mixCategoriaData, mixOutrosDetalhe]);
 
   // ── KPIs do mês atual — sempre usando rawData filtrado por ano atual ──
   const kpis = useMemo(() => {
@@ -875,7 +878,12 @@ export default function Overview() {
               />
               <Bar dataKey="valor" radius={[0, 4, 4, 0]} maxBarSize={20}>
                 {mixCategoriaChart.map((d, i) => (
-                  <Cell key={d.categoria} fill={d.categoria.startsWith('Outros') ? '#D4D4D8' : '#97A624'} />
+                  <Cell
+                    key={d.categoria}
+                    fill={d.categoria.startsWith('Outros') ? '#D4D4D8' : '#97A624'}
+                    cursor={d.categoria.startsWith('Outros') ? 'pointer' : 'default'}
+                    onClick={() => { if (d.categoria.startsWith('Outros')) setMostrarOutros(v => !v); }}
+                  />
                 ))}
                 <LabelList
                   dataKey="valor"
@@ -883,10 +891,12 @@ export default function Overview() {
                   content={({ x, y, width, height, value, index }) => {
                     const d = mixCategoriaChart[index];
                     const pct = mixCategoriaTotal > 0 ? (value / mixCategoriaTotal * 100) : 0;
+                    const isOutros = d.categoria.startsWith('Outros');
                     return (
                       <text x={(x||0) + (width||0) + 8} y={(y||0) + (height||0)/2} dominantBaseline="middle"
                         fontSize={11} fontWeight={600} fill="#3F3F46" fontFamily="DM Sans">
                         {formatBRL(value, true)} <tspan fill="#A1A1AA" fontWeight={400}>({pct.toFixed(0)}%)</tspan>
+                        {isOutros && <tspan fill="#97A624" fontWeight={600}> {mostrarOutros ? '▲' : '▼ ver'}</tspan>}
                       </text>
                     );
                   }}
@@ -894,6 +904,28 @@ export default function Overview() {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+
+          {mostrarOutros && mixOutrosDetalhe.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-surface-border">
+              <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+                Dentro de "Outros" ({mixOutrosDetalhe.length} categorias)
+              </p>
+              <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                {mixOutrosDetalhe.map(d => {
+                  const pct = mixCategoriaTotal > 0 ? d.valor / mixCategoriaTotal * 100 : 0;
+                  return (
+                    <div key={d.categoria} className="flex items-center justify-between text-xs py-1">
+                      <span className="text-zinc-600">{d.categoria}</span>
+                      <span className="text-zinc-500">
+                        <span className="font-semibold text-zinc-700">{formatBRL(d.valor, true)}</span>
+                        <span className="text-zinc-400 ml-1.5">({pct.toFixed(1).replace('.', ',')}%)</span>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
