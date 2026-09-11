@@ -158,12 +158,19 @@ export type Meta = {
   percentualFaixa1: number; percentualFaixa3: number
   projecao: number; percentualProjecaoFaixa3: number
 } | null
+export type Tendencia = {
+  ehMesCorrente: boolean; diasDecorridos: number; diasNoMes: number
+  projecaoCompetencia: number; projecaoFechamento: number
+}
+export type Pacote = { pacote: string; qtd: number; receita: number; ticketMedio: number }
 export type OnePageData = {
   atual: PeriodoMes; mesAnterior: PeriodoMes; anoAnterior: PeriodoMes
   serieFaturamento: SerieFaturamento[]
   anos: { atual: AnoCompleto; anterior: AnoCompleto }
   funil: { etapa: string; count: number }[]
   meta: Meta
+  tendencia: Tendencia
+  pacotes: Pacote[]
 }
 
 export function useOnePage(filtros: Pick<Filtros, 'unidade' | 'vendedor'>, mesFiltro: string) {
@@ -212,7 +219,7 @@ export function usePorLoja(filtros: Filtros) {
       .catch(e => setErro(e.message))
       .finally(() => setLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtros.ano, filtros.mes, filtros.status, filtros.vendedor])
+  }, [filtros.ano, filtros.mes, filtros.status, filtros.unidade, filtros.vendedor])
 
   return { lojas, loading, erro }
 }
