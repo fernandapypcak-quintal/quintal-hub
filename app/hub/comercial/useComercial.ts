@@ -147,13 +147,15 @@ export function useLeadsDiarios(filtros: Filtros, dataInicio: string, dataFim: s
 
 export type PeriodoMes = {
   mes: string; leads: number; won: number; taxaConversao: number
-  receitaFechamento: number; receitaCompetencia: number; ticketMedio: number
+  receitaFechamento: number; receitaCompetencia: number
+  pax: number; ticketMedio: number; ticketMedioPax: number
 }
 export type SerieFaturamento = PeriodoMes & { periodo: string; label: string }
 export type Meta = {
   mes: string; faixa1: number; faixa2: number; faixa3: number
-  atingido: number; faixaAtual: number
+  atingido: number; faixaAtual: number; mesFechado: boolean
   percentualFaixa1: number; percentualFaixa3: number
+  projecao: number; percentualProjecaoFaixa3: number
 } | null
 export type OnePageData = {
   atual: PeriodoMes; mesAnterior: PeriodoMes; anoAnterior: PeriodoMes
@@ -162,7 +164,7 @@ export type OnePageData = {
   meta: Meta
 }
 
-export function useOnePage(filtros: Pick<Filtros, 'unidade' | 'vendedor'>) {
+export function useOnePage(filtros: Pick<Filtros, 'unidade' | 'vendedor'>, mesFiltro: string) {
   const [dados, setDados] = useState<OnePageData | null>(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
@@ -170,6 +172,7 @@ export function useOnePage(filtros: Pick<Filtros, 'unidade' | 'vendedor'>) {
   useEffect(() => {
     setLoading(true); setErro(null)
     const p = new URLSearchParams({ tipo: 'onepage' })
+    if (mesFiltro)        p.set('mes_filtro', mesFiltro)
     if (filtros.unidade)  p.set('unidade',  filtros.unidade)
     if (filtros.vendedor) p.set('vendedor', filtros.vendedor)
     fetch(`${GAS_URL}?${p}`)
@@ -178,7 +181,7 @@ export function useOnePage(filtros: Pick<Filtros, 'unidade' | 'vendedor'>) {
       .catch(e => setErro(e.message))
       .finally(() => setLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtros.unidade, filtros.vendedor])
+  }, [filtros.unidade, filtros.vendedor, mesFiltro])
 
   return { dados, loading, erro }
 }
