@@ -4,8 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import Sidebar from './components/layout/Sidebar'
 import BottomNav from './components/layout/BottomNav'
-import Funil from './components/pages/Funil'
-import Eventos from './components/pages/Eventos'
+import OnePage from './components/pages/OnePage'
 import Calendario from './components/pages/Calendario'
 import Leads from './components/pages/Leads'
 import Conversoes from './components/pages/Conversoes'
@@ -23,8 +22,7 @@ const TODAS_UNIDADES = [
 ]
 
 const PAGES: Record<string, React.ComponentType<any>> = {
-  funil:      Funil,
-  eventos:    Eventos,
+  resumo:     OnePage,
   calendario: Calendario,
   leads:      Leads,
   conversoes: Conversoes,
@@ -46,7 +44,7 @@ export default function ComercialClientApp({ allowedLojas = '*' }: { allowedLoja
   const UNIDADES = idsPermitidos === '*' ? TODAS_UNIDADES : TODAS_UNIDADES.filter(u => idsPermitidos.includes(u.id))
   const podeVerTodas = allowedLojas === '*'
 
-  const [activePage, setActivePage] = useState('funil')
+  const [activePage, setActivePage] = useState('resumo')
   const [filtros, setFiltros] = useState({
     status:   '' as '' | 'open' | 'won' | 'lost',
     unidade:  podeVerTodas ? '' : (UNIDADES[0]?.id ?? ''),
@@ -56,7 +54,7 @@ export default function ComercialClientApp({ allowedLojas = '*' }: { allowedLoja
   })
 
   const vendedores = useVendedores()
-  const Page = PAGES[activePage] || Funil
+  const Page = PAGES[activePage] || OnePage
 
   function set(key: string, val: string) {
     setFiltros(f => ({ ...f, [key]: val }))
