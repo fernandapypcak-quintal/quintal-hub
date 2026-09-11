@@ -6,7 +6,6 @@ const PAGES = [
   { id: 'leads',      icon: '📥', label: 'Leads' },
   { id: 'conversoes', icon: '🏆', label: 'Conv.' },
   { id: 'por_loja',   icon: '🏪', label: 'Lojas' },
-  { id: 'taxa',        icon: '📈', label: 'Conv %' },
 ]
 
 export default function BottomNav({ activePage, onPageChange }: {
