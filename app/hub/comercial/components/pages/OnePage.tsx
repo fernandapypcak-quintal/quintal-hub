@@ -104,12 +104,17 @@ function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior }: {
 
 const GAS_URL = '/api/pipedrive'
 
-type LinhaGranular = { periodo: string; label: string; leads: number; fechados: number; taxa: number; receita: number }
+type DealGranular = {
+  empresa: string; data_evento: string; vendedor: string; unidade_nome: string
+  valor: number; qtd_pessoas: any; cardapio_nome: string; won_time: string; add_time: string
+}
+type LinhaGranular = { periodo: string; label: string; leads: number; fechados: number; taxa: number; receita: number; deals: DealGranular[] }
 type DadosGranular = { mensal: LinhaGranular[]; semanal: LinhaGranular[]; diario: LinhaGranular[] }
 
-function PainelLeadsConversao({ filtros, mesFiltro }: { filtros: any; mesFiltro: string }) {
+function PainelDesempenho({ filtros, mesFiltro }: { filtros: any; mesFiltro: string }) {
   const [dados, setDados] = useState<DadosGranular | null>(null)
   const [granularidade, setGranularidade] = useState<'mensal' | 'semanal' | 'diario'>('diario')
+  const [selecionado, setSelecionado] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -125,59 +130,120 @@ function PainelLeadsConversao({ filtros, mesFiltro }: { filtros: any; mesFiltro:
 
   if (loading || !dados) return (
     <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20, textAlign: 'center', color: '#9a9c9f', fontSize: 13 }}>
-      Carregando leads e conversão...
+      Carregando leads, conversão e ticket médio...
     </div>
   )
 
   const linhas = [...(dados[granularidade] || [])].reverse().slice(-16)
-  const maxLeads = Math.max(...linhas.map(l => l.leads), 1)
-  const maxTaxa = Math.max(...linhas.map(l => l.taxa), 1)
+  const comTicket = linhas.map(l => ({ ...l, ticketMedio: l.fechados > 0 ? Math.round(l.receita / l.fechados) : 0 }))
+  const maxLeads = Math.max(...comTicket.map(l => l.leads), 1)
+  const maxTaxa = Math.max(...comTicket.map(l => l.taxa), 1)
+  const maxTicket = Math.max(...comTicket.map(l => l.ticketMedio), 1)
 
-  const BotaoGran = ({ v, label }: { v: typeof granularidade; label: string }) => (
-    <button onClick={() => setGranularidade(v)}
-      style={{ padding: '5px 12px', borderRadius: 20, border: '0.5px solid', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-        background: granularidade===v ? '#0D0F14' : '#fff', color: granularidade===v ? '#97A624' : '#5a5c5f', borderColor: granularidade===v ? '#0D0F14' : '#E8E8E2' }}>
-      {label}
-    </button>
+  const periodoAtivo = selecionado && comTicket.some(l => l.periodo === selecionado) ? selecionado : (comTicket[comTicket.length-1]?.periodo || null)
+  const linhaAtiva = comTicket.find(l => l.periodo === periodoAtivo)
+
+  const pacotesMap: Record<string, { pacote: string; qtd: number; receita: number }> = {}
+  ;(linhaAtiva?.deals || []).forEach(d => {
+    const nome = String(d.cardapio_nome || 'Não informado').trim()
+    if (!pacotesMap[nome]) pacotesMap[nome] = { pacote: nome, qtd: 0, receita: 0 }
+    pacotesMap[nome].qtd++
+    pacotesMap[nome].receita += parseFloat(String(d.valor)) || 0
+  })
+  const pacotesAtivos = Object.values(pacotesMap)
+    .map(p => ({ ...p, ticketMedio: p.qtd ? Math.round(p.receita/p.qtd) : 0 }))
+    .sort((a,b) => b.qtd - a.qtd)
+  const maxPacoteQtd = Math.max(...pacotesAtivos.map(p => p.qtd), 1)
+
+  function BotaoGran({ v, label }: { v: typeof granularidade; label: string }) {
+    return (
+      <button onClick={() => { setGranularidade(v); setSelecionado(null) }}
+        style={{ padding: '5px 12px', borderRadius: 20, border: '0.5px solid', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+          background: granularidade===v ? '#0D0F14' : '#fff', color: granularidade===v ? '#97A624' : '#5a5c5f', borderColor: granularidade===v ? '#0D0F14' : '#E8E8E2' }}>
+        {label}
+      </button>
+    )
+  }
+
+  const seletorGranularidade = (
+    <div style={{ display: 'flex', gap: 6 }}>
+      <BotaoGran v="diario" label="Diário" />
+      <BotaoGran v="semanal" label="Semanal" />
+      <BotaoGran v="mensal" label="Mensal" />
+    </div>
   )
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-      <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
-          <span style={{ fontSize: 15, fontWeight: 700 }}>Leads que entram</span>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <BotaoGran v="diario" label="Diário" />
-            <BotaoGran v="semanal" label="Semanal" />
-            <BotaoGran v="mensal" label="Mensal" />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
+            <span style={{ fontSize: 15, fontWeight: 700 }}>Leads que entram</span>
+            {seletorGranularidade}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 200, overflowX: 'auto', paddingBottom: 8 }}>
+            {comTicket.map(l => (
+              <div key={l.periodo} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 40, flex: '1 0 40px' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#185FA5', fontFamily: 'DM Mono, monospace' }}>{l.leads}</span>
+                <div style={{ width: '100%', maxWidth: 26, height: `${Math.max((l.leads/maxLeads)*140,4)}px`, background: '#185FA5', borderRadius: '4px 4px 0 0' }} />
+                <span style={{ fontSize: 10, color: '#9a9c9f', textAlign: 'center' }}>{l.label}</span>
+              </div>
+            ))}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 200, overflowX: 'auto', paddingBottom: 8 }}>
-          {linhas.map(l => (
-            <div key={l.periodo} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 40, flex: '1 0 40px' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#185FA5', fontFamily: 'DM Mono, monospace' }}>{l.leads}</span>
-              <div style={{ width: '100%', maxWidth: 26, height: `${Math.max((l.leads/maxLeads)*140,4)}px`, background: '#185FA5', borderRadius: '4px 4px 0 0' }} />
-              <span style={{ fontSize: 10, color: '#9a9c9f', textAlign: 'center' }}>{l.label}</span>
-            </div>
-          ))}
+
+        <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
+            <span style={{ fontSize: 15, fontWeight: 700 }}>Taxa de conversão</span>
+            {seletorGranularidade}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 200, overflowX: 'auto', paddingBottom: 8 }}>
+            {comTicket.map(l => (
+              <div key={l.periodo} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 40, flex: '1 0 40px' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#3B6D11', fontFamily: 'DM Mono, monospace' }}>{l.taxa}%</span>
+                <div style={{ width: '100%', maxWidth: 26, height: `${Math.max((l.taxa/maxTaxa)*140,4)}px`, background: '#3B6D11', borderRadius: '4px 4px 0 0' }} />
+                <span style={{ fontSize: 10, color: '#9a9c9f', textAlign: 'center' }}>{l.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
+      {/* ── Ticket médio clicável + pacotes do período clicado ──── */}
       <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
-          <span style={{ fontSize: 15, fontWeight: 700 }}>Taxa de conversão</span>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <BotaoGran v="diario" label="Diário" />
-            <BotaoGran v="semanal" label="Semanal" />
-            <BotaoGran v="mensal" label="Mensal" />
-          </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 8 }}>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>Evolução do ticket médio (por evento)</span>
+          {seletorGranularidade}
         </div>
+        <div style={{ fontSize: 11, color: '#9a9c9f', marginBottom: 14 }}>Clique numa barra pra ver os pacotes vendidos naquele período.</div>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 200, overflowX: 'auto', paddingBottom: 8 }}>
-          {linhas.map(l => (
-            <div key={l.periodo} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 40, flex: '1 0 40px' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#3B6D11', fontFamily: 'DM Mono, monospace' }}>{l.taxa}%</span>
-              <div style={{ width: '100%', maxWidth: 26, height: `${Math.max((l.taxa/maxTaxa)*140,4)}px`, background: '#3B6D11', borderRadius: '4px 4px 0 0' }} />
-              <span style={{ fontSize: 10, color: '#9a9c9f', textAlign: 'center' }}>{l.label}</span>
+          {comTicket.map(l => (
+            <div key={l.periodo} onClick={() => setSelecionado(l.periodo)}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 46, flex: '1 0 46px', cursor: 'pointer' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#8a7405', fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(l.ticketMedio)}</span>
+              <div style={{
+                width: '100%', maxWidth: 30, height: `${Math.max((l.ticketMedio/maxTicket)*140,4)}px`,
+                background: l.periodo === periodoAtivo ? '#8a7405' : '#D9B504',
+                border: l.periodo === periodoAtivo ? '2px solid #5a4b03' : 'none',
+                borderRadius: '4px 4px 0 0',
+              }} />
+              <span style={{ fontSize: 10, color: l.periodo === periodoAtivo ? '#0D0F14' : '#9a9c9f', fontWeight: l.periodo === periodoAtivo ? 700 : 400, textAlign: 'center' }}>{l.label}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Pacotes do período selecionado */}
+        <div style={{ marginTop: 20, paddingTop: 16, borderTop: '0.5px solid #E8E8E2' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Pacotes vendidos {linhaAtiva ? `· ${linhaAtiva.label}` : ''}</div>
+          {pacotesAtivos.length === 0 && <div style={{ fontSize: 13, color: '#9a9c9f' }}>Nenhum pacote vendido nesse período.</div>}
+          {pacotesAtivos.map(p => (
+            <div key={p.pacote} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#3a3c3f', width: 160, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.pacote}</div>
+              <div style={{ flex: 1, height: 22, background: '#F5F5F2', borderRadius: 5, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${Math.max((p.qtd/maxPacoteQtd)*100,5)}%`, background: '#7d5ac9', borderRadius: 5, display: 'flex', alignItems: 'center', paddingLeft: 8, fontSize: 11, fontWeight: 700, color: '#fff', fontFamily: 'DM Mono, monospace' }}>{p.qtd}x</div>
+              </div>
+              <div style={{ fontSize: 12, fontFamily: 'DM Mono, monospace', color: '#5a5c5f', width: 90, textAlign: 'right', flexShrink: 0 }}>{fmtBRLCompacto(p.receita)}</div>
+              <div style={{ fontSize: 11, fontFamily: 'DM Mono, monospace', color: '#9a9c9f', width: 80, textAlign: 'right', flexShrink: 0 }}>tkt {fmtBRLCompacto(p.ticketMedio)}</div>
             </div>
           ))}
         </div>
@@ -203,12 +269,10 @@ export default function OnePage({ filtros }: { filtros: any }) {
     </div>
   )
 
-  const { atual, mesAnterior, anoAnterior, serieFaturamento, anos, funil, meta, tendencia, pacotes } = dados
+  const { atual, mesAnterior, anoAnterior, anos, funil, meta, tendencia } = dados
   const nomeMesAtual = nomesMesesLong[parseInt(atual.mes.split('-')[1])-1]
 
-  const maxTicket = Math.max(...serieFaturamento.map(s => s.ticketMedio), 1)
   const maxFunil = Math.max(...funil.map(f => f.count), 1)
-  const maxPacoteQtd = Math.max(...pacotes.map(p => p.qtd), 1)
 
   return (
     <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -367,53 +431,21 @@ export default function OnePage({ filtros }: { filtros: any }) {
         corAnterior="#a8c8e8"
       />
 
-      {/* ── Leads e conversão, com granularidade ──────────────── */}
-      <PainelLeadsConversao filtros={filtros} mesFiltro={mesFiltro} />
+      {/* ── Leads, conversão e ticket médio (com pacotes), granularidade ── */}
+      <PainelDesempenho filtros={filtros} mesFiltro={mesFiltro} />
 
-      {/* ── Pacotes vendidos (o que compõe o ticket médio) ────── */}
+      {/* ── Funil ──────────────────────────────────────────── */}
       <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 20 }}>Pacotes vendidos · {nomeMesAtual} (competência)</div>
-        {pacotes.length === 0 && <div style={{ fontSize: 13, color: '#9a9c9f' }}>Nenhum pacote vendido no período.</div>}
-        {pacotes.map(p => (
-          <div key={p.pacote} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#3a3c3f', width: 160, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.pacote}</div>
-            <div style={{ flex: 1, height: 24, background: '#F5F5F2', borderRadius: 5, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${Math.max((p.qtd/maxPacoteQtd)*100,5)}%`, background: '#7d5ac9', borderRadius: 5, display: 'flex', alignItems: 'center', paddingLeft: 8, fontSize: 12, fontWeight: 700, color: '#fff', fontFamily: 'DM Mono, monospace' }}>{p.qtd}x</div>
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 20 }}>Funil (aberto agora)</div>
+        {funil.length === 0 && <div style={{ fontSize: 13, color: '#9a9c9f' }}>Sem deals em aberto no filtro atual.</div>}
+        {funil.map(f => (
+          <div key={f.etapa} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#3a3c3f', width: 125, textAlign: 'right', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.etapa}</div>
+            <div style={{ flex: 1, height: 26, background: '#F5F5F2', borderRadius: 5, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${Math.max((f.count/maxFunil)*100,5)}%`, background: '#97A624', borderRadius: 5, display: 'flex', alignItems: 'center', paddingLeft: 8, fontSize: 13, fontWeight: 700, color: '#fff', fontFamily: 'DM Mono, monospace' }}>{f.count}</div>
             </div>
-            <div style={{ fontSize: 12, fontFamily: 'DM Mono, monospace', color: '#5a5c5f', width: 90, textAlign: 'right', flexShrink: 0 }}>{fmtBRLCompacto(p.receita)}</div>
-            <div style={{ fontSize: 11, fontFamily: 'DM Mono, monospace', color: '#9a9c9f', width: 80, textAlign: 'right', flexShrink: 0 }}>tkt {fmtBRLCompacto(p.ticketMedio)}</div>
           </div>
         ))}
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 14 }}>
-        {/* ── Evolução ticket médio ──────────────────────────── */}
-        <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 20 }}>Evolução do ticket médio (por evento)</div>
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 220, overflowX: 'auto', paddingBottom: 8 }}>
-            {serieFaturamento.map(s => (
-              <div key={s.periodo} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 62, flex: '1 0 62px' }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#8a7405', fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(s.ticketMedio)}</span>
-                <div style={{ width: '100%', maxWidth: 44, height: `${Math.max((s.ticketMedio/maxTicket)*150,6)}px`, background: '#D9B504', borderRadius: '5px 5px 0 0', minHeight: 6 }} />
-                <span style={{ fontSize: 12, fontWeight: 600, color: '#5a5c5f' }}>{s.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ── Funil compacto ─────────────────────────────────── */}
-        <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 20 }}>Funil (aberto agora)</div>
-          {funil.length === 0 && <div style={{ fontSize: 13, color: '#9a9c9f' }}>Sem deals em aberto no filtro atual.</div>}
-          {funil.map(f => (
-            <div key={f.etapa} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#3a3c3f', width: 125, textAlign: 'right', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.etapa}</div>
-              <div style={{ flex: 1, height: 26, background: '#F5F5F2', borderRadius: 5, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${Math.max((f.count/maxFunil)*100,5)}%`, background: '#97A624', borderRadius: 5, display: 'flex', alignItems: 'center', paddingLeft: 8, fontSize: 13, fontWeight: 700, color: '#fff', fontFamily: 'DM Mono, monospace' }}>{f.count}</div>
-              </div>
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   )
