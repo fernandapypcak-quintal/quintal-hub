@@ -1,8 +1,8 @@
 'use client'
 
 const PAGES = [
-  { id: 'funil',      icon: '📊', label: 'Funil' },
-  { id: 'eventos',    icon: '📋', label: 'Eventos' },
+  { id: 'resumo',     icon: '🏠', label: 'Resumo' },
+  { id: 'calendario', icon: '📅', label: 'Agenda' },
   { id: 'leads',      icon: '📥', label: 'Leads' },
   { id: 'conversoes', icon: '🏆', label: 'Conv.' },
   { id: 'por_loja',   icon: '🏪', label: 'Lojas' },
