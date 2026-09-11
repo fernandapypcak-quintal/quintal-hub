@@ -43,6 +43,7 @@ export default function Conversoes({ filtros }: { filtros: any }) {
   const [customInicio, setCustomInicio] = useState(toDateStr(firstOfMonth))
   const [customFim, setCustomFim]       = useState(toDateStr(today))
   const [deals, setDeals]             = useState<Deal[]>([])
+  const [receitaCompetencia, setReceitaCompetencia] = useState<number | null>(null)
   const [loading, setLoading]         = useState(false)
   const [erro, setErro]               = useState<string | null>(null)
   const [fetched, setFetched]         = useState(false)
@@ -54,7 +55,7 @@ export default function Conversoes({ filtros }: { filtros: any }) {
 
   function buscar() {
     if (!inicio || !fim) return
-    setLoading(true); setErro(null); setFetched(false)
+    setLoading(true); setErro(null); setFetched(false); setReceitaCompetencia(null)
     const p = new URLSearchParams({ tipo: 'conversoes', dataInicio: inicio, dataFim: fim, limit: '1000' })
     if (filtros.unidade)  p.set('unidade',  filtros.unidade)
     if (filtros.vendedor) p.set('vendedor', filtros.vendedor)
@@ -63,6 +64,20 @@ export default function Conversoes({ filtros }: { filtros: any }) {
       .then(data => { if (data.erro) throw new Error(data.erro); setDeals(data.deals||[]); setFetched(true) })
       .catch(e => setErro(e.message))
       .finally(() => setLoading(false))
+
+    // Segunda busca: mesma janela de datas, mas por competência (data_evento)
+    // em vez de fechamento (won_time) — pra mostrar as duas visões lado a lado.
+    const pComp = new URLSearchParams({ tipo: 'agenda', dataInicio: inicio, dataFim: fim, status_evento: 'won', limit: '2000' })
+    if (filtros.unidade)  pComp.set('unidade',  filtros.unidade)
+    if (filtros.vendedor) pComp.set('vendedor', filtros.vendedor)
+    fetch(`${GAS_URL}?${pComp}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.erro) return
+        const total = (data.deals || []).reduce((s: number, d: Deal) => s + (parseFloat(String(d.valor||0))||0), 0)
+        setReceitaCompetencia(total)
+      })
+      .catch(() => {})
   }
 
   // Agrupa por won_time
@@ -114,8 +129,9 @@ export default function Conversoes({ filtros }: { filtros: any }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 }}>
             {[
               { label: 'Conversões', value: String(deals.length), sub: `${dias.length} dias`, color: '#3B6D11' },
-              { label: 'Receita total', value: fmtBRL(receitaTotal), sub: 'no período', color: '#97A624' },
-              { label: 'Ticket médio', value: fmtBRL(deals.length ? receitaTotal/deals.length : 0), color: '#185FA5' },
+              { label: 'Receita (fechamento)', value: fmtBRL(receitaTotal), sub: 'won_time no período', color: '#185FA5' },
+              { label: 'Receita (competência)', value: receitaCompetencia === null ? '...' : fmtBRL(receitaCompetencia), sub: 'data_evento no período', color: '#97A624' },
+              { label: 'Ticket médio', value: fmtBRL(deals.length ? receitaTotal/deals.length : 0), color: '#c9855a' },
               { label: 'Total pax', value: paxTotal.toLocaleString('pt-BR'), sub: 'pessoas', color: '#D9B504' },
             ].map(k => (
               <div key={k.label} style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: '14px 18px', borderTop: `3px solid ${k.color}` }}>
