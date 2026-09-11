@@ -37,19 +37,43 @@ function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior }: {
   corAtual: string
   corAnterior: string
 }) {
-  const max = Math.max(
-    ...anos.atual.meses.map(m => m[campo]),
-    ...anos.anterior.meses.map(m => m[campo]),
-    1
+  const todosValores = [...anos.atual.meses.map(m => m[campo]), ...anos.anterior.meses.map(m => m[campo])]
+
+  // Eixo cortado: se o maior valor for um "fora da curva" (bem maior que o
+  // segundo maior), a escala visual usa o segundo maior como teto — senão um
+  // único mês gigante achata todos os outros no gráfico. O valor exato
+  // continua sempre escrito por cima da barra e na tabela; só a ALTURA da
+  // barra que estoura o teto fica cortada (marcada com um "zigue-zague").
+  const ordenados = [...todosValores].sort((a,b) => b-a)
+  const maior = ordenados[0] || 1
+  const segundoMaior = ordenados[1] || maior
+  const teto = (segundoMaior > 0 && maior > segundoMaior * 2.2) ? Math.ceil(segundoMaior * 1.2) : maior
+  const max = Math.max(teto, 1)
+
+  function alturaPx(valor: number) {
+    return Math.max((Math.min(valor, max) / max) * 150, 3)
+  }
+  function estourou(valor: number) {
+    return valor > max
+  }
+
+  const CorteTopo = ({ cor }: { cor: string }) => (
+    <div style={{ width: 24, height: 6, marginBottom: -1, background: `repeating-linear-gradient(-45deg, ${cor}, ${cor} 3px, transparent 3px, transparent 6px)` }} />
   )
+
   return (
     <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 4, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 15, fontWeight: 700 }}>{titulo}</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#5a5c5f' }}><span style={{ width: 11, height: 11, borderRadius: 3, background: corAnterior, display: 'inline-block' }} />{anos.anterior.ano}</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#5a5c5f' }}><span style={{ width: 11, height: 11, borderRadius: 3, background: corAtual, display: 'inline-block' }} />{anos.atual.ano}</span>
       </div>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14, height: 260, overflowX: 'auto', paddingBottom: 8 }}>
+      {teto < maior && (
+        <div style={{ fontSize: 11, color: '#9a9c9f', marginBottom: 16 }}>
+          Escala com corte — barras hachuradas no topo estouram o teto do gráfico (valor exato sempre escrito, e na tabela abaixo).
+        </div>
+      )}
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14, height: 260, overflowX: 'auto', paddingBottom: 8, marginTop: teto < maior ? 0 : 20 }}>
         {anos.atual.meses.map((mAtualMes, i) => {
           const mAnt = anos.anterior.meses[i]
           return (
@@ -57,11 +81,13 @@ function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior }: {
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 5, height: 200 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
                   <span style={{ fontSize: 10, fontWeight: 700, color: '#8a8c8f', fontFamily: 'DM Mono, monospace', marginBottom: 4, whiteSpace: 'nowrap' }}>{fmtBRLCompacto(mAnt[campo])}</span>
-                  <div style={{ width: 24, height: `${Math.max((mAnt[campo]/max)*150,3)}px`, background: corAnterior, borderRadius: '4px 4px 0 0' }} />
+                  {estourou(mAnt[campo]) && <CorteTopo cor={corAnterior} />}
+                  <div style={{ width: 24, height: `${alturaPx(mAnt[campo])}px`, background: corAnterior, borderRadius: '4px 4px 0 0' }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: corAtual, fontFamily: 'DM Mono, monospace', marginBottom: 4, whiteSpace: 'nowrap' }}>{fmtBRLCompacto(mAtualMes[campo])}</span>
-                  <div style={{ width: 24, height: `${Math.max((mAtualMes[campo]/max)*150,3)}px`, background: corAtual, borderRadius: '4px 4px 0 0' }} />
+                  {estourou(mAtualMes[campo]) && <CorteTopo cor={corAtual} />}
+                  <div style={{ width: 24, height: `${alturaPx(mAtualMes[campo])}px`, background: corAtual, borderRadius: '4px 4px 0 0' }} />
                 </div>
               </div>
               <span style={{ fontSize: 13, fontWeight: 600, color: '#3a3c3f', textAlign: 'center' }}>{mAtualMes.label}</span>
@@ -175,7 +201,7 @@ function PainelDesempenho({ filtros, mesFiltro }: { filtros: any; mesFiltro: str
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
             <span style={{ fontSize: 15, fontWeight: 700 }}>Leads que entram</span>
