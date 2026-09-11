@@ -29,6 +29,49 @@ function hojeYm() {
   return `${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,'0')}`
 }
 
+function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior }: {
+  titulo: string
+  campo: 'receitaCompetencia' | 'receitaFechamento'
+  anos: { atual: { ano: number; meses: any[] }; anterior: { ano: number; meses: any[] } }
+  corAtual: string
+  corAnterior: string
+}) {
+  const max = Math.max(
+    ...anos.atual.meses.map(m => m[campo]),
+    ...anos.anterior.meses.map(m => m[campo]),
+    1
+  )
+  return (
+    <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 20 }}>
+        <span style={{ fontSize: 15, fontWeight: 700 }}>{titulo}</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#5a5c5f' }}><span style={{ width: 11, height: 11, borderRadius: 3, background: corAnterior, display: 'inline-block' }} />{anos.anterior.ano}</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#5a5c5f' }}><span style={{ width: 11, height: 11, borderRadius: 3, background: corAtual, display: 'inline-block' }} />{anos.atual.ano}</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14, height: 260, overflowX: 'auto', paddingBottom: 8 }}>
+        {anos.atual.meses.map((mAtualMes, i) => {
+          const mAnt = anos.anterior.meses[i]
+          return (
+            <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 78, flex: '1 0 78px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 5, height: 200 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#8a8c8f', fontFamily: 'DM Mono, monospace', marginBottom: 4, whiteSpace: 'nowrap' }}>{fmtBRLCompacto(mAnt[campo])}</span>
+                  <div style={{ width: 24, height: `${Math.max((mAnt[campo]/max)*150,3)}px`, background: corAnterior, borderRadius: '4px 4px 0 0' }} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: corAtual, fontFamily: 'DM Mono, monospace', marginBottom: 4, whiteSpace: 'nowrap' }}>{fmtBRLCompacto(mAtualMes[campo])}</span>
+                  <div style={{ width: 24, height: `${Math.max((mAtualMes[campo]/max)*150,3)}px`, background: corAtual, borderRadius: '4px 4px 0 0' }} />
+                </div>
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#3a3c3f', textAlign: 'center' }}>{mAtualMes.label}</span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function OnePage({ filtros }: { filtros: any }) {
   // Usa o MESMO filtro de ano/mês que já existe no topo do dashboard —
   // sem seletor duplicado aqui. Se "Todos os meses" estiver selecionado lá em
@@ -46,10 +89,9 @@ export default function OnePage({ filtros }: { filtros: any }) {
     </div>
   )
 
-  const { atual, mesAnterior, anoAnterior, serieFaturamento, funil, meta } = dados
+  const { atual, mesAnterior, anoAnterior, serieFaturamento, anos, funil, meta } = dados
   const nomeMesAtual = nomesMesesLong[parseInt(atual.mes.split('-')[1])-1]
 
-  const maxFat = Math.max(...serieFaturamento.map(s => Math.max(s.receitaCompetencia, s.receitaFechamento)), 1)
   const maxTicket = Math.max(...serieFaturamento.map(s => s.ticketMedio), 1)
   const maxFunil = Math.max(...funil.map(f => f.count), 1)
 
@@ -175,31 +217,23 @@ export default function OnePage({ filtros }: { filtros: any }) {
         </div>
       )}
 
-      {/* ── Faturamento mês a mês: competência x fechamento ─── */}
-      <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 20 }}>
-          <span style={{ fontSize: 15, fontWeight: 700 }}>Faturamento mês a mês</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#5a5c5f' }}><span style={{ width: 11, height: 11, borderRadius: 3, background: '#97A624', display: 'inline-block' }} />Competência</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#5a5c5f' }}><span style={{ width: 11, height: 11, borderRadius: 3, background: '#185FA5', display: 'inline-block' }} />Fechamento</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, height: 260, overflowX: 'auto', paddingBottom: 8 }}>
-          {serieFaturamento.map(s => (
-            <div key={s.periodo} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 84, flex: '1 0 84px' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 200 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#3B6D11', fontFamily: 'DM Mono, monospace', marginBottom: 4, whiteSpace: 'nowrap' }}>{fmtBRLCompacto(s.receitaCompetencia)}</span>
-                  <div style={{ width: 28, height: `${Math.max((s.receitaCompetencia/maxFat)*150,4)}px`, background: '#97A624', borderRadius: '4px 4px 0 0' }} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#185FA5', fontFamily: 'DM Mono, monospace', marginBottom: 4, whiteSpace: 'nowrap' }}>{fmtBRLCompacto(s.receitaFechamento)}</span>
-                  <div style={{ width: 28, height: `${Math.max((s.receitaFechamento/maxFat)*150,4)}px`, background: '#185FA5', borderRadius: '4px 4px 0 0' }} />
-                </div>
-              </div>
-              <span style={{ fontSize: 13, fontWeight: 600, color: '#3a3c3f', textAlign: 'center' }}>{s.label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* ── Faturamento por Competência: ano atual x ano anterior ── */}
+      <GraficoAnual
+        titulo={`Faturamento por Competência · ${anos.atual.ano} x ${anos.anterior.ano}`}
+        campo="receitaCompetencia"
+        anos={anos}
+        corAtual="#3B6D11"
+        corAnterior="#c3d89a"
+      />
+
+      {/* ── Faturamento por Fechamento: ano atual x ano anterior ─── */}
+      <GraficoAnual
+        titulo={`Faturamento por Fechamento · ${anos.atual.ano} x ${anos.anterior.ano}`}
+        campo="receitaFechamento"
+        anos={anos}
+        corAtual="#185FA5"
+        corAnterior="#a8c8e8"
+      />
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 14 }}>
         {/* ── Evolução ticket médio ──────────────────────────── */}
