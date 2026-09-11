@@ -145,6 +145,44 @@ export function useLeadsDiarios(filtros: Filtros, dataInicio: string, dataFim: s
   return { leads, loading, erro }
 }
 
+export type PeriodoMes = {
+  mes: string; leads: number; won: number; taxaConversao: number
+  receitaFechamento: number; receitaCompetencia: number; ticketMedio: number
+}
+export type SerieFaturamento = PeriodoMes & { periodo: string; label: string }
+export type Meta = {
+  mes: string; faixa1: number; faixa2: number; faixa3: number
+  atingido: number; faixaAtual: number
+  percentualFaixa1: number; percentualFaixa3: number
+} | null
+export type OnePageData = {
+  atual: PeriodoMes; mesAnterior: PeriodoMes; anoAnterior: PeriodoMes
+  serieFaturamento: SerieFaturamento[]
+  funil: { etapa: string; count: number }[]
+  meta: Meta
+}
+
+export function useOnePage(filtros: Pick<Filtros, 'unidade' | 'vendedor'>) {
+  const [dados, setDados] = useState<OnePageData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [erro, setErro] = useState<string | null>(null)
+
+  useEffect(() => {
+    setLoading(true); setErro(null)
+    const p = new URLSearchParams({ tipo: 'onepage' })
+    if (filtros.unidade)  p.set('unidade',  filtros.unidade)
+    if (filtros.vendedor) p.set('vendedor', filtros.vendedor)
+    fetch(`${GAS_URL}?${p}`)
+      .then(r => r.json())
+      .then(data => { if (data.erro) throw new Error(data.erro); setDados(data) })
+      .catch(e => setErro(e.message))
+      .finally(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtros.unidade, filtros.vendedor])
+
+  return { dados, loading, erro }
+}
+
 export function useVendedores() {
   const [vendedores, setVendedores] = useState<string[]>([])
   useEffect(() => {
