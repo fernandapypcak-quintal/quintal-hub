@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { useOnePage } from '../../useComercial'
 
 function fmtBRLCompacto(v: number) {
@@ -68,6 +69,119 @@ function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior }: {
           )
         })}
       </div>
+
+      {/* Tabela — números exatos, sempre legíveis mesmo quando um mês fora
+          da curva (ex: um Dezembro gigante) esmaga as barras dos outros */}
+      <div style={{ marginTop: 18, overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid #E8E8E2' }}>
+              <th style={{ textAlign: 'left', padding: '6px 8px', color: '#9a9c9f', fontWeight: 600 }}>Mês</th>
+              <th style={{ textAlign: 'right', padding: '6px 8px', color: '#9a9c9f', fontWeight: 600 }}>{anos.anterior.ano}</th>
+              <th style={{ textAlign: 'right', padding: '6px 8px', color: '#9a9c9f', fontWeight: 600 }}>{anos.atual.ano}</th>
+              <th style={{ textAlign: 'right', padding: '6px 8px', color: '#9a9c9f', fontWeight: 600 }}>Var.</th>
+            </tr>
+          </thead>
+          <tbody>
+            {anos.atual.meses.map((mAtualMes, i) => {
+              const mAnt = anos.anterior.meses[i]
+              const d = delta(mAtualMes[campo], mAnt[campo])
+              return (
+                <tr key={i} style={{ borderBottom: '0.5px solid #F5F5F2' }}>
+                  <td style={{ padding: '6px 8px', fontWeight: 600, color: '#3a3c3f' }}>{mAtualMes.label}</td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'DM Mono, monospace', color: '#8a8c8f' }}>{fmtBRLCompacto(mAnt[campo])}</td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'DM Mono, monospace', fontWeight: 700, color: corAtual }}>{fmtBRLCompacto(mAtualMes[campo])}</td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right' }}>{d && <span style={{ color: d.up ? '#3B6D11' : '#a32d2d', fontWeight: 600 }}>{d.up ? '↑' : '↓'} {d.pct}%</span>}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+const GAS_URL = '/api/pipedrive'
+
+type LinhaGranular = { periodo: string; label: string; leads: number; fechados: number; taxa: number; receita: number }
+type DadosGranular = { mensal: LinhaGranular[]; semanal: LinhaGranular[]; diario: LinhaGranular[] }
+
+function PainelLeadsConversao({ filtros, mesFiltro }: { filtros: any; mesFiltro: string }) {
+  const [dados, setDados] = useState<DadosGranular | null>(null)
+  const [granularidade, setGranularidade] = useState<'mensal' | 'semanal' | 'diario'>('diario')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    const p = new URLSearchParams({ tipo: 'taxa_conversao', mes_filtro: mesFiltro })
+    if (filtros.unidade)  p.set('unidade',  filtros.unidade)
+    if (filtros.vendedor) p.set('vendedor', filtros.vendedor)
+    fetch(`${GAS_URL}?${p}`)
+      .then(r => r.json())
+      .then(data => { if (!data.erro) setDados(data) })
+      .finally(() => setLoading(false))
+  }, [filtros.unidade, filtros.vendedor, mesFiltro])
+
+  if (loading || !dados) return (
+    <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20, textAlign: 'center', color: '#9a9c9f', fontSize: 13 }}>
+      Carregando leads e conversão...
+    </div>
+  )
+
+  const linhas = [...(dados[granularidade] || [])].reverse().slice(-16)
+  const maxLeads = Math.max(...linhas.map(l => l.leads), 1)
+  const maxTaxa = Math.max(...linhas.map(l => l.taxa), 1)
+
+  const BotaoGran = ({ v, label }: { v: typeof granularidade; label: string }) => (
+    <button onClick={() => setGranularidade(v)}
+      style={{ padding: '5px 12px', borderRadius: 20, border: '0.5px solid', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+        background: granularidade===v ? '#0D0F14' : '#fff', color: granularidade===v ? '#97A624' : '#5a5c5f', borderColor: granularidade===v ? '#0D0F14' : '#E8E8E2' }}>
+      {label}
+    </button>
+  )
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>Leads que entram</span>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <BotaoGran v="diario" label="Diário" />
+            <BotaoGran v="semanal" label="Semanal" />
+            <BotaoGran v="mensal" label="Mensal" />
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 200, overflowX: 'auto', paddingBottom: 8 }}>
+          {linhas.map(l => (
+            <div key={l.periodo} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 40, flex: '1 0 40px' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#185FA5', fontFamily: 'DM Mono, monospace' }}>{l.leads}</span>
+              <div style={{ width: '100%', maxWidth: 26, height: `${Math.max((l.leads/maxLeads)*140,4)}px`, background: '#185FA5', borderRadius: '4px 4px 0 0' }} />
+              <span style={{ fontSize: 10, color: '#9a9c9f', textAlign: 'center' }}>{l.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>Taxa de conversão</span>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <BotaoGran v="diario" label="Diário" />
+            <BotaoGran v="semanal" label="Semanal" />
+            <BotaoGran v="mensal" label="Mensal" />
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 200, overflowX: 'auto', paddingBottom: 8 }}>
+          {linhas.map(l => (
+            <div key={l.periodo} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 40, flex: '1 0 40px' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#3B6D11', fontFamily: 'DM Mono, monospace' }}>{l.taxa}%</span>
+              <div style={{ width: '100%', maxWidth: 26, height: `${Math.max((l.taxa/maxTaxa)*140,4)}px`, background: '#3B6D11', borderRadius: '4px 4px 0 0' }} />
+              <span style={{ fontSize: 10, color: '#9a9c9f', textAlign: 'center' }}>{l.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
@@ -89,11 +203,12 @@ export default function OnePage({ filtros }: { filtros: any }) {
     </div>
   )
 
-  const { atual, mesAnterior, anoAnterior, serieFaturamento, anos, funil, meta } = dados
+  const { atual, mesAnterior, anoAnterior, serieFaturamento, anos, funil, meta, tendencia, pacotes } = dados
   const nomeMesAtual = nomesMesesLong[parseInt(atual.mes.split('-')[1])-1]
 
   const maxTicket = Math.max(...serieFaturamento.map(s => s.ticketMedio), 1)
   const maxFunil = Math.max(...funil.map(f => f.count), 1)
+  const maxPacoteQtd = Math.max(...pacotes.map(p => p.qtd), 1)
 
   return (
     <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -103,20 +218,37 @@ export default function OnePage({ filtros }: { filtros: any }) {
         <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: '16px 18px', borderTop: '3px solid #97A624' }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Faturamento · Competência</div>
           <div style={{ fontSize: 26, fontWeight: 800, fontFamily: 'DM Mono, monospace', color: '#3B6D11', lineHeight: 1, marginBottom: 8 }}>{fmtBRLCompacto(atual.receitaCompetencia)}</div>
-          <div style={{ fontSize: 11, color: '#9a9c9f' }}>Eventos que acontecem em {nomeMesAtual.toLowerCase()}</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+            <DeltaTag atual={atual.receitaCompetencia} ant={mesAnterior.receitaCompetencia} label="vs mês ant." />
+            <DeltaTag atual={atual.receitaCompetencia} ant={anoAnterior.receitaCompetencia} label="vs ano ant." />
+          </div>
+          {tendencia.ehMesCorrente ? (
+            <div style={{ fontSize: 11, color: '#9a9c9f' }}>Tendência do mês: <strong style={{ color: '#3B6D11' }}>{fmtBRLCompacto(tendencia.projecaoCompetencia)}</strong></div>
+          ) : (
+            <div style={{ fontSize: 11, color: '#9a9c9f' }}>Eventos que acontecem em {nomeMesAtual.toLowerCase()}</div>
+          )}
         </div>
 
         <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: '16px 18px', borderTop: '3px solid #185FA5' }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Faturamento · Fechamento</div>
           <div style={{ fontSize: 26, fontWeight: 800, fontFamily: 'DM Mono, monospace', color: '#185FA5', lineHeight: 1, marginBottom: 8 }}>{fmtBRLCompacto(atual.receitaFechamento)}</div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
             <DeltaTag atual={atual.receitaFechamento} ant={mesAnterior.receitaFechamento} label="vs mês ant." />
             <DeltaTag atual={atual.receitaFechamento} ant={anoAnterior.receitaFechamento} label="vs ano ant." />
           </div>
+          {tendencia.ehMesCorrente && (
+            <div style={{ fontSize: 11, color: '#9a9c9f' }}>Tendência do mês: <strong style={{ color: '#185FA5' }}>{fmtBRLCompacto(tendencia.projecaoFechamento)}</strong></div>
+          )}
         </div>
       </div>
 
+
       {/* ── KPIs principais ────────────────────────────────── */}
+      {!tendencia.ehMesCorrente ? null : (
+        <div style={{ fontSize: 11, color: '#9a9c9f' }}>
+          Comparações "vs mês/ano anterior" usam só os primeiros {tendencia.diasDecorridos} dias desses períodos, pra comparar com o mesmo tanto de dias que já passou em {nomeMesAtual.toLowerCase()}.
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
         <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: '14px 16px', borderTop: '3px solid #97A624' }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Leads</div>
@@ -177,7 +309,7 @@ export default function OnePage({ filtros }: { filtros: any }) {
       {meta && (
         <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 18 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>Meta de faturamento (fechamento) · {nomeMesAtual}</span>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>Meta de faturamento (competência) · {nomeMesAtual}</span>
             <span style={{ fontSize: 12, color: '#9a9c9f' }}>Fechado até agora: <strong style={{ color: '#0D0F14' }}>{fmtBRLCompacto(meta.atingido)}</strong></span>
           </div>
           <div style={{ position: 'relative', height: 28, background: '#F5F5F2', borderRadius: 8, overflow: 'hidden' }}>
@@ -234,6 +366,25 @@ export default function OnePage({ filtros }: { filtros: any }) {
         corAtual="#185FA5"
         corAnterior="#a8c8e8"
       />
+
+      {/* ── Leads e conversão, com granularidade ──────────────── */}
+      <PainelLeadsConversao filtros={filtros} mesFiltro={mesFiltro} />
+
+      {/* ── Pacotes vendidos (o que compõe o ticket médio) ────── */}
+      <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 20 }}>Pacotes vendidos · {nomeMesAtual} (competência)</div>
+        {pacotes.length === 0 && <div style={{ fontSize: 13, color: '#9a9c9f' }}>Nenhum pacote vendido no período.</div>}
+        {pacotes.map(p => (
+          <div key={p.pacote} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#3a3c3f', width: 160, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.pacote}</div>
+            <div style={{ flex: 1, height: 24, background: '#F5F5F2', borderRadius: 5, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${Math.max((p.qtd/maxPacoteQtd)*100,5)}%`, background: '#7d5ac9', borderRadius: 5, display: 'flex', alignItems: 'center', paddingLeft: 8, fontSize: 12, fontWeight: 700, color: '#fff', fontFamily: 'DM Mono, monospace' }}>{p.qtd}x</div>
+            </div>
+            <div style={{ fontSize: 12, fontFamily: 'DM Mono, monospace', color: '#5a5c5f', width: 90, textAlign: 'right', flexShrink: 0 }}>{fmtBRLCompacto(p.receita)}</div>
+            <div style={{ fontSize: 11, fontFamily: 'DM Mono, monospace', color: '#9a9c9f', width: 80, textAlign: 'right', flexShrink: 0 }}>tkt {fmtBRLCompacto(p.ticketMedio)}</div>
+          </div>
+        ))}
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 14 }}>
         {/* ── Evolução ticket médio ──────────────────────────── */}
