@@ -9,7 +9,6 @@ import Calendario from './components/pages/Calendario'
 import Leads from './components/pages/Leads'
 import Conversoes from './components/pages/Conversoes'
 import PorLoja from './components/pages/PorLoja'
-import TaxaConversao from './components/pages/TaxaConversao'
 import { useVendedores } from './useComercial'
 import { allowedNativeLabels } from '@/lib/units'
 
@@ -27,7 +26,6 @@ const PAGES: Record<string, React.ComponentType<any>> = {
   leads:      Leads,
   conversoes: Conversoes,
   por_loja:   PorLoja,
-  taxa:       TaxaConversao,
 }
 
 const currentYear = new Date().getFullYear()
@@ -49,7 +47,7 @@ export default function ComercialClientApp({ allowedLojas = '*' }: { allowedLoja
     status:   '' as '' | 'open' | 'won' | 'lost',
     unidade:  podeVerTodas ? '' : (UNIDADES[0]?.id ?? ''),
     ano:      String(currentYear),
-    mes:      '',
+    mes:      String(new Date().getMonth() + 1).padStart(2, '0'),
     vendedor: '',
   })
 
