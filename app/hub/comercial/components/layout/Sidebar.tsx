@@ -6,7 +6,6 @@ const PAGES = [
   { id: 'leads',      icon: '📥', label: 'Leads diários' },
   { id: 'conversoes', icon: '🏆', label: 'Conversões' },
   { id: 'por_loja',   icon: '🏪', label: 'Por loja' },
-  { id: 'taxa',        icon: '📈', label: 'Taxa de conversão' },
 ]
 
 export default function Sidebar({ activePage, onPageChange }: {
