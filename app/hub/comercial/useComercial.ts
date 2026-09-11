@@ -151,6 +151,7 @@ export type PeriodoMes = {
   pax: number; ticketMedio: number; ticketMedioPax: number
 }
 export type SerieFaturamento = PeriodoMes & { periodo: string; label: string }
+export type AnoCompleto = { ano: number; meses: (PeriodoMes & { mes: number; label: string })[] }
 export type Meta = {
   mes: string; faixa1: number; faixa2: number; faixa3: number
   atingido: number; faixaAtual: number; mesFechado: boolean
@@ -160,6 +161,7 @@ export type Meta = {
 export type OnePageData = {
   atual: PeriodoMes; mesAnterior: PeriodoMes; anoAnterior: PeriodoMes
   serieFaturamento: SerieFaturamento[]
+  anos: { atual: AnoCompleto; anterior: AnoCompleto }
   funil: { etapa: string; count: number }[]
   meta: Meta
 }
