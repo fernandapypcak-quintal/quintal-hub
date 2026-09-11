@@ -65,9 +65,15 @@ export default function Conversoes({ filtros }: { filtros: any }) {
       .catch(e => setErro(e.message))
       .finally(() => setLoading(false))
 
-    // Segunda busca: mesma janela de datas, mas por competência (data_evento)
-    // em vez de fechamento (won_time) — pra mostrar as duas visões lado a lado.
-    const pComp = new URLSearchParams({ tipo: 'agenda', dataInicio: inicio, dataFim: fim, status_evento: 'won', limit: '2000' })
+    // Segunda busca: competência (data_evento) — usa o(s) MÊS(ES) CHEIO(S)
+    // cobertos pela janela de fechamento selecionada, não os mesmos dias
+    // exatos. Assim "Este mês" mostra a competência do mês inteiro, batendo
+    // com o card de Competência do Resumo (que também é sempre mês cheio).
+    const mesInicioCompetencia = inicio.substring(0,7) + '-01'
+    const [anoFimComp, mesFimComp] = fim.substring(0,7).split('-').map(Number)
+    const ultimoDiaFim = new Date(anoFimComp, mesFimComp, 0).getDate()
+    const fimCompetencia = fim.substring(0,7) + '-' + String(ultimoDiaFim).padStart(2,'0')
+    const pComp = new URLSearchParams({ tipo: 'agenda', dataInicio: mesInicioCompetencia, dataFim: fimCompetencia, status_evento: 'won', limit: '2000' })
     if (filtros.unidade)  pComp.set('unidade',  filtros.unidade)
     if (filtros.vendedor) pComp.set('vendedor', filtros.vendedor)
     fetch(`${GAS_URL}?${pComp}`)
@@ -130,7 +136,7 @@ export default function Conversoes({ filtros }: { filtros: any }) {
             {[
               { label: 'Conversões', value: String(deals.length), sub: `${dias.length} dias`, color: '#3B6D11' },
               { label: 'Receita (fechamento)', value: fmtBRL(receitaTotal), sub: 'won_time no período', color: '#185FA5' },
-              { label: 'Receita (competência)', value: receitaCompetencia === null ? '...' : fmtBRL(receitaCompetencia), sub: 'data_evento no período', color: '#97A624' },
+              { label: 'Receita (competência)', value: receitaCompetencia === null ? '...' : fmtBRL(receitaCompetencia), sub: 'mês(es) cheio(s) do período', color: '#97A624' },
               { label: 'Ticket médio', value: fmtBRL(deals.length ? receitaTotal/deals.length : 0), color: '#c9855a' },
               { label: 'Total pax', value: paxTotal.toLocaleString('pt-BR'), sub: 'pessoas', color: '#D9B504' },
             ].map(k => (
