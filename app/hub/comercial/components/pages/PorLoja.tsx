@@ -48,7 +48,7 @@ function PainelPorLojaDetalhe({ filtros }: { filtros: any }) {
 
       {lojas.map(l => {
         const isExp = expandida === l.loja
-        const maxEvolucao = Math.max(...l.evolucaoMensal.map((e: any) => e.receita), 1)
+        const maxEvolucao = Math.max(...l.evolucaoMensal.map((e: any) => Math.max(e.receita, e.receitaCompetencia)), 1)
         return (
           <div key={l.loja} style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderLeft: '4px solid #97A624', borderRadius: 14, overflow: 'hidden' }}>
             <div style={{ padding: '16px 20px', cursor: 'pointer' }} onClick={() => setExpandida(isExp ? null : l.loja)}>
@@ -58,11 +58,15 @@ function PainelPorLojaDetalhe({ filtros }: { filtros: any }) {
                   <div style={{ fontSize: 22, fontWeight: 800, fontFamily: 'DM Mono, monospace', color: '#3B6D11' }}>{fmtBRLCompacto(l.realAtual)}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 10, color: '#9a9c9f', marginBottom: 3 }}>YoY {ehMesCorrente ? `(dia ${diaCorte})` : ''}</div>
+                  <div style={{ fontSize: 10, color: '#9a9c9f', marginBottom: 3 }}>YoY (fech.) {ehMesCorrente ? `dia ${diaCorte}` : ''}</div>
                   <VarBadge v={l.yoy} />
                 </div>
                 <div>
-                  <div style={{ fontSize: 10, color: '#9a9c9f', marginBottom: 3 }}>Tend Fat</div>
+                  <div style={{ fontSize: 10, color: '#9a9c9f', marginBottom: 3 }}>YoY (comp.)</div>
+                  <VarBadge v={l.yoyCompetencia} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, color: '#9a9c9f', marginBottom: 3 }}>Tend Fat (fech.)</div>
                   <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'DM Mono, monospace', color: '#185FA5' }}>{fmtBRLCompacto(l.tendFat)}</div>
                 </div>
                 <div>
@@ -70,7 +74,7 @@ function PainelPorLojaDetalhe({ filtros }: { filtros: any }) {
                   <VarBadge v={l.tendVsAA} />
                 </div>
                 <div>
-                  <div style={{ fontSize: 10, color: '#9a9c9f', marginBottom: 3 }}>Peso</div>
+                  <div style={{ fontSize: 10, color: '#9a9c9f', marginBottom: 3 }}>Peso (fech.)</div>
                   <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'DM Mono, monospace' }}>{l.peso}%</div>
                 </div>
                 <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'flex-end', gap: 3, height: 40 }}>
@@ -86,22 +90,32 @@ function PainelPorLojaDetalhe({ filtros }: { filtros: any }) {
                 <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 16 }}>
                   <div><div style={{ fontSize: 10, color: '#9a9c9f' }}>Faturamento (fechamento)</div><div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'DM Mono, monospace', color: '#185FA5' }}>{fmtBRLCompacto(l.realAtual)}</div></div>
                   <div><div style={{ fontSize: 10, color: '#9a9c9f' }}>Faturamento (competência)</div><div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'DM Mono, monospace', color: '#3B6D11' }}>{fmtBRLCompacto(l.receitaCompetencia)}</div></div>
-                  <div><div style={{ fontSize: 10, color: '#9a9c9f' }}>Fechamentos no mês</div><div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'DM Mono, monospace' }}>{l.won}</div></div>
-                  <div><div style={{ fontSize: 10, color: '#9a9c9f' }}>Ticket médio</div><div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(l.ticketMedio)}</div></div>
+                  <div><div style={{ fontSize: 10, color: '#9a9c9f' }}>Fechamentos (fech.)</div><div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'DM Mono, monospace' }}>{l.won}</div></div>
+                  <div><div style={{ fontSize: 10, color: '#9a9c9f' }}>Eventos (competência)</div><div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'DM Mono, monospace' }}>{l.wonCompetencia}</div></div>
+                  <div><div style={{ fontSize: 10, color: '#9a9c9f' }}>Ticket médio (fech.)</div><div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(l.ticketMedio)}</div></div>
+                  <div><div style={{ fontSize: 10, color: '#9a9c9f' }}>Ticket médio (comp.)</div><div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(l.ticketMedioCompetencia)}</div></div>
                 </div>
-                <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 20 }}>
-                  <div>
-                    <div style={{ fontSize: 10, color: '#9a9c9f' }}>vs mês anterior (mesmo período)</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(l.realMesAnterior)}</span>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginBottom: 20 }}>
+                  <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 10, padding: '10px 14px' }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', marginBottom: 8 }}>vs mês anterior</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <span style={{ fontSize: 11, color: '#5a5c5f' }}>Fechamento: {fmtBRLCompacto(l.realMesAnterior)}</span>
                       <VarBadge v={l.momVariacao} />
                     </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 11, color: '#5a5c5f' }}>Competência: {fmtBRLCompacto(l.receitaCompetenciaMesAnt)}</span>
+                      <VarBadge v={l.momCompetencia} />
+                    </div>
                   </div>
-                  <div>
-                    <div style={{ fontSize: 10, color: '#9a9c9f' }}>vs ano anterior (mesmo período)</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(l.realAnoAnterior)}</span>
+                  <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 10, padding: '10px 14px' }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', marginBottom: 8 }}>vs ano anterior</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <span style={{ fontSize: 11, color: '#5a5c5f' }}>Fechamento: {fmtBRLCompacto(l.realAnoAnterior)}</span>
                       <VarBadge v={l.yoy} />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 11, color: '#5a5c5f' }}>Competência: {fmtBRLCompacto(l.receitaCompetenciaAnoAnt)}</span>
+                      <VarBadge v={l.yoyCompetencia} />
                     </div>
                   </div>
                 </div>
@@ -127,12 +141,24 @@ function PainelPorLojaDetalhe({ filtros }: { filtros: any }) {
                   </div>
                 )}
 
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', marginBottom: 8 }}>Evolução mensal (fechamento)</div>
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 130, overflowX: 'auto' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', marginBottom: 8 }}>Evolução mensal</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, fontSize: 11, color: '#5a5c5f' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: '#97A624', display: 'inline-block' }} />Fechamento</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: '#c3d89a', display: 'inline-block' }} />Competência</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 150, overflowX: 'auto' }}>
                   {l.evolucaoMensal.map((e: any) => (
-                    <div key={e.periodo} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 50, flex: '1 0 50px' }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: '#3B6D11', fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(e.receita)}</span>
-                      <div style={{ width: '100%', maxWidth: 30, height: `${Math.max((e.receita/maxEvolucao)*90,3)}px`, background: '#97A624', borderRadius: '3px 3px 0 0' }} />
+                    <div key={e.periodo} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 60, flex: '1 0 60px' }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 110 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end' }}>
+                          <span style={{ fontSize: 9, fontWeight: 700, color: '#3B6D11', fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(e.receita)}</span>
+                          <div style={{ width: 18, height: `${Math.max((e.receita/maxEvolucao)*90,3)}px`, background: '#97A624', borderRadius: '3px 3px 0 0' }} />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end' }}>
+                          <span style={{ fontSize: 9, fontWeight: 700, color: '#7a9451', fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(e.receitaCompetencia)}</span>
+                          <div style={{ width: 18, height: `${Math.max((e.receitaCompetencia/maxEvolucao)*90,3)}px`, background: '#c3d89a', borderRadius: '3px 3px 0 0' }} />
+                        </div>
+                      </div>
                       <span style={{ fontSize: 10, color: '#9a9c9f' }}>{e.label}</span>
                     </div>
                   ))}
