@@ -148,7 +148,7 @@ export function useLeadsDiarios(filtros: Filtros, dataInicio: string, dataFim: s
 export type PeriodoMes = {
   mes: string; leads: number; won: number; taxaConversao: number
   receitaFechamento: number; receitaCompetencia: number
-  pax: number; ticketMedio: number; ticketMedioPax: number
+  pax: number; ticketMedio: number; ticketMedioPax: number; ticketMedioCompetencia: number
 }
 export type SerieFaturamento = PeriodoMes & { periodo: string; label: string }
 export type AnoCompleto = { ano: number; meses: (PeriodoMes & { mes: number; label: string })[] }
