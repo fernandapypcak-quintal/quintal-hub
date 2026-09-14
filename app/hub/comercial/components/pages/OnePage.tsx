@@ -30,14 +30,21 @@ function hojeYm() {
   return `${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,'0')}`
 }
 
-function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior }: {
+function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior, mesAtualNum }: {
   titulo: string
   campo: 'receitaCompetencia' | 'receitaFechamento'
   anos: { atual: { ano: number; meses: any[] }; anterior: { ano: number; meses: any[] } }
   corAtual: string
   corAnterior: string
+  mesAtualNum: number
 }) {
   const todosValores = [...anos.atual.meses.map(m => m[campo]), ...anos.anterior.meses.map(m => m[campo])]
+
+  // Acumulado: soma Jan..mês atual, comparando os dois anos na MESMA janela
+  // (senão o ano anterior, com 12 meses fechados, sempre pareceria "maior").
+  const acumuladoAtual = anos.atual.meses.slice(0, mesAtualNum).reduce((s,m) => s+m[campo], 0)
+  const acumuladoAnterior = anos.anterior.meses.slice(0, mesAtualNum).reduce((s,m) => s+m[campo], 0)
+  const deltaAcumulado = delta(acumuladoAtual, acumuladoAnterior)
 
   // Eixo cortado: se o maior valor for um "fora da curva" (bem maior que o
   // segundo maior), a escala visual usa o segundo maior como teto — senão um
@@ -67,6 +74,16 @@ function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior }: {
         <span style={{ fontSize: 15, fontWeight: 700 }}>{titulo}</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#5a5c5f' }}><span style={{ width: 11, height: 11, borderRadius: 3, background: corAnterior, display: 'inline-block' }} />{anos.anterior.ano}</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#5a5c5f' }}><span style={{ width: 11, height: 11, borderRadius: 3, background: corAtual, display: 'inline-block' }} />{anos.atual.ano}</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginBottom: teto < maior ? 4 : 20 }}>
+        <span style={{ fontSize: 12, color: '#9a9c9f' }}>Acumulado Jan-{anos.atual.meses[mesAtualNum-1]?.label} {anos.atual.ano}:</span>
+        <span style={{ fontSize: 15, fontWeight: 700, color: corAtual, fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(acumuladoAtual)}</span>
+        <span style={{ fontSize: 12, color: '#9a9c9f' }}>vs {anos.anterior.ano}: {fmtBRLCompacto(acumuladoAnterior)}</span>
+        {deltaAcumulado && (
+          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: deltaAcumulado.up ? '#eaf3de' : '#fdeaea', color: deltaAcumulado.up ? '#3B6D11' : '#a32d2d', fontWeight: 600 }}>
+            {deltaAcumulado.up ? '↑' : '↓'} {deltaAcumulado.pct}%
+          </span>
+        )}
       </div>
       {teto < maior && (
         <div style={{ fontSize: 11, color: '#9a9c9f', marginBottom: 16 }}>
@@ -176,10 +193,11 @@ function PainelDesempenho({ filtros, mesFiltro }: { filtros: any; mesFiltro: str
     pacotesMap[nome].qtd++
     pacotesMap[nome].receita += parseFloat(String(d.valor)) || 0
   })
+  const receitaTotalPacotes = Object.values(pacotesMap).reduce((s,p) => s+p.receita, 0) || 1
   const pacotesAtivos = Object.values(pacotesMap)
-    .map(p => ({ ...p, ticketMedio: p.qtd ? Math.round(p.receita/p.qtd) : 0 }))
-    .sort((a,b) => b.qtd - a.qtd)
-  const maxPacoteQtd = Math.max(...pacotesAtivos.map(p => p.qtd), 1)
+    .map(p => ({ ...p, ticketMedio: p.qtd ? Math.round(p.receita/p.qtd) : 0, pctFaturamento: parseFloat(((p.receita/receitaTotalPacotes)*100).toFixed(1)) }))
+    .sort((a,b) => b.receita - a.receita)
+  const maxPacoteReceita = Math.max(...pacotesAtivos.map(p => p.receita), 1)
 
   function BotaoGran({ v, label }: { v: typeof granularidade; label: string }) {
     return (
@@ -260,14 +278,15 @@ function PainelDesempenho({ filtros, mesFiltro }: { filtros: any; mesFiltro: str
 
         {/* Pacotes do período selecionado */}
         <div style={{ marginTop: 20, paddingTop: 16, borderTop: '0.5px solid #E8E8E2' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Pacotes vendidos {linhaAtiva ? `· ${linhaAtiva.label}` : ''}</div>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Pacotes vendidos {linhaAtiva ? `· ${linhaAtiva.label}` : ''} <span style={{ fontWeight: 400, color: '#9a9c9f', fontSize: 11 }}>(barra = peso no faturamento do período)</span></div>
           {pacotesAtivos.length === 0 && <div style={{ fontSize: 13, color: '#9a9c9f' }}>Nenhum pacote vendido nesse período.</div>}
           {pacotesAtivos.map(p => (
             <div key={p.pacote} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: '#3a3c3f', width: 160, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.pacote}</div>
               <div style={{ flex: 1, height: 22, background: '#F5F5F2', borderRadius: 5, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${Math.max((p.qtd/maxPacoteQtd)*100,5)}%`, background: '#7d5ac9', borderRadius: 5, display: 'flex', alignItems: 'center', paddingLeft: 8, fontSize: 11, fontWeight: 700, color: '#fff', fontFamily: 'DM Mono, monospace' }}>{p.qtd}x</div>
+                <div style={{ height: '100%', width: `${Math.max((p.receita/maxPacoteReceita)*100,5)}%`, background: '#7d5ac9', borderRadius: 5, display: 'flex', alignItems: 'center', paddingLeft: 8, fontSize: 11, fontWeight: 700, color: '#fff', fontFamily: 'DM Mono, monospace' }}>{p.pctFaturamento}%</div>
               </div>
+              <div style={{ fontSize: 12, fontFamily: 'DM Mono, monospace', color: '#5a5c5f', width: 55, textAlign: 'right', flexShrink: 0 }}>{p.qtd}x</div>
               <div style={{ fontSize: 12, fontFamily: 'DM Mono, monospace', color: '#5a5c5f', width: 90, textAlign: 'right', flexShrink: 0 }}>{fmtBRLCompacto(p.receita)}</div>
               <div style={{ fontSize: 11, fontFamily: 'DM Mono, monospace', color: '#9a9c9f', width: 80, textAlign: 'right', flexShrink: 0 }}>tkt {fmtBRLCompacto(p.ticketMedio)}</div>
             </div>
@@ -377,11 +396,20 @@ export default function OnePage({ filtros }: { filtros: any }) {
         </div>
 
         <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: '14px 16px', borderTop: '3px solid #c9855a' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Ticket médio / evento</div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Ticket médio (fechamento)</div>
           <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'DM Mono, monospace', color: '#a05a2c', lineHeight: 1, marginBottom: 6 }}>{fmtBRLCompacto(atual.ticketMedio)}</div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <DeltaTag atual={atual.ticketMedio} ant={mesAnterior.ticketMedio} label="mês ant." />
             <DeltaTag atual={atual.ticketMedio} ant={anoAnterior.ticketMedio} label="ano ant." />
+          </div>
+        </div>
+
+        <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: '14px 16px', borderTop: '3px solid #3B6D11' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Ticket médio (competência)</div>
+          <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'DM Mono, monospace', color: '#3B6D11', lineHeight: 1, marginBottom: 6 }}>{fmtBRLCompacto(atual.ticketMedioCompetencia)}</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <DeltaTag atual={atual.ticketMedioCompetencia} ant={mesAnterior.ticketMedioCompetencia} label="mês ant." />
+            <DeltaTag atual={atual.ticketMedioCompetencia} ant={anoAnterior.ticketMedioCompetencia} label="ano ant." />
           </div>
         </div>
 
@@ -446,6 +474,7 @@ export default function OnePage({ filtros }: { filtros: any }) {
         anos={anos}
         corAtual="#3B6D11"
         corAnterior="#c3d89a"
+        mesAtualNum={parseInt(atual.mes.split('-')[1])}
       />
 
       {/* ── Faturamento por Fechamento: ano atual x ano anterior ─── */}
@@ -455,6 +484,7 @@ export default function OnePage({ filtros }: { filtros: any }) {
         anos={anos}
         corAtual="#185FA5"
         corAnterior="#a8c8e8"
+        mesAtualNum={parseInt(atual.mes.split('-')[1])}
       />
 
       {/* ── Leads, conversão e ticket médio (com pacotes), granularidade ── */}
