@@ -22,11 +22,10 @@ export default function Home() {
   const totalGastoShows = useMemo(() => somar(shows, s => s.valor), [shows])
   const totalGasto = totalGastoInflaveis + totalGastoShows
   // totalEntradasKids já vem sem sobreposição com o Faturamento Dom Show
-  // (o Apps Script exclui domingo 12h-14h dessa métrica pra não duplicar)
+  // (o Apps Script exclui a janela do show desse cálculo pra não duplicar)
   const totalReceita = totalComboValor + totalFaturamentoDom + totalEntradasKids
   const resultado = totalReceita - totalGasto
 
-  // ── Vs mês anterior ──────────────────────────────────────────────
   // Agrupa por DIA (não por mês) — precisamos disso pra poder cortar os
   // dois meses no mesmo dia quando o mês mais recente ainda está em
   // andamento (senão "13 dias de agosto" perde feio pra "31 dias de julho"
@@ -107,6 +106,12 @@ export default function Home() {
     () => agruparPorUnidade(criancas, c => c.qtdCriancas),
     [criancas]
   )
+
+  const comboPorUnidade = useMemo(
+    () => agruparPorUnidade(combo, c => c.qtdVendida),
+    [combo]
+  )
+
   const gastoPorUnidade = useMemo(() => {
     const mapa = {}
     inflaveis.forEach(i => {
@@ -130,7 +135,7 @@ export default function Home() {
     [shows]
   )
 
-  // ── Evolução Mensal ──────────────────────────────────────────────
+  // ── Evolução Mensal (consolidada, rede toda) ──────────────────────
   const evolucaoMensal = useMemo(() => {
     const criancasPorMes = agruparPorMes(criancas, c => c.qtdCriancas)
     const comboPorMes = agruparPorMes(combo, c => c.valor)
@@ -246,6 +251,14 @@ export default function Home() {
             <GraficoBarraUnidade
               dados={criancasPorUnidade}
               cor="#DB2777"
+              formatarValor={v => v.toLocaleString('pt-BR')}
+            />
+          </Card>
+
+          <Card titulo="Combo Quintal Feliz por Unidade">
+            <GraficoBarraUnidade
+              dados={comboPorUnidade}
+              cor="#7C3AED"
               formatarValor={v => v.toLocaleString('pt-BR')}
             />
           </Card>
