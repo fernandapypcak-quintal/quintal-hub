@@ -151,7 +151,7 @@ type DealGranular = {
   empresa: string; data_evento: string; vendedor: string; unidade_nome: string
   valor: number; qtd_pessoas: any; cardapio_nome: string; won_time: string; add_time: string
 }
-type TicketBucket = { qtd: number; receita: number; ticketMedio: number; deals: DealGranular[] }
+type TicketBucket = { qtd: number; receita: number; pax: number; ticketMedio: number; ticketMedioPax: number; deals: DealGranular[] }
 type LinhaGranular = { periodo: string; label: string; leads: number; fechados: number; taxa: number; receita: number; deals: DealGranular[]; fechamento: TicketBucket; competencia: TicketBucket }
 type DadosGranular = { mensal: LinhaGranular[]; semanal: LinhaGranular[]; diario: LinhaGranular[] }
 
@@ -159,6 +159,7 @@ function PainelDesempenho({ filtros, mesFiltro }: { filtros: any; mesFiltro: str
   const [dados, setDados] = useState<DadosGranular | null>(null)
   const [granularidade, setGranularidade] = useState<'mensal' | 'semanal' | 'diario'>('diario')
   const [selecionado, setSelecionado] = useState<string | null>(null)
+  const [metricaTicket, setMetricaTicket] = useState<'evento' | 'pax'>('evento')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -181,7 +182,7 @@ function PainelDesempenho({ filtros, mesFiltro }: { filtros: any; mesFiltro: str
   const linhas = [...(dados[granularidade] || [])].reverse().slice(-16)
   const maxLeads = Math.max(...linhas.map(l => l.leads), 1)
   const maxTaxa = Math.max(...linhas.map(l => l.taxa), 1)
-  const maxTicket = Math.max(...linhas.map(l => Math.max(l.fechamento?.ticketMedio||0, l.competencia?.ticketMedio||0)), 1)
+  const maxTicket = Math.max(...linhas.map(l => metricaTicket==='pax' ? Math.max(l.fechamento?.ticketMedioPax||0, l.competencia?.ticketMedioPax||0) : Math.max(l.fechamento?.ticketMedio||0, l.competencia?.ticketMedio||0)), 1)
 
   const periodoAtivo = selecionado && linhas.some(l => l.periodo === selecionado) ? selecionado : (linhas[linhas.length-1]?.periodo || null)
   const linhaAtiva = linhas.find(l => l.periodo === periodoAtivo)
@@ -258,32 +259,49 @@ function PainelDesempenho({ filtros, mesFiltro }: { filtros: any; mesFiltro: str
       {/* ── Ticket médio clicável + pacotes do período clicado ──── */}
       <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 8 }}>
-          <span style={{ fontSize: 15, fontWeight: 700 }}>Evolução do ticket médio (por evento)</span>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>Evolução do ticket médio</span>
           {seletorGranularidade}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 6, fontSize: 11, color: '#5a5c5f' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: '#185FA5', display: 'inline-block' }} />Fechamento</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: '#97A624', display: 'inline-block' }} />Competência</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 6, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#5a5c5f' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: '#185FA5', display: 'inline-block' }} />Fechamento</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 10 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: '#97A624', display: 'inline-block' }} />Competência</span>
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
+            <button onClick={() => setMetricaTicket('evento')}
+              style={{ padding: '4px 10px', borderRadius: 20, border: '0.5px solid', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                background: metricaTicket==='evento' ? '#0D0F14' : '#fff', color: metricaTicket==='evento' ? '#97A624' : '#5a5c5f', borderColor: metricaTicket==='evento' ? '#0D0F14' : '#E8E8E2' }}>
+              Por evento
+            </button>
+            <button onClick={() => setMetricaTicket('pax')}
+              style={{ padding: '4px 10px', borderRadius: 20, border: '0.5px solid', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                background: metricaTicket==='pax' ? '#0D0F14' : '#fff', color: metricaTicket==='pax' ? '#97A624' : '#5a5c5f', borderColor: metricaTicket==='pax' ? '#0D0F14' : '#E8E8E2' }}>
+              Por pessoa
+            </button>
+          </div>
         </div>
         <div style={{ fontSize: 11, color: '#9a9c9f', marginBottom: 14 }}>Clique num par de barras pra ver os pacotes vendidos (competência) naquele período.</div>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: 200, overflowX: 'auto', paddingBottom: 8 }}>
-          {linhas.map(l => (
+          {linhas.map(l => {
+            const valFech = metricaTicket === 'pax' ? (l.fechamento?.ticketMedioPax||0) : (l.fechamento?.ticketMedio||0)
+            const valComp = metricaTicket === 'pax' ? (l.competencia?.ticketMedioPax||0) : (l.competencia?.ticketMedio||0)
+            return (
             <div key={l.periodo} onClick={() => setSelecionado(l.periodo)}
               style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 68, flex: '1 0 68px', cursor: 'pointer' }}>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 160 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end' }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: '#185FA5', fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(l.fechamento?.ticketMedio||0)}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#185FA5', fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(valFech)}</span>
                   <div style={{
-                    width: 22, height: `${Math.max(((l.fechamento?.ticketMedio||0)/maxTicket)*130,3)}px`,
+                    width: 22, height: `${Math.max((valFech/maxTicket)*130,3)}px`,
                     background: l.periodo === periodoAtivo ? '#0d3b66' : '#185FA5',
                     border: l.periodo === periodoAtivo ? '2px solid #072238' : 'none',
                     borderRadius: '4px 4px 0 0',
                   }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end' }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: '#3B6D11', fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(l.competencia?.ticketMedio||0)}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#3B6D11', fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(valComp)}</span>
                   <div style={{
-                    width: 22, height: `${Math.max(((l.competencia?.ticketMedio||0)/maxTicket)*130,3)}px`,
+                    width: 22, height: `${Math.max((valComp/maxTicket)*130,3)}px`,
                     background: l.periodo === periodoAtivo ? '#254d0a' : '#97A624',
                     border: l.periodo === periodoAtivo ? '2px solid #173007' : 'none',
                     borderRadius: '4px 4px 0 0',
@@ -292,7 +310,7 @@ function PainelDesempenho({ filtros, mesFiltro }: { filtros: any; mesFiltro: str
               </div>
               <span style={{ fontSize: 10, color: l.periodo === periodoAtivo ? '#0D0F14' : '#9a9c9f', fontWeight: l.periodo === periodoAtivo ? 700 : 400, textAlign: 'center' }}>{l.label}</span>
             </div>
-          ))}
+          )})}
         </div>
 
         {/* Pacotes do período selecionado */}
