@@ -151,7 +151,8 @@ type DealGranular = {
   empresa: string; data_evento: string; vendedor: string; unidade_nome: string
   valor: number; qtd_pessoas: any; cardapio_nome: string; won_time: string; add_time: string
 }
-type LinhaGranular = { periodo: string; label: string; leads: number; fechados: number; taxa: number; receita: number; deals: DealGranular[] }
+type TicketBucket = { qtd: number; receita: number; ticketMedio: number; deals: DealGranular[] }
+type LinhaGranular = { periodo: string; label: string; leads: number; fechados: number; taxa: number; receita: number; deals: DealGranular[]; fechamento: TicketBucket; competencia: TicketBucket }
 type DadosGranular = { mensal: LinhaGranular[]; semanal: LinhaGranular[]; diario: LinhaGranular[] }
 
 function PainelDesempenho({ filtros, mesFiltro }: { filtros: any; mesFiltro: string }) {
@@ -178,16 +179,17 @@ function PainelDesempenho({ filtros, mesFiltro }: { filtros: any; mesFiltro: str
   )
 
   const linhas = [...(dados[granularidade] || [])].reverse().slice(-16)
-  const comTicket = linhas.map(l => ({ ...l, ticketMedio: l.fechados > 0 ? Math.round(l.receita / l.fechados) : 0 }))
-  const maxLeads = Math.max(...comTicket.map(l => l.leads), 1)
-  const maxTaxa = Math.max(...comTicket.map(l => l.taxa), 1)
-  const maxTicket = Math.max(...comTicket.map(l => l.ticketMedio), 1)
+  const maxLeads = Math.max(...linhas.map(l => l.leads), 1)
+  const maxTaxa = Math.max(...linhas.map(l => l.taxa), 1)
+  const maxTicket = Math.max(...linhas.map(l => Math.max(l.fechamento?.ticketMedio||0, l.competencia?.ticketMedio||0)), 1)
 
-  const periodoAtivo = selecionado && comTicket.some(l => l.periodo === selecionado) ? selecionado : (comTicket[comTicket.length-1]?.periodo || null)
-  const linhaAtiva = comTicket.find(l => l.periodo === periodoAtivo)
+  const periodoAtivo = selecionado && linhas.some(l => l.periodo === selecionado) ? selecionado : (linhas[linhas.length-1]?.periodo || null)
+  const linhaAtiva = linhas.find(l => l.periodo === periodoAtivo)
 
+  // Pacotes: base competência (mesmo critério do painel geral de pacotes —
+  // "o que vendemos pra acontecer nesse período", não "o que foi criado nesse período")
   const pacotesMap: Record<string, { pacote: string; qtd: number; receita: number }> = {}
-  ;(linhaAtiva?.deals || []).forEach(d => {
+  ;(linhaAtiva?.competencia?.deals || []).forEach(d => {
     const nome = String(d.cardapio_nome || 'Não informado').trim()
     if (!pacotesMap[nome]) pacotesMap[nome] = { pacote: nome, qtd: 0, receita: 0 }
     pacotesMap[nome].qtd++
@@ -226,7 +228,7 @@ function PainelDesempenho({ filtros, mesFiltro }: { filtros: any; mesFiltro: str
             {seletorGranularidade}
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 200, overflowX: 'auto', paddingBottom: 8 }}>
-            {comTicket.map(l => (
+            {linhas.map(l => (
               <div key={l.periodo} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 40, flex: '1 0 40px' }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: '#185FA5', fontFamily: 'DM Mono, monospace' }}>{l.leads}</span>
                 <div style={{ width: '100%', maxWidth: 26, height: `${Math.max((l.leads/maxLeads)*140,4)}px`, background: '#185FA5', borderRadius: '4px 4px 0 0' }} />
@@ -242,7 +244,7 @@ function PainelDesempenho({ filtros, mesFiltro }: { filtros: any; mesFiltro: str
             {seletorGranularidade}
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 200, overflowX: 'auto', paddingBottom: 8 }}>
-            {comTicket.map(l => (
+            {linhas.map(l => (
               <div key={l.periodo} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 40, flex: '1 0 40px' }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: '#3B6D11', fontFamily: 'DM Mono, monospace' }}>{l.taxa}%</span>
                 <div style={{ width: '100%', maxWidth: 26, height: `${Math.max((l.taxa/maxTaxa)*140,4)}px`, background: '#3B6D11', borderRadius: '4px 4px 0 0' }} />
@@ -259,18 +261,35 @@ function PainelDesempenho({ filtros, mesFiltro }: { filtros: any; mesFiltro: str
           <span style={{ fontSize: 15, fontWeight: 700 }}>Evolução do ticket médio (por evento)</span>
           {seletorGranularidade}
         </div>
-        <div style={{ fontSize: 11, color: '#9a9c9f', marginBottom: 14 }}>Clique numa barra pra ver os pacotes vendidos naquele período.</div>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 200, overflowX: 'auto', paddingBottom: 8 }}>
-          {comTicket.map(l => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 6, fontSize: 11, color: '#5a5c5f' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: '#185FA5', display: 'inline-block' }} />Fechamento</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: '#97A624', display: 'inline-block' }} />Competência</span>
+        </div>
+        <div style={{ fontSize: 11, color: '#9a9c9f', marginBottom: 14 }}>Clique num par de barras pra ver os pacotes vendidos (competência) naquele período.</div>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: 200, overflowX: 'auto', paddingBottom: 8 }}>
+          {linhas.map(l => (
             <div key={l.periodo} onClick={() => setSelecionado(l.periodo)}
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 46, flex: '1 0 46px', cursor: 'pointer' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#8a7405', fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(l.ticketMedio)}</span>
-              <div style={{
-                width: '100%', maxWidth: 30, height: `${Math.max((l.ticketMedio/maxTicket)*140,4)}px`,
-                background: l.periodo === periodoAtivo ? '#8a7405' : '#D9B504',
-                border: l.periodo === periodoAtivo ? '2px solid #5a4b03' : 'none',
-                borderRadius: '4px 4px 0 0',
-              }} />
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 68, flex: '1 0 68px', cursor: 'pointer' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 160 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end' }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#185FA5', fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(l.fechamento?.ticketMedio||0)}</span>
+                  <div style={{
+                    width: 22, height: `${Math.max(((l.fechamento?.ticketMedio||0)/maxTicket)*130,3)}px`,
+                    background: l.periodo === periodoAtivo ? '#0d3b66' : '#185FA5',
+                    border: l.periodo === periodoAtivo ? '2px solid #072238' : 'none',
+                    borderRadius: '4px 4px 0 0',
+                  }} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end' }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#3B6D11', fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(l.competencia?.ticketMedio||0)}</span>
+                  <div style={{
+                    width: 22, height: `${Math.max(((l.competencia?.ticketMedio||0)/maxTicket)*130,3)}px`,
+                    background: l.periodo === periodoAtivo ? '#254d0a' : '#97A624',
+                    border: l.periodo === periodoAtivo ? '2px solid #173007' : 'none',
+                    borderRadius: '4px 4px 0 0',
+                  }} />
+                </div>
+              </div>
               <span style={{ fontSize: 10, color: l.periodo === periodoAtivo ? '#0D0F14' : '#9a9c9f', fontWeight: l.periodo === periodoAtivo ? 700 : 400, textAlign: 'center' }}>{l.label}</span>
             </div>
           ))}
@@ -278,7 +297,7 @@ function PainelDesempenho({ filtros, mesFiltro }: { filtros: any; mesFiltro: str
 
         {/* Pacotes do período selecionado */}
         <div style={{ marginTop: 20, paddingTop: 16, borderTop: '0.5px solid #E8E8E2' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Pacotes vendidos {linhaAtiva ? `· ${linhaAtiva.label}` : ''} <span style={{ fontWeight: 400, color: '#9a9c9f', fontSize: 11 }}>(barra = peso no faturamento do período)</span></div>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Pacotes vendidos (competência) {linhaAtiva ? `· ${linhaAtiva.label}` : ''} <span style={{ fontWeight: 400, color: '#9a9c9f', fontSize: 11 }}>(barra = peso no faturamento do período)</span></div>
           {pacotesAtivos.length === 0 && <div style={{ fontSize: 13, color: '#9a9c9f' }}>Nenhum pacote vendido nesse período.</div>}
           {pacotesAtivos.map(p => (
             <div key={p.pacote} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
