@@ -160,6 +160,7 @@ function PainelDesempenho({ filtros, mesFiltro }: { filtros: any; mesFiltro: str
   const [granularidade, setGranularidade] = useState<'mensal' | 'semanal' | 'diario'>('diario')
   const [selecionado, setSelecionado] = useState<string | null>(null)
   const [metricaTicket, setMetricaTicket] = useState<'evento' | 'pax'>('evento')
+  const [pacoteAberto, setPacoteAberto] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -186,8 +187,6 @@ function PainelDesempenho({ filtros, mesFiltro }: { filtros: any; mesFiltro: str
 
   const periodoAtivo = selecionado && linhas.some(l => l.periodo === selecionado) ? selecionado : (linhas[linhas.length-1]?.periodo || null)
   const linhaAtiva = linhas.find(l => l.periodo === periodoAtivo)
-
-  const [pacoteAberto, setPacoteAberto] = useState<string | null>(null)
 
   // Pacotes: base competência (mesmo critério do painel geral de pacotes —
   // "o que vendemos pra acontecer nesse período", não "o que foi criado nesse período")
