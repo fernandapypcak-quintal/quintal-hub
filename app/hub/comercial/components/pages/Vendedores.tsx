@@ -64,13 +64,20 @@ function PainelFunilProdutividade({ filtros }: { filtros: any }) {
   if (loading) return <div style={{ padding: 30, textAlign: 'center', color: '#9a9c9f' }}>Carregando funil...</div>
   if (erro || !dados) return <div style={{ padding: 20, background: '#fdeaea', borderRadius: 10, color: '#a32d2d', fontSize: 13 }}>Erro: {erro}</div>
 
+  if (!dados.historico || !dados.funilDetalhado) return (
+    <div style={{ padding: 20, background: '#fdeaea', borderRadius: 10, color: '#a32d2d', fontSize: 13 }}>
+      Resposta do servidor incompleta — o Apps Script provavelmente precisa de uma nova versão do deployment.
+    </div>
+  )
+
   const { historico, funilDetalhado } = dados
   const maxHist = Math.max(...historico.map(h => Math.max(h.qualificacao, h.fechamento)), 1)
   const maxFunil = Math.max(...funilDetalhado.map(f => f.count), 1)
 
   const mesAtivo = (mesSelecionado && historico.some(h => h.periodo === mesSelecionado)) ? mesSelecionado : (historico[historico.length-1]?.periodo || null)
   const linhaAtiva = historico.find(h => h.periodo === mesAtivo)
-  const maxOndeFicou = Math.max(...(linhaAtiva?.ondeFicou.map(f => f.count) || [1]), 1)
+  const ondeFicouAtivo = linhaAtiva?.ondeFicou || []
+  const maxOndeFicou = Math.max(...(ondeFicouAtivo.map(f => f.count)), 1)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -103,8 +110,8 @@ function PainelFunilProdutividade({ filtros }: { filtros: any }) {
         {/* Onde ficou — detalhe por etapa do mês selecionado */}
         <div style={{ marginTop: 20, paddingTop: 16, borderTop: '0.5px solid #E8E8E2' }}>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Onde parou {linhaAtiva ? `· ${linhaAtiva.label}` : ''} <span style={{ fontWeight: 400, color: '#9a9c9f', fontSize: 11 }}>(etapa mais avançada que cada lead da safra alcançou)</span></div>
-          {(!linhaAtiva || linhaAtiva.ondeFicou.length === 0) && <div style={{ fontSize: 12, color: '#9a9c9f' }}>Sem dado de etapa pra esse mês.</div>}
-          {linhaAtiva?.ondeFicou.map(f => (
+          {ondeFicouAtivo.length === 0 && <div style={{ fontSize: 12, color: '#9a9c9f' }}>Sem dado de etapa pra esse mês.</div>}
+          {ondeFicouAtivo.map(f => (
             <div key={f.etapa} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
               <div style={{ fontSize: 11, color: '#5a5c5f', width: 140, textAlign: 'right', flexShrink: 0 }}>{f.etapa}</div>
               <div style={{ flex: 1, height: 22, background: '#F5F5F2', borderRadius: 5, overflow: 'hidden' }}>
