@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { DASHBOARDS } from '@/lib/dashboards'
+import { DASHBOARDS, SUB_PERMISSIONS } from '@/lib/dashboards'
 import { UNITS } from '@/lib/units'
 
 // ── Types ─────────────────────────────────────────────────────
@@ -37,9 +37,11 @@ function PermBadge({ perm }: { perm: string[] | '*' }) {
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
       {perm.map(p => {
         const dash = DASHBOARDS.find(d => d.id === p)
+        const sub = !dash ? SUB_PERMISSIONS.find(s => s.id === p) : null
+        const cor = dash?.color || sub?.color || '#97A624'
         return (
-          <span key={p} style={{ background: `${dash?.color || '#97A624'}18`, color: dash?.color || '#97A624', fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20, border: `1px solid ${dash?.color || '#97A624'}40` }}>
-            {dash?.name || p}
+          <span key={p} style={{ background: `${cor}18`, color: cor, fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20, border: `1px solid ${cor}40` }}>
+            {dash?.name || sub?.name || p}
           </span>
         )
       })}
@@ -151,6 +153,25 @@ function ModalNovoUsuario({ onClose, onSave }: { onClose: () => void; onSave: (e
               })}
             </div>
           )}
+
+          {/* Sub-permissões — só aparecem quando o dashboard "pai" já tá marcado */}
+          {perm !== '*' && SUB_PERMISSIONS.filter(s => (perm as string[]).includes(s.parentId)).length > 0 && (
+            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed #E0E0DA' }}>
+              <div style={{ fontSize: 11, color: '#999', marginBottom: 6 }}>Acessos extras</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                {SUB_PERMISSIONS.filter(s => (perm as string[]).includes(s.parentId)).map(s => {
+                  const sel = (perm as string[]).includes(s.id)
+                  return (
+                    <button key={s.id} onClick={() => toggleDash(s.id)}
+                      style={{ padding: '7px 10px', borderRadius: 8, border: `2px solid ${sel ? s.color : '#E0E0DA'}`, background: sel ? `${s.color}12` : '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: sel ? s.color : '#888', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: sel ? s.color : '#CCC', flexShrink: 0 }} />
+                      {s.name}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Unidades */}
@@ -257,6 +278,25 @@ function ModalEditarPermissoes({ user, onClose, onSave }: { user: User; onClose:
                 </button>
               )
             })}
+          </div>
+        )}
+
+        {/* Sub-permissões — só aparecem quando o dashboard "pai" já tá marcado */}
+        {perm !== '*' && SUB_PERMISSIONS.filter(s => (perm as string[]).includes(s.parentId)).length > 0 && (
+          <div style={{ marginBottom: 20, marginTop: -12 }}>
+            <div style={{ fontSize: 11, color: '#999', marginBottom: 6 }}>Acessos extras</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+              {SUB_PERMISSIONS.filter(s => (perm as string[]).includes(s.parentId)).map(s => {
+                const sel = (perm as string[]).includes(s.id)
+                return (
+                  <button key={s.id} onClick={() => toggleDash(s.id)}
+                    style={{ padding: '7px 10px', borderRadius: 8, border: `2px solid ${sel ? s.color : '#E0E0DA'}`, background: sel ? `${s.color}12` : '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: sel ? s.color : '#888', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: sel ? s.color : '#CCC', flexShrink: 0 }} />
+                    {s.name}
+                  </button>
+                )
+              })}
+            </div>
           </div>
         )}
 
