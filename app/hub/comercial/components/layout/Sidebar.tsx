@@ -6,12 +6,15 @@ const PAGES = [
   { id: 'leads',      icon: '📥', label: 'Leads diários' },
   { id: 'conversoes', icon: '🏆', label: 'Conversões' },
   { id: 'por_loja',   icon: '🏪', label: 'Por loja' },
+  { id: 'vendedores', icon: '🧑‍💼', label: 'Vendedores' },
 ]
 
-export default function Sidebar({ activePage, onPageChange }: {
+export default function Sidebar({ activePage, onPageChange, podeVerVendedores = false }: {
   activePage: string
   onPageChange: (p: string) => void
+  podeVerVendedores?: boolean
 }) {
+  const paginas = PAGES.filter(p => p.id !== 'vendedores' || podeVerVendedores)
   return (
     <aside style={{ width: 220, background: '#fff', borderRight: '0.5px solid #E8E8E2', display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ padding: '16px 18px', borderBottom: '0.5px solid #E8E8E2', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -22,7 +25,7 @@ export default function Sidebar({ activePage, onPageChange }: {
         </div>
       </div>
       <nav style={{ padding: '12px 8px', flex: 1 }}>
-        {PAGES.map(p => (
+        {paginas.map(p => (
           <button key={p.id} onClick={() => onPageChange(p.id)}
             style={{
               display: 'flex', alignItems: 'center', gap: 9,
