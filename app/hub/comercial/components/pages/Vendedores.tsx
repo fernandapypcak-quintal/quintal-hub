@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { useVendedoresResumo, useFunilProdutividade } from '../../useComercial'
 
 function fmtBRLCompacto(v: number) {
@@ -58,6 +59,8 @@ function GraficoSerie({ titulo, serie, cor }: { titulo: string; serie: { label: 
 
 function PainelFunilProdutividade({ filtros }: { filtros: any }) {
   const { dados, loading, erro } = useFunilProdutividade(filtros)
+  const [mesSelecionado, setMesSelecionado] = useState<string | null>(null)
+
   if (loading) return <div style={{ padding: 30, textAlign: 'center', color: '#9a9c9f' }}>Carregando funil...</div>
   if (erro || !dados) return <div style={{ padding: 20, background: '#fdeaea', borderRadius: 10, color: '#a32d2d', fontSize: 13 }}>Erro: {erro}</div>
 
@@ -65,29 +68,52 @@ function PainelFunilProdutividade({ filtros }: { filtros: any }) {
   const maxHist = Math.max(...historico.map(h => Math.max(h.qualificacao, h.fechamento)), 1)
   const maxFunil = Math.max(...funilDetalhado.map(f => f.count), 1)
 
+  const mesAtivo = (mesSelecionado && historico.some(h => h.periodo === mesSelecionado)) ? mesSelecionado : (historico[historico.length-1]?.periodo || null)
+  const linhaAtiva = historico.find(h => h.periodo === mesAtivo)
+  const maxOndeFicou = Math.max(...(linhaAtiva?.ondeFicou.map(f => f.count) || [1]), 1)
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
         <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Funil de Produtividade — histórico mensal</div>
-        <div style={{ fontSize: 11, color: '#9a9c9f', marginBottom: 18 }}>Por safra de lead (mês de criação) — quantos, dos que ainda estão em aberto, estão em Qualificação vs já avançaram pra Fechamento.</div>
+        <div style={{ fontSize: 11, color: '#9a9c9f', marginBottom: 18 }}>Por safra de lead (mês de criação) — Fechamento conta todo lead que EM ALGUM MOMENTO chegou numa etapa de negociação/fechamento (mesmo que hoje já tenha ganho ou sido perdido); Qualificação é quem nunca saiu do estágio inicial. Clique num mês pra ver o detalhe de onde cada lead parou.</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14, fontSize: 11, color: '#5a5c5f' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: '#D9B504', display: 'inline-block' }} />Qualificação</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: '#185FA5', display: 'inline-block' }} />Fechamento</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: 200, overflowX: 'auto', paddingBottom: 8 }}>
           {historico.map(h => (
-            <div key={h.periodo} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 60, flex: '1 0 60px' }}>
+            <div key={h.periodo} onClick={() => setMesSelecionado(h.periodo)}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 60, flex: '1 0 60px', cursor: 'pointer' }}>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 150 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end' }}>
                   <span style={{ fontSize: 10, fontWeight: 700, color: '#8a7405', fontFamily: 'DM Mono, monospace' }}>{h.qualificacao}</span>
-                  <div style={{ width: 20, height: `${Math.max((h.qualificacao/maxHist)*120,3)}px`, background: '#D9B504', borderRadius: '3px 3px 0 0' }} />
+                  <div style={{ width: 20, height: `${Math.max((h.qualificacao/maxHist)*120,3)}px`, background: h.periodo===mesAtivo ? '#8a7405' : '#D9B504', border: h.periodo===mesAtivo ? '2px solid #5a4b03' : 'none', borderRadius: '3px 3px 0 0' }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end' }}>
                   <span style={{ fontSize: 10, fontWeight: 700, color: '#185FA5', fontFamily: 'DM Mono, monospace' }}>{h.fechamento}</span>
-                  <div style={{ width: 20, height: `${Math.max((h.fechamento/maxHist)*120,3)}px`, background: '#185FA5', borderRadius: '3px 3px 0 0' }} />
+                  <div style={{ width: 20, height: `${Math.max((h.fechamento/maxHist)*120,3)}px`, background: h.periodo===mesAtivo ? '#0d3b66' : '#185FA5', border: h.periodo===mesAtivo ? '2px solid #072238' : 'none', borderRadius: '3px 3px 0 0' }} />
                 </div>
               </div>
-              <span style={{ fontSize: 10, color: '#9a9c9f' }}>{h.label}</span>
+              <span style={{ fontSize: 10, color: h.periodo===mesAtivo ? '#0D0F14' : '#9a9c9f', fontWeight: h.periodo===mesAtivo ? 700 : 400 }}>{h.label}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Onde ficou — detalhe por etapa do mês selecionado */}
+        <div style={{ marginTop: 20, paddingTop: 16, borderTop: '0.5px solid #E8E8E2' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Onde parou {linhaAtiva ? `· ${linhaAtiva.label}` : ''} <span style={{ fontWeight: 400, color: '#9a9c9f', fontSize: 11 }}>(etapa mais avançada que cada lead da safra alcançou)</span></div>
+          {(!linhaAtiva || linhaAtiva.ondeFicou.length === 0) && <div style={{ fontSize: 12, color: '#9a9c9f' }}>Sem dado de etapa pra esse mês.</div>}
+          {linhaAtiva?.ondeFicou.map(f => (
+            <div key={f.etapa} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <div style={{ fontSize: 11, color: '#5a5c5f', width: 140, textAlign: 'right', flexShrink: 0 }}>{f.etapa}</div>
+              <div style={{ flex: 1, height: 22, background: '#F5F5F2', borderRadius: 5, overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', width: `${Math.max((f.count/maxOndeFicou)*100,5)}%`,
+                  background: f.grupo === 'qualificacao' ? '#D9B504' : f.grupo === 'fechamento' ? '#185FA5' : '#9a9c9f',
+                  borderRadius: 5, display: 'flex', alignItems: 'center', paddingLeft: 8, fontSize: 11, fontWeight: 700, color: '#fff', fontFamily: 'DM Mono, monospace',
+                }}>{f.count}</div>
+              </div>
             </div>
           ))}
         </div>
