@@ -245,6 +245,7 @@ export type LinhaFunilProdutividade = {
   periodo: string; label: string; leadsNoMes: number
   qualificacao: number; fechamento: number; won: number; lost: number
   taxaAvancoFechamento: number
+  ondeFicou: { etapa: string; grupo: string; count: number }[]
 }
 export type FunilProdutividadeData = {
   historico: LinhaFunilProdutividade[]
