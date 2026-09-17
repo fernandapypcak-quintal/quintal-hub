@@ -206,6 +206,72 @@ export function useVendedores() {
   return vendedores
 }
 
+export type VendedorResumo = {
+  nome: string; papel: 'SDR' | 'Closer' | 'Outro' | 'Sem vendedor'
+  leads: number; won: number; taxaConversao: number
+  receitaFechamento: number; receitaCompetencia: number; comissao: number
+}
+export type SerieMensalValor = { periodo: string; label: string; valor: number; qtd: number }
+export type VendedoresResumoData = {
+  mes: string
+  vendedores: VendedorResumo[]
+  forecast: SerieMensalValor[]
+  pipelineAbertoPorCloser: Record<string, SerieMensalValor[]>
+  semSdr: { qtd: number; receitaFechamento: number }
+  comissaoTotal: { sdr: number; closer: number }
+}
+
+export function useVendedoresResumo(filtros: Pick<Filtros, 'unidade'>, mesFiltro: string) {
+  const [dados, setDados] = useState<VendedoresResumoData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [erro, setErro] = useState<string | null>(null)
+
+  useEffect(() => {
+    setLoading(true); setErro(null)
+    const p = new URLSearchParams({ tipo: 'vendedores_resumo', mes_filtro: mesFiltro })
+    if (filtros.unidade) p.set('unidade', filtros.unidade)
+    fetch(`${GAS_URL}?${p}`)
+      .then(r => r.json())
+      .then(data => { if (data.erro) throw new Error(data.erro); setDados(data) })
+      .catch(e => setErro(e.message))
+      .finally(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtros.unidade, mesFiltro])
+
+  return { dados, loading, erro }
+}
+
+export type LinhaFunilProdutividade = {
+  periodo: string; label: string; leadsNoMes: number
+  qualificacao: number; fechamento: number; won: number; lost: number
+  taxaAvancoFechamento: number
+}
+export type FunilProdutividadeData = {
+  historico: LinhaFunilProdutividade[]
+  funilDetalhado: { etapa: string; grupo: string; count: number }[]
+}
+
+export function useFunilProdutividade(filtros: Pick<Filtros, 'unidade' | 'vendedor'>) {
+  const [dados, setDados] = useState<FunilProdutividadeData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [erro, setErro] = useState<string | null>(null)
+
+  useEffect(() => {
+    setLoading(true); setErro(null)
+    const p = new URLSearchParams({ tipo: 'funil_produtividade' })
+    if (filtros.unidade)  p.set('unidade',  filtros.unidade)
+    if (filtros.vendedor) p.set('vendedor', filtros.vendedor)
+    fetch(`${GAS_URL}?${p}`)
+      .then(r => r.json())
+      .then(data => { if (data.erro) throw new Error(data.erro); setDados(data) })
+      .catch(e => setErro(e.message))
+      .finally(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtros.unidade, filtros.vendedor])
+
+  return { dados, loading, erro }
+}
+
 export function usePorLojaDetalhe(filtros: Pick<Filtros, 'unidade' | 'vendedor'>, mesFiltro: string) {
   const [dados, setDados] = useState<{ mes: string; diaCorte: number | null; ehMesCorrente: boolean; lojas: any[] } | null>(null)
   const [loading, setLoading] = useState(true)
