@@ -187,14 +187,17 @@ function PainelDesempenho({ filtros, mesFiltro }: { filtros: any; mesFiltro: str
   const periodoAtivo = selecionado && linhas.some(l => l.periodo === selecionado) ? selecionado : (linhas[linhas.length-1]?.periodo || null)
   const linhaAtiva = linhas.find(l => l.periodo === periodoAtivo)
 
+  const [pacoteAberto, setPacoteAberto] = useState<string | null>(null)
+
   // Pacotes: base competência (mesmo critério do painel geral de pacotes —
   // "o que vendemos pra acontecer nesse período", não "o que foi criado nesse período")
-  const pacotesMap: Record<string, { pacote: string; qtd: number; receita: number }> = {}
+  const pacotesMap: Record<string, { pacote: string; qtd: number; receita: number; clientes: DealGranular[] }> = {}
   ;(linhaAtiva?.competencia?.deals || []).forEach(d => {
     const nome = String(d.cardapio_nome || 'Não informado').trim()
-    if (!pacotesMap[nome]) pacotesMap[nome] = { pacote: nome, qtd: 0, receita: 0 }
+    if (!pacotesMap[nome]) pacotesMap[nome] = { pacote: nome, qtd: 0, receita: 0, clientes: [] }
     pacotesMap[nome].qtd++
     pacotesMap[nome].receita += parseFloat(String(d.valor)) || 0
+    pacotesMap[nome].clientes.push(d)
   })
   const receitaTotalPacotes = Object.values(pacotesMap).reduce((s,p) => s+p.receita, 0) || 1
   const pacotesAtivos = Object.values(pacotesMap)
@@ -315,17 +318,31 @@ function PainelDesempenho({ filtros, mesFiltro }: { filtros: any; mesFiltro: str
 
         {/* Pacotes do período selecionado */}
         <div style={{ marginTop: 20, paddingTop: 16, borderTop: '0.5px solid #E8E8E2' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Pacotes vendidos (competência) {linhaAtiva ? `· ${linhaAtiva.label}` : ''} <span style={{ fontWeight: 400, color: '#9a9c9f', fontSize: 11 }}>(barra = peso no faturamento do período)</span></div>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Pacotes vendidos (competência) {linhaAtiva ? `· ${linhaAtiva.label}` : ''} <span style={{ fontWeight: 400, color: '#9a9c9f', fontSize: 11 }}>(barra = peso no faturamento do período · clique pra ver os clientes)</span></div>
           {pacotesAtivos.length === 0 && <div style={{ fontSize: 13, color: '#9a9c9f' }}>Nenhum pacote vendido nesse período.</div>}
           {pacotesAtivos.map(p => (
-            <div key={p.pacote} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#3a3c3f', width: 160, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.pacote}</div>
-              <div style={{ flex: 1, height: 22, background: '#F5F5F2', borderRadius: 5, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${Math.max((p.receita/maxPacoteReceita)*100,5)}%`, background: '#7d5ac9', borderRadius: 5, display: 'flex', alignItems: 'center', paddingLeft: 8, fontSize: 11, fontWeight: 700, color: '#fff', fontFamily: 'DM Mono, monospace' }}>{p.pctFaturamento}%</div>
+            <div key={p.pacote} style={{ marginBottom: 8 }}>
+              <div onClick={() => setPacoteAberto(pacoteAberto === p.pacote ? null : p.pacote)}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                <span style={{ fontSize: 10, color: '#9a9c9f', width: 12, flexShrink: 0 }}>{pacoteAberto === p.pacote ? '▾' : '▸'}</span>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#3a3c3f', width: 150, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.pacote}</div>
+                <div style={{ flex: 1, height: 22, background: '#F5F5F2', borderRadius: 5, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${Math.max((p.receita/maxPacoteReceita)*100,5)}%`, background: '#7d5ac9', borderRadius: 5, display: 'flex', alignItems: 'center', paddingLeft: 8, fontSize: 11, fontWeight: 700, color: '#fff', fontFamily: 'DM Mono, monospace' }}>{p.pctFaturamento}%</div>
+                </div>
+                <div style={{ fontSize: 12, fontFamily: 'DM Mono, monospace', color: '#5a5c5f', width: 55, textAlign: 'right', flexShrink: 0 }}>{p.qtd}x</div>
+                <div style={{ fontSize: 12, fontFamily: 'DM Mono, monospace', color: '#5a5c5f', width: 90, textAlign: 'right', flexShrink: 0 }}>{fmtBRLCompacto(p.receita)}</div>
+                <div style={{ fontSize: 11, fontFamily: 'DM Mono, monospace', color: '#9a9c9f', width: 80, textAlign: 'right', flexShrink: 0 }}>tkt {fmtBRLCompacto(p.ticketMedio)}</div>
               </div>
-              <div style={{ fontSize: 12, fontFamily: 'DM Mono, monospace', color: '#5a5c5f', width: 55, textAlign: 'right', flexShrink: 0 }}>{p.qtd}x</div>
-              <div style={{ fontSize: 12, fontFamily: 'DM Mono, monospace', color: '#5a5c5f', width: 90, textAlign: 'right', flexShrink: 0 }}>{fmtBRLCompacto(p.receita)}</div>
-              <div style={{ fontSize: 11, fontFamily: 'DM Mono, monospace', color: '#9a9c9f', width: 80, textAlign: 'right', flexShrink: 0 }}>tkt {fmtBRLCompacto(p.ticketMedio)}</div>
+              {pacoteAberto === p.pacote && (
+                <div style={{ marginLeft: 22, marginTop: 6, marginBottom: 4, background: '#FAFAF8', border: '0.5px solid #E8E8E2', borderRadius: 8, padding: '8px 12px' }}>
+                  {p.clientes.map((c, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '4px 0', borderBottom: i < p.clientes.length-1 ? '0.5px solid #F0F0EC' : 'none', fontSize: 12 }}>
+                      <span style={{ color: '#3a3c3f', fontWeight: 500 }}>{c.empresa || 'Não informado'}</span>
+                      <span style={{ color: '#9a9c9f', fontFamily: 'DM Mono, monospace', flexShrink: 0 }}>{c.data_evento ? c.data_evento.substring(8,10)+'/'+c.data_evento.substring(5,7) : '—'} · {fmtBRLCompacto(parseFloat(String(c.valor))||0)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>
