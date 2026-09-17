@@ -7,5 +7,11 @@ export default async function ComercialPage() {
   if (!access) redirect('/login')
   if (!hasDashboardAccess(access, 'comercial')) redirect('/hub')
 
-  return <ComercialClientApp allowedLojas={access.lojas} />
+  // Página de Vendedores mostra comissão — acesso à parte, não é liberado
+  // só por ter acesso ao dashboard Comercial. Pra liberar alguém: adiciona
+  // 'comercial-vendedores' na coluna "dashboards" da linha dessa pessoa na
+  // tabela user_permissions (Supabase), ou marca a pessoa como admin.
+  const podeVerVendedores = access.isAdmin || hasDashboardAccess(access, 'comercial-vendedores')
+
+  return <ComercialClientApp allowedLojas={access.lojas} podeVerVendedores={podeVerVendedores} />
 }
