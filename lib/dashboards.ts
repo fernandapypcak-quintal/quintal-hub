@@ -22,6 +22,15 @@ export const DASHBOARDS: Dashboard[] = [
   { id: 'bonus', name: 'Meta de Bônus', description: 'Acompanhamento da meta coletiva de bônus (CMV, Custo c/ Pessoal, LOL, NPS)', url: '', internalPath: '/hub/bonus', color: '#97A624', icon: '🏆' },
 ]
 
+// Sub-permissões: não são dashboards próprios (não aparecem como card no
+// HUB principal) — são liberações extras DENTRO de um dashboard que já
+// existe. O toggle só aparece na tela de admin quando o dashboard "pai"
+// (parentId) já está marcado pra aquela pessoa.
+export type SubPermission = { id: string; parentId: string; name: string; color: string }
+export const SUB_PERMISSIONS: SubPermission[] = [
+  { id: 'comercial-vendedores', parentId: 'comercial', name: 'Vendedores (comissão)', color: '#7d5ac9' },
+]
+
 export const USER_PERMISSIONS: Record<string, string[] | '*'> = {
   'amanda.pamplona@quintaldoespeto.com.br':    '*',
   'cintia.araujo@quintaldoespeto.com.br':      ['faturamento', 'custos'],
