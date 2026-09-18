@@ -160,7 +160,7 @@ export type Meta = {
 } | null
 export type Tendencia = {
   ehMesCorrente: boolean; diasDecorridos: number; diasNoMes: number
-  projecaoCompetencia: number; projecaoFechamento: number
+  projecaoCompetencia: number; projecaoFechamento: number; diasComparacao: number
 }
 export type Pacote = { pacote: string; qtd: number; receita: number; ticketMedio: number }
 export type OnePageData = {
