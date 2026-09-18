@@ -71,7 +71,7 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
   const ehMesCorrente = ehFechamento && anoAtual === hoje.getFullYear() && mesNum === (hoje.getMonth()+1)
   // Hoje ainda não terminou, então não conta como dia fechado — corta em
   // dia 01 até ONTEM nos dois anos, pra comparar só dias completos.
-  const diaCorte = ehMesCorrente ? Math.max(hoje.getDate() - 1, 0) : 31
+  const diaCorte = ehMesCorrente ? hoje.getDate() : 31
 
   function filtrarPorDia(deals: DealResumo[]) {
     if (!ehFechamento) return deals
@@ -102,7 +102,7 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
   const competenciaAnterior = ehFechamento ? agruparPorCompetencia(dealsAnteriorCortado) : []
 
   const Coluna = ({ ano, deals, total, cor, competencia }: { ano: number; deals: DealResumo[]; total: number; cor: string; competencia: [string,{valor:number;qtd:number}][] }) => (
-    <div className="modal-print-coluna" style={{ flex: 1, minWidth: 260 }}>
+    <div style={{ flex: 1, minWidth: 260 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10, paddingBottom: 8, borderBottom: `2px solid ${cor}` }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: cor }}>{ano}</span>
         <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(total)} <span style={{ fontWeight: 400, color: '#9a9c9f' }}>({deals.length})</span></span>
@@ -122,7 +122,7 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
 
       {deals.length === 0 && <div style={{ fontSize: 12, color: '#9a9c9f', padding: '10px 0' }}>Nenhum negócio nesse mês.</div>}
       {deals.map(d => (
-        <div key={d.id} className="modal-print-linha" style={{ padding: '7px 0', borderBottom: '0.5px solid #F0F0EC', fontSize: 12 }}>
+        <div key={d.id} style={{ padding: '7px 0', borderBottom: '0.5px solid #F0F0EC', fontSize: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
             <span style={{ fontWeight: 600, color: '#3a3c3f', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.empresa || d.titulo}</span>
             <span style={{ fontWeight: 700, fontFamily: 'DM Mono, monospace', flexShrink: 0 }}>{fmtBRLCompacto(parseFloat(String(d.valor))||0)}</span>
@@ -148,31 +148,82 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
 
   const deltaAnual = delta(totalAtual, totalAnterior)
 
+  // Impressão via iframe escondido na própria página — mais confiável que
+  // window.open (que pode ser bloqueado silenciosamente e, nesse caso,
+  // acabar imprimindo a aba de trás em vez da janela nova).
+  function imprimir() {
+    function esc(s: string) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
+    function linhasHtml(deals: DealResumo[]) {
+      if (deals.length === 0) return '<div style="color:#999;padding:10px 0;">Nenhum negócio nesse mês.</div>'
+      return deals.map(d => `
+        <div style="padding:8px 0;border-bottom:1px solid #eee;page-break-inside:avoid;">
+          <div style="display:flex;justify-content:space-between;gap:10px;">
+            <strong>${esc(d.empresa||d.titulo)}</strong>
+            <strong>${esc(fmtBRLCompacto(parseFloat(String(d.valor))||0))}</strong>
+          </div>
+          <div style="color:#888;font-size:12px;">evento: ${esc(d.data_evento)||'—'} · fechou: ${esc(d.won_time)||'—'} · ${esc(d.vendedor)}</div>
+        </div>`).join('')
+    }
+    function competenciaHtml(comp: [string,{valor:number;qtd:number}][]) {
+      if (!ehFechamento || comp.length === 0) return ''
+      return `<div style="margin-bottom:16px;padding-bottom:12px;border-bottom:1px dashed #ddd;">
+        <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;margin-bottom:8px;">Pra onde foi a competência</div>
+        ${comp.map(([m,v]) => `<div style="display:flex;justify-content:space-between;font-size:14px;padding:3px 0;"><span>${esc(m)}</span><span>${esc(fmtBRLCompacto(v.valor))} (${v.qtd})</span></div>`).join('')}
+      </div>`
+    }
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(titulo)}</title>
+      <style>
+        * { box-sizing: border-box; }
+        body { font-family: Arial, Helvetica, sans-serif; padding: 28px; color: #222; font-size: 15px; line-height: 1.5; margin: 0; }
+        h1 { font-size: 20px; margin: 0 0 6px; }
+        .cols { display: flex; flex-direction: column; gap: 32px; margin-top: 20px; }
+        .col-header { display: flex; justify-content: space-between; border-bottom: 2px solid #333; padding-bottom: 8px; margin-bottom: 12px; font-size: 16px; font-weight: 700; }
+      </style>
+    </head><body>
+      <h1>${esc(titulo)}</h1>
+      ${deltaAnual ? `<span style="display:inline-block;font-size:13px;font-weight:700;padding:4px 12px;border-radius:20px;background:${deltaAnual.up?'#eaf3de':'#fdeaea'};color:${deltaAnual.up?'#3B6D11':'#a32d2d'};">${deltaAnual.up?'↑':'↓'} ${deltaAnual.pct}% vs ${anoAnterior}</span>` : ''}
+      ${ehMesCorrente ? `<div style="font-size:12px;color:#8a7405;margin-top:10px;">Mês em curso — comparando dia 01 a ${String(diaCorte).padStart(2,'0')} (hoje) nos dois anos.</div>` : ''}
+      <div class="cols">
+        <div>
+          <div class="col-header"><span>${anoAnterior}</span><span>${esc(fmtBRLCompacto(totalAnterior))} (${dealsAnteriorCortado.length})</span></div>
+          ${competenciaHtml(competenciaAnterior)}
+          ${linhasHtml(dealsAnteriorCortado)}
+        </div>
+        <div>
+          <div class="col-header"><span>${anoAtual}</span><span>${esc(fmtBRLCompacto(totalAtual))} (${dealsAtualCortado.length})</span></div>
+          ${competenciaHtml(competenciaAtual)}
+          ${linhasHtml(dealsAtualCortado)}
+        </div>
+      </div>
+    </body></html>`
+
+    const iframe = document.createElement('iframe')
+    iframe.style.position = 'fixed'
+    iframe.style.right = '0'
+    iframe.style.bottom = '0'
+    iframe.style.width = '0'
+    iframe.style.height = '0'
+    iframe.style.border = '0'
+    document.body.appendChild(iframe)
+    const doc = iframe.contentWindow?.document
+    if (!doc) { document.body.removeChild(iframe); alert('Não consegui preparar a impressão — tenta de novo.'); return }
+    doc.open(); doc.write(html); doc.close()
+
+    function limpar() { if (iframe.parentNode) document.body.removeChild(iframe) }
+    iframe.onload = () => {
+      iframe.contentWindow?.focus()
+      iframe.contentWindow?.print()
+    }
+    // Fallback, pra garantir que o iframe some mesmo se onload não disparar,
+    // ou se a caixa de diálogo de impressão for cancelada.
+    setTimeout(limpar, 4000)
+  }
+
   return (
-    <div className="modal-overlay-print-reset" onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <style>{`@media print {
-        body * { visibility: hidden; }
-        .modal-print-area, .modal-print-area * { visibility: visible; }
-        .modal-overlay-print-reset {
-          position: static !important; background: none !important; padding: 0 !important;
-          display: block !important; height: auto !important; width: auto !important;
-        }
-        .modal-print-area {
-          position: static !important; left: auto; top: auto;
-          width: 100% !important; max-width: none !important; max-height: none !important;
-          overflow: visible !important; box-shadow: none !important; border-radius: 0 !important;
-          padding: 0 !important;
-        }
-        .modal-print-area, .modal-print-area * { font-size: 15px !important; line-height: 1.5 !important; }
-        .modal-print-titulo { font-size: 20px !important; margin-bottom: 12px !important; }
-        .modal-print-linha { page-break-inside: avoid; }
-        .modal-print-coluna { page-break-inside: avoid; }
-        .modal-print-colunas { display: block !important; }
-        .modal-print-coluna { margin-bottom: 28px !important; }
-        .no-print { display: none !important; }
-      }`}</style>
-      <div className="modal-print-area" onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 20, width: '100%', maxWidth: 820, maxHeight: '85vh', overflow: 'auto' }}>
-        <div className="modal-print-titulo" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap', gap: 8 }}>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 20, width: '100%', maxWidth: 820, maxHeight: '85vh', overflow: 'auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap', gap: 8 }}>
           <span style={{ fontSize: 14, fontWeight: 700 }}>{titulo}</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {deltaAnual && (
@@ -180,18 +231,18 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
                 {deltaAnual.up ? '↑' : '↓'} {deltaAnual.pct}% vs {anoAnterior}
               </span>
             )}
-            <button onClick={exportarCSV} className="no-print" style={{ padding: '5px 10px', borderRadius: 8, border: '0.5px solid #E8E8E2', background: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: '#5a5c5f' }}>⬇ Exportar CSV</button>
-            <button onClick={() => window.print()} className="no-print" style={{ padding: '5px 10px', borderRadius: 8, border: '0.5px solid #E8E8E2', background: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: '#5a5c5f' }}>🖨 Imprimir</button>
-            <button onClick={onClose} className="no-print" style={{ border: 'none', background: 'transparent', fontSize: 18, cursor: 'pointer', color: '#9a9c9f' }}>×</button>
+            <button onClick={exportarCSV} style={{ padding: '5px 10px', borderRadius: 8, border: '0.5px solid #E8E8E2', background: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: '#5a5c5f' }}>⬇ Exportar CSV</button>
+            <button onClick={imprimir} style={{ padding: '5px 10px', borderRadius: 8, border: '0.5px solid #E8E8E2', background: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: '#5a5c5f' }}>🖨 Imprimir</button>
+            <button onClick={onClose} style={{ border: 'none', background: 'transparent', fontSize: 18, cursor: 'pointer', color: '#9a9c9f' }}>×</button>
           </div>
         </div>
         {ehMesCorrente && (
-          <div style={{ fontSize: 11, color: '#8a7405', marginBottom: 14 }}>Mês em curso — hoje ainda não fechou, então comparando só dia 01 a {String(diaCorte).padStart(2,'0')} (dias completos) nos dois anos.</div>
+          <div style={{ fontSize: 11, color: '#8a7405', marginBottom: 14 }}>Mês em curso — comparando dia 01 a {String(diaCorte).padStart(2,'0')} (hoje) nos dois anos.</div>
         )}
         {loading ? (
           <div style={{ padding: 30, textAlign: 'center', color: '#9a9c9f' }}>Carregando...</div>
         ) : (
-          <div className="modal-print-colunas" style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginTop: ehMesCorrente ? 0 : 14 }}>
+          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginTop: ehMesCorrente ? 0 : 14 }}>
             <Coluna ano={anoAnterior} deals={dealsAnteriorCortado} total={totalAnterior} cor="#8a8c8f" competencia={competenciaAnterior} />
             <Coluna ano={anoAtual} deals={dealsAtualCortado} total={totalAtual} cor="#185FA5" competencia={competenciaAtual} />
           </div>
@@ -595,7 +646,7 @@ export default function OnePage({ filtros }: { filtros: any }) {
       {/* ── KPIs principais ────────────────────────────────── */}
       {!tendencia.ehMesCorrente ? null : (
         <div style={{ fontSize: 11, color: '#9a9c9f' }}>
-          Comparações "vs mês/ano anterior" usam do dia 01 até o dia {tendencia.diasComparacao} desses períodos — hoje ainda não terminou, então não entra na conta (só dias fechados de verdade), pra comparar igual com igual.
+          Comparações "vs mês/ano anterior" usam do dia 01 até hoje (dia {tendencia.diasComparacao}) desses períodos, pra comparar com o mesmo tanto de dias que já passou este mês.
         </div>
       )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
