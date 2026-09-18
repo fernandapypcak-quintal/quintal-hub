@@ -207,21 +207,31 @@ export function useVendedores() {
 }
 
 export type VendedorResumo = {
-  nome: string; papel: 'SDR' | 'Closer' | 'Outro' | 'Sem vendedor'
-  leads: number; won: number; taxaConversao: number
+  nome: string; papel: 'SDR' | 'Closer' | 'Outro (SDR)' | 'Outro (Closer)'
+  leadsCriados: number; convertidos: number; ganhosNoMes: number; taxaConversao: number
   receitaFechamento: number; receitaCompetencia: number; comissao: number
+  receitaFechamentoComSdr: number; receitaFechamentoSemSdr: number
 }
-export type SerieMensalValor = { periodo: string; label: string; valor: number; qtd: number }
+export type SerieMensalValor = { periodo: string; label: string; valor: number; qtd: number; temDados?: boolean }
+export type TotaisGerais = {
+  leadsCriados: number; convertidos: number; taxaConversao: number
+  ganhosNoMes: number; receitaFechamento: number; receitaCompetencia: number
+  pipelineAbertoValor: number; comissaoTotal: number
+}
 export type VendedoresResumoData = {
-  mes: string
+  mes: string; eventoRealizado: boolean
   vendedores: VendedorResumo[]
   forecast: SerieMensalValor[]
   pipelineAbertoPorCloser: Record<string, SerieMensalValor[]>
-  semSdr: { qtd: number; receitaFechamento: number }
-  comissaoTotal: { sdr: number; closer: number }
+  faturamentoCompetenciaTotal: number
+  totaisGerais: TotaisGerais
+  semSdrConfirmado: { qtd: number; valor: number }
+  semSdrPendente: { qtd: number; valor: number }
+  comissaoTotal: { sdr: number; closer: number; pendente: { qtd: number; valor: number } }
+  avisos: { conversao: string; closer: string; leadsCriados: string }
 }
 
-export function useVendedoresResumo(filtros: Pick<Filtros, 'unidade'>, mesFiltro: string) {
+export function useVendedoresResumo(filtros: Pick<Filtros, 'unidade' | 'vendedor'>, mesFiltro: string, sdrFiltro?: string) {
   const [dados, setDados] = useState<VendedoresResumoData | null>(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
@@ -229,14 +239,16 @@ export function useVendedoresResumo(filtros: Pick<Filtros, 'unidade'>, mesFiltro
   useEffect(() => {
     setLoading(true); setErro(null)
     const p = new URLSearchParams({ tipo: 'vendedores_resumo', mes_filtro: mesFiltro })
-    if (filtros.unidade) p.set('unidade', filtros.unidade)
+    if (filtros.unidade)  p.set('unidade',  filtros.unidade)
+    if (filtros.vendedor) p.set('vendedor', filtros.vendedor)
+    if (sdrFiltro) p.set('sdr', sdrFiltro)
     fetch(`${GAS_URL}?${p}`)
       .then(r => r.json())
       .then(data => { if (data.erro) throw new Error(data.erro); setDados(data) })
       .catch(e => setErro(e.message))
       .finally(() => setLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtros.unidade, mesFiltro])
+  }, [filtros.unidade, filtros.vendedor, mesFiltro, sdrFiltro])
 
   return { dados, loading, erro }
 }
@@ -252,8 +264,9 @@ export type FunilProdutividadeData = {
   funilDetalhado: { etapa: string; grupo: string; count: number }[]
 }
 
-export function useFunilProdutividade(filtros: Pick<Filtros, 'unidade' | 'vendedor'>) {
-  const [dados, setDados] = useState<FunilProdutividadeData | null>(null)
+export type FunilProdutividadeData_ = FunilProdutividadeData & { rotulo?: string }
+export function useFunilProdutividade(filtros: Pick<Filtros, 'unidade' | 'vendedor'>, sdr?: string) {
+  const [dados, setDados] = useState<FunilProdutividadeData_ | null>(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
 
@@ -262,13 +275,14 @@ export function useFunilProdutividade(filtros: Pick<Filtros, 'unidade' | 'vended
     const p = new URLSearchParams({ tipo: 'funil_produtividade' })
     if (filtros.unidade)  p.set('unidade',  filtros.unidade)
     if (filtros.vendedor) p.set('vendedor', filtros.vendedor)
+    if (sdr) p.set('sdr', sdr)
     fetch(`${GAS_URL}?${p}`)
       .then(r => r.json())
       .then(data => { if (data.erro) throw new Error(data.erro); setDados(data) })
       .catch(e => setErro(e.message))
       .finally(() => setLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtros.unidade, filtros.vendedor])
+  }, [filtros.unidade, filtros.vendedor, sdr])
 
   return { dados, loading, erro }
 }
