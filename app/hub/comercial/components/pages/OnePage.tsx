@@ -69,7 +69,9 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
   // que ainda não terminou. Mês já encerrado não corta (mês cheio dos dois lados).
   const hoje = new Date()
   const ehMesCorrente = ehFechamento && anoAtual === hoje.getFullYear() && mesNum === (hoje.getMonth()+1)
-  const diaCorte = ehMesCorrente ? hoje.getDate() : 31
+  // Hoje ainda não terminou, então não conta como dia fechado — corta em
+  // dia 01 até ONTEM nos dois anos, pra comparar só dias completos.
+  const diaCorte = ehMesCorrente ? Math.max(hoje.getDate() - 1, 0) : 31
 
   function filtrarPorDia(deals: DealResumo[]) {
     if (!ehFechamento) return deals
@@ -100,7 +102,7 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
   const competenciaAnterior = ehFechamento ? agruparPorCompetencia(dealsAnteriorCortado) : []
 
   const Coluna = ({ ano, deals, total, cor, competencia }: { ano: number; deals: DealResumo[]; total: number; cor: string; competencia: [string,{valor:number;qtd:number}][] }) => (
-    <div style={{ flex: 1, minWidth: 260 }}>
+    <div className="modal-print-coluna" style={{ flex: 1, minWidth: 260 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10, paddingBottom: 8, borderBottom: `2px solid ${cor}` }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: cor }}>{ano}</span>
         <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(total)} <span style={{ fontWeight: 400, color: '#9a9c9f' }}>({deals.length})</span></span>
@@ -120,7 +122,7 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
 
       {deals.length === 0 && <div style={{ fontSize: 12, color: '#9a9c9f', padding: '10px 0' }}>Nenhum negócio nesse mês.</div>}
       {deals.map(d => (
-        <div key={d.id} style={{ padding: '7px 0', borderBottom: '0.5px solid #F0F0EC', fontSize: 12 }}>
+        <div key={d.id} className="modal-print-linha" style={{ padding: '7px 0', borderBottom: '0.5px solid #F0F0EC', fontSize: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
             <span style={{ fontWeight: 600, color: '#3a3c3f', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.empresa || d.titulo}</span>
             <span style={{ fontWeight: 700, fontFamily: 'DM Mono, monospace', flexShrink: 0 }}>{fmtBRLCompacto(parseFloat(String(d.valor))||0)}</span>
@@ -147,15 +149,30 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
   const deltaAnual = delta(totalAtual, totalAnterior)
 
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+    <div className="modal-overlay-print-reset" onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <style>{`@media print {
         body * { visibility: hidden; }
         .modal-print-area, .modal-print-area * { visibility: visible; }
-        .modal-print-area { position: absolute; left: 0; top: 0; width: 100%; max-height: none !important; overflow: visible !important; box-shadow: none !important; }
+        .modal-overlay-print-reset {
+          position: static !important; background: none !important; padding: 0 !important;
+          display: block !important; height: auto !important; width: auto !important;
+        }
+        .modal-print-area {
+          position: static !important; left: auto; top: auto;
+          width: 100% !important; max-width: none !important; max-height: none !important;
+          overflow: visible !important; box-shadow: none !important; border-radius: 0 !important;
+          padding: 0 !important;
+        }
+        .modal-print-area, .modal-print-area * { font-size: 15px !important; line-height: 1.5 !important; }
+        .modal-print-titulo { font-size: 20px !important; margin-bottom: 12px !important; }
+        .modal-print-linha { page-break-inside: avoid; }
+        .modal-print-coluna { page-break-inside: avoid; }
+        .modal-print-colunas { display: block !important; }
+        .modal-print-coluna { margin-bottom: 28px !important; }
         .no-print { display: none !important; }
       }`}</style>
       <div className="modal-print-area" onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 20, width: '100%', maxWidth: 820, maxHeight: '85vh', overflow: 'auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap', gap: 8 }}>
+        <div className="modal-print-titulo" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap', gap: 8 }}>
           <span style={{ fontSize: 14, fontWeight: 700 }}>{titulo}</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {deltaAnual && (
@@ -169,12 +186,12 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
           </div>
         </div>
         {ehMesCorrente && (
-          <div style={{ fontSize: 11, color: '#8a7405', marginBottom: 14 }}>Mês em curso — comparando dia 01 a {String(diaCorte).padStart(2,'0')} nos dois anos, pra ser justo.</div>
+          <div style={{ fontSize: 11, color: '#8a7405', marginBottom: 14 }}>Mês em curso — hoje ainda não fechou, então comparando só dia 01 a {String(diaCorte).padStart(2,'0')} (dias completos) nos dois anos.</div>
         )}
         {loading ? (
           <div style={{ padding: 30, textAlign: 'center', color: '#9a9c9f' }}>Carregando...</div>
         ) : (
-          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginTop: ehMesCorrente ? 0 : 14 }}>
+          <div className="modal-print-colunas" style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginTop: ehMesCorrente ? 0 : 14 }}>
             <Coluna ano={anoAnterior} deals={dealsAnteriorCortado} total={totalAnterior} cor="#8a8c8f" competencia={competenciaAnterior} />
             <Coluna ano={anoAtual} deals={dealsAtualCortado} total={totalAtual} cor="#185FA5" competencia={competenciaAtual} />
           </div>
@@ -578,7 +595,7 @@ export default function OnePage({ filtros }: { filtros: any }) {
       {/* ── KPIs principais ────────────────────────────────── */}
       {!tendencia.ehMesCorrente ? null : (
         <div style={{ fontSize: 11, color: '#9a9c9f' }}>
-          Comparações "vs mês/ano anterior" usam só os primeiros {tendencia.diasDecorridos} dias desses períodos, pra comparar com o mesmo tanto de dias que já passou em {nomeMesAtual.toLowerCase()}.
+          Comparações "vs mês/ano anterior" usam do dia 01 até o dia {tendencia.diasComparacao} desses períodos — hoje ainda não terminou, então não entra na conta (só dias fechados de verdade), pra comparar igual com igual.
         </div>
       )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
