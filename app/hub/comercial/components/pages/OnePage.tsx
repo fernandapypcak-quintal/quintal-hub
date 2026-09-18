@@ -30,14 +30,91 @@ function hojeYm() {
   return `${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,'0')}`
 }
 
-function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior, mesAtualNum }: {
+const GAS_URL = '/api/pipedrive'
+
+type DealResumo = {
+  id: string; empresa: string; titulo: string; status: string; stage_nome: string
+  valor: number; data_evento: string; won_time: string; vendedor: string
+}
+
+// Modal de comparação: mostra os negócios que compuseram o valor de um mês
+// específico, nos dois anos (atual e anterior), lado a lado — pra
+// investigar diferenças ou conferir contra outra fonte (ex: planilha).
+function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior, filtros, onClose }: {
+  titulo: string; campoData: 'won_time' | 'data_evento'; mesNum: number
+  anoAtual: number; anoAnterior: number; filtros: any; onClose: () => void
+}) {
+  const [dealsAtual, setDealsAtual] = useState<DealResumo[]>([])
+  const [dealsAnterior, setDealsAnterior] = useState<DealResumo[]>([])
+  const [loading, setLoading] = useState(true)
+  const mesStr = String(mesNum).padStart(2, '0')
+
+  useEffect(() => {
+    setLoading(true)
+    function buscar(ano: number) {
+      const p = new URLSearchParams({ tipo: 'deals', limit: '500', status: 'won', campo_data: campoData, ano: String(ano), mes: mesStr })
+      if (filtros?.unidade)  p.set('unidade',  filtros.unidade)
+      if (filtros?.vendedor) p.set('vendedor', filtros.vendedor)
+      return fetch(`${GAS_URL}?${p}`).then(r => r.json()).then(d => d.deals || [])
+    }
+    Promise.all([buscar(anoAtual), buscar(anoAnterior)])
+      .then(([a, b]) => { setDealsAtual(a); setDealsAnterior(b) })
+      .finally(() => setLoading(false))
+  }, [campoData, mesNum, anoAtual, anoAnterior, filtros?.unidade, filtros?.vendedor])
+
+  const totalAtual = dealsAtual.reduce((s,d) => s + (parseFloat(String(d.valor))||0), 0)
+  const totalAnterior = dealsAnterior.reduce((s,d) => s + (parseFloat(String(d.valor))||0), 0)
+
+  const Coluna = ({ ano, deals, total, cor }: { ano: number; deals: DealResumo[]; total: number; cor: string }) => (
+    <div style={{ flex: 1, minWidth: 260 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10, paddingBottom: 8, borderBottom: `2px solid ${cor}` }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: cor }}>{ano}</span>
+        <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(total)} <span style={{ fontWeight: 400, color: '#9a9c9f' }}>({deals.length})</span></span>
+      </div>
+      {deals.length === 0 && <div style={{ fontSize: 12, color: '#9a9c9f', padding: '10px 0' }}>Nenhum negócio nesse mês.</div>}
+      {deals.map(d => (
+        <div key={d.id} style={{ padding: '7px 0', borderBottom: '0.5px solid #F0F0EC', fontSize: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+            <span style={{ fontWeight: 600, color: '#3a3c3f', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.empresa || d.titulo}</span>
+            <span style={{ fontWeight: 700, fontFamily: 'DM Mono, monospace', flexShrink: 0 }}>{fmtBRLCompacto(parseFloat(String(d.valor))||0)}</span>
+          </div>
+          <div style={{ color: '#9a9c9f', fontSize: 10 }}>evento: {d.data_evento||'—'} · fechou: {d.won_time||'—'} · {d.vendedor}</div>
+        </div>
+      ))}
+    </div>
+  )
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 20, width: '100%', maxWidth: 820, maxHeight: '85vh', overflow: 'auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <span style={{ fontSize: 14, fontWeight: 700 }}>{titulo}</span>
+          <button onClick={onClose} style={{ border: 'none', background: 'transparent', fontSize: 18, cursor: 'pointer', color: '#9a9c9f' }}>×</button>
+        </div>
+        {loading ? (
+          <div style={{ padding: 30, textAlign: 'center', color: '#9a9c9f' }}>Carregando...</div>
+        ) : (
+          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+            <Coluna ano={anoAnterior} deals={dealsAnterior} total={totalAnterior} cor="#8a8c8f" />
+            <Coluna ano={anoAtual} deals={dealsAtual} total={totalAtual} cor="#185FA5" />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior, mesAtualNum, filtros }: {
   titulo: string
   campo: 'receitaCompetencia' | 'receitaFechamento'
   anos: { atual: { ano: number; meses: any[] }; anterior: { ano: number; meses: any[] } }
   corAtual: string
   corAnterior: string
   mesAtualNum: number
+  filtros: any
 }) {
+  const [mesSelecionado, setMesSelecionado] = useState<number | null>(null)
+  const campoData: 'won_time' | 'data_evento' = campo === 'receitaFechamento' ? 'won_time' : 'data_evento'
   const todosValores = [...anos.atual.meses.map(m => m[campo]), ...anos.anterior.meses.map(m => m[campo])]
 
   // Acumulado: soma Jan..mês atual, comparando os dois anos na MESMA janela
@@ -85,6 +162,7 @@ function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior, mesAtualNum 
           </span>
         )}
       </div>
+      <div style={{ fontSize: 11, color: '#9a9c9f', marginBottom: teto < maior ? 8 : 0 }}>Clique num mês pra ver os negócios que compõem o valor, nos dois anos.</div>
       {teto < maior && (
         <div style={{ fontSize: 11, color: '#9a9c9f', marginBottom: 16 }}>
           Escala com corte — barras hachuradas no topo estouram o teto do gráfico (valor exato sempre escrito, e na tabela abaixo).
@@ -94,7 +172,7 @@ function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior, mesAtualNum 
         {anos.atual.meses.map((mAtualMes, i) => {
           const mAnt = anos.anterior.meses[i]
           return (
-            <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 78, flex: '1 0 78px' }}>
+            <div key={i} onClick={() => setMesSelecionado(mAtualMes.mes)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 78, flex: '1 0 78px', cursor: 'pointer' }}>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 5, height: 200 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
                   <span style={{ fontSize: 10, fontWeight: 700, color: '#8a8c8f', fontFamily: 'DM Mono, monospace', marginBottom: 4, whiteSpace: 'nowrap' }}>{fmtBRLCompacto(mAnt[campo])}</span>
@@ -130,7 +208,9 @@ function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior, mesAtualNum 
               const mAnt = anos.anterior.meses[i]
               const d = delta(mAtualMes[campo], mAnt[campo])
               return (
-                <tr key={i} style={{ borderBottom: '0.5px solid #F5F5F2' }}>
+                <tr key={i} onClick={() => setMesSelecionado(mAtualMes.mes)} style={{ borderBottom: '0.5px solid #F5F5F2', cursor: 'pointer' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#FAFAF8')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                   <td style={{ padding: '6px 8px', fontWeight: 600, color: '#3a3c3f' }}>{mAtualMes.label}</td>
                   <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'DM Mono, monospace', color: '#8a8c8f' }}>{fmtBRLCompacto(mAnt[campo])}</td>
                   <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'DM Mono, monospace', fontWeight: 700, color: corAtual }}>{fmtBRLCompacto(mAtualMes[campo])}</td>
@@ -141,11 +221,21 @@ function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior, mesAtualNum 
           </tbody>
         </table>
       </div>
+
+      {mesSelecionado !== null && (
+        <ModalComparacaoMeses
+          titulo={`${titulo} · ${anos.atual.meses[mesSelecionado-1]?.label}`}
+          campoData={campoData}
+          mesNum={mesSelecionado}
+          anoAtual={anos.atual.ano}
+          anoAnterior={anos.anterior.ano}
+          filtros={filtros}
+          onClose={() => setMesSelecionado(null)}
+        />
+      )}
     </div>
   )
 }
-
-const GAS_URL = '/api/pipedrive'
 
 type DealGranular = {
   empresa: string; data_evento: string; vendedor: string; unidade_nome: string
@@ -528,6 +618,7 @@ export default function OnePage({ filtros }: { filtros: any }) {
         corAtual="#3B6D11"
         corAnterior="#c3d89a"
         mesAtualNum={parseInt(atual.mes.split('-')[1])}
+        filtros={filtros}
       />
 
       {/* ── Faturamento por Fechamento: ano atual x ano anterior ─── */}
@@ -538,6 +629,7 @@ export default function OnePage({ filtros }: { filtros: any }) {
         corAtual="#185FA5"
         corAnterior="#a8c8e8"
         mesAtualNum={parseInt(atual.mes.split('-')[1])}
+        filtros={filtros}
       />
 
       {/* ── Leads, conversão e ticket médio (com pacotes), granularidade ── */}
