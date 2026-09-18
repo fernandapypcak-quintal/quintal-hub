@@ -175,10 +175,12 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(titulo)}</title>
       <style>
         * { box-sizing: border-box; }
-        body { font-family: Arial, Helvetica, sans-serif; padding: 28px; color: #222; font-size: 15px; line-height: 1.5; margin: 0; }
-        h1 { font-size: 20px; margin: 0 0 6px; }
-        .cols { display: flex; flex-direction: column; gap: 32px; margin-top: 20px; }
-        .col-header { display: flex; justify-content: space-between; border-bottom: 2px solid #333; padding-bottom: 8px; margin-bottom: 12px; font-size: 16px; font-weight: 700; }
+        @page { size: landscape; margin: 14mm; }
+        body { font-family: Arial, Helvetica, sans-serif; padding: 0; color: #222; font-size: 14px; line-height: 1.5; margin: 0; }
+        h1 { font-size: 19px; margin: 0 0 6px; }
+        .cols { display: flex; flex-direction: row; gap: 40px; margin-top: 18px; align-items: flex-start; }
+        .cols > div { flex: 1; min-width: 0; }
+        .col-header { display: flex; justify-content: space-between; border-bottom: 2px solid #333; padding-bottom: 8px; margin-bottom: 12px; font-size: 15px; font-weight: 700; }
       </style>
     </head><body>
       <h1>${esc(titulo)}</h1>
