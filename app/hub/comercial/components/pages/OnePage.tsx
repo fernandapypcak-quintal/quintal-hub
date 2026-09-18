@@ -48,6 +48,7 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
   const [dealsAnterior, setDealsAnterior] = useState<DealResumo[]>([])
   const [loading, setLoading] = useState(true)
   const mesStr = String(mesNum).padStart(2, '0')
+  const ehFechamento = campoData === 'won_time'
 
   useEffect(() => {
     setLoading(true)
@@ -62,15 +63,61 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
       .finally(() => setLoading(false))
   }, [campoData, mesNum, anoAtual, anoAnterior, filtros?.unidade, filtros?.vendedor])
 
-  const totalAtual = dealsAtual.reduce((s,d) => s + (parseFloat(String(d.valor))||0), 0)
-  const totalAnterior = dealsAnterior.reduce((s,d) => s + (parseFloat(String(d.valor))||0), 0)
+  // Corte por dia: só se aplica no gráfico de FECHAMENTO, e só quando o mês
+  // clicado é o mês corrente de verdade (ainda em curso) — nos dois anos, no
+  // mesmo dia, senão o ano fechado inteiro sempre pareceria maior que o mês
+  // que ainda não terminou. Mês já encerrado não corta (mês cheio dos dois lados).
+  const hoje = new Date()
+  const ehMesCorrente = ehFechamento && anoAtual === hoje.getFullYear() && mesNum === (hoje.getMonth()+1)
+  const diaCorte = ehMesCorrente ? hoje.getDate() : 31
 
-  const Coluna = ({ ano, deals, total, cor }: { ano: number; deals: DealResumo[]; total: number; cor: string }) => (
+  function filtrarPorDia(deals: DealResumo[]) {
+    if (!ehFechamento) return deals
+    return deals.filter(d => {
+      const dia = parseInt(String(d.won_time||'').substring(8,10))
+      return !dia || dia <= diaCorte
+    })
+  }
+  const dealsAtualCortado = filtrarPorDia(dealsAtual)
+  const dealsAnteriorCortado = filtrarPorDia(dealsAnterior)
+
+  const totalAtual = dealsAtualCortado.reduce((s,d) => s + (parseFloat(String(d.valor))||0), 0)
+  const totalAnterior = dealsAnteriorCortado.reduce((s,d) => s + (parseFloat(String(d.valor))||0), 0)
+
+  // Pra onde foi a competência: agrupa os deals que FECHARAM nesse mês pelo
+  // mês do EVENTO (data_evento) — só faz sentido no gráfico de Fechamento.
+  function agruparPorCompetencia(deals: DealResumo[]) {
+    const mapa: Record<string, { valor: number; qtd: number }> = {}
+    deals.forEach(d => {
+      const comp = String(d.data_evento||'').substring(0,7) || 'Sem data'
+      if (!mapa[comp]) mapa[comp] = { valor: 0, qtd: 0 }
+      mapa[comp].valor += parseFloat(String(d.valor))||0
+      mapa[comp].qtd++
+    })
+    return Object.entries(mapa).sort((a,b) => a[0].localeCompare(b[0]))
+  }
+  const competenciaAtual = ehFechamento ? agruparPorCompetencia(dealsAtualCortado) : []
+  const competenciaAnterior = ehFechamento ? agruparPorCompetencia(dealsAnteriorCortado) : []
+
+  const Coluna = ({ ano, deals, total, cor, competencia }: { ano: number; deals: DealResumo[]; total: number; cor: string; competencia: [string,{valor:number;qtd:number}][] }) => (
     <div style={{ flex: 1, minWidth: 260 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10, paddingBottom: 8, borderBottom: `2px solid ${cor}` }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: cor }}>{ano}</span>
         <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(total)} <span style={{ fontWeight: 400, color: '#9a9c9f' }}>({deals.length})</span></span>
       </div>
+
+      {ehFechamento && competencia.length > 0 && (
+        <div style={{ marginBottom: 14, paddingBottom: 12, borderBottom: '1px dashed #E8E8E2' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', marginBottom: 6 }}>Pra onde foi a competência</div>
+          {competencia.map(([comp, v]) => (
+            <div key={comp} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '2px 0' }}>
+              <span style={{ color: '#5a5c5f' }}>{comp}</span>
+              <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 600 }}>{fmtBRLCompacto(v.valor)} <span style={{ color: '#9a9c9f' }}>({v.qtd})</span></span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {deals.length === 0 && <div style={{ fontSize: 12, color: '#9a9c9f', padding: '10px 0' }}>Nenhum negócio nesse mês.</div>}
       {deals.map(d => (
         <div key={d.id} style={{ padding: '7px 0', borderBottom: '0.5px solid #F0F0EC', fontSize: 12 }}>
@@ -87,16 +134,19 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 20, width: '100%', maxWidth: 820, maxHeight: '85vh', overflow: 'auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
           <span style={{ fontSize: 14, fontWeight: 700 }}>{titulo}</span>
           <button onClick={onClose} style={{ border: 'none', background: 'transparent', fontSize: 18, cursor: 'pointer', color: '#9a9c9f' }}>×</button>
         </div>
+        {ehMesCorrente && (
+          <div style={{ fontSize: 11, color: '#8a7405', marginBottom: 14 }}>Mês em curso — comparando dia 01 a {String(diaCorte).padStart(2,'0')} nos dois anos, pra ser justo.</div>
+        )}
         {loading ? (
           <div style={{ padding: 30, textAlign: 'center', color: '#9a9c9f' }}>Carregando...</div>
         ) : (
-          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-            <Coluna ano={anoAnterior} deals={dealsAnterior} total={totalAnterior} cor="#8a8c8f" />
-            <Coluna ano={anoAtual} deals={dealsAtual} total={totalAtual} cor="#185FA5" />
+          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginTop: ehMesCorrente ? 0 : 14 }}>
+            <Coluna ano={anoAnterior} deals={dealsAnteriorCortado} total={totalAnterior} cor="#8a8c8f" competencia={competenciaAnterior} />
+            <Coluna ano={anoAtual} deals={dealsAtualCortado} total={totalAtual} cor="#185FA5" competencia={competenciaAtual} />
           </div>
         )}
       </div>
