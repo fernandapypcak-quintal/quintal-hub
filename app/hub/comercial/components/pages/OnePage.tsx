@@ -131,12 +131,42 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
     </div>
   )
 
+  function exportarCSV() {
+    const linhas = [['Ano','Empresa','Valor','DataEvento','Fechou','Vendedor']]
+    dealsAnteriorCortado.forEach(d => linhas.push([String(anoAnterior), d.empresa||d.titulo, String(parseFloat(String(d.valor))||0), d.data_evento||'', d.won_time||'', d.vendedor||'']))
+    dealsAtualCortado.forEach(d => linhas.push([String(anoAtual), d.empresa||d.titulo, String(parseFloat(String(d.valor))||0), d.data_evento||'', d.won_time||'', d.vendedor||'']))
+    const csv = linhas.map(l => l.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n')
+    const blob = new Blob(['\uFEFF'+csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `${titulo.replace(/[^\w]+/g,'_')}.csv`
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const deltaAnual = delta(totalAtual, totalAnterior)
+
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 20, width: '100%', maxWidth: 820, maxHeight: '85vh', overflow: 'auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+      <style>{`@media print {
+        body * { visibility: hidden; }
+        .modal-print-area, .modal-print-area * { visibility: visible; }
+        .modal-print-area { position: absolute; left: 0; top: 0; width: 100%; max-height: none !important; overflow: visible !important; box-shadow: none !important; }
+        .no-print { display: none !important; }
+      }`}</style>
+      <div className="modal-print-area" onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 20, width: '100%', maxWidth: 820, maxHeight: '85vh', overflow: 'auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap', gap: 8 }}>
           <span style={{ fontSize: 14, fontWeight: 700 }}>{titulo}</span>
-          <button onClick={onClose} style={{ border: 'none', background: 'transparent', fontSize: 18, cursor: 'pointer', color: '#9a9c9f' }}>×</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {deltaAnual && (
+              <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: deltaAnual.up ? '#eaf3de' : '#fdeaea', color: deltaAnual.up ? '#3B6D11' : '#a32d2d' }}>
+                {deltaAnual.up ? '↑' : '↓'} {deltaAnual.pct}% vs {anoAnterior}
+              </span>
+            )}
+            <button onClick={exportarCSV} className="no-print" style={{ padding: '5px 10px', borderRadius: 8, border: '0.5px solid #E8E8E2', background: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: '#5a5c5f' }}>⬇ Exportar CSV</button>
+            <button onClick={() => window.print()} className="no-print" style={{ padding: '5px 10px', borderRadius: 8, border: '0.5px solid #E8E8E2', background: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: '#5a5c5f' }}>🖨 Imprimir</button>
+            <button onClick={onClose} className="no-print" style={{ border: 'none', background: 'transparent', fontSize: 18, cursor: 'pointer', color: '#9a9c9f' }}>×</button>
+          </div>
         </div>
         {ehMesCorrente && (
           <div style={{ fontSize: 11, color: '#8a7405', marginBottom: 14 }}>Mês em curso — comparando dia 01 a {String(diaCorte).padStart(2,'0')} nos dois anos, pra ser justo.</div>
