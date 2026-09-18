@@ -172,7 +172,7 @@ function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior, mesAtualNum,
         {anos.atual.meses.map((mAtualMes, i) => {
           const mAnt = anos.anterior.meses[i]
           return (
-            <div key={i} onClick={() => setMesSelecionado(mAtualMes.mes)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 78, flex: '1 0 78px', cursor: 'pointer' }}>
+            <div key={i} onClick={() => setMesSelecionado(i+1)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 78, flex: '1 0 78px', cursor: 'pointer' }}>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 5, height: 200 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
                   <span style={{ fontSize: 10, fontWeight: 700, color: '#8a8c8f', fontFamily: 'DM Mono, monospace', marginBottom: 4, whiteSpace: 'nowrap' }}>{fmtBRLCompacto(mAnt[campo])}</span>
@@ -208,7 +208,7 @@ function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior, mesAtualNum,
               const mAnt = anos.anterior.meses[i]
               const d = delta(mAtualMes[campo], mAnt[campo])
               return (
-                <tr key={i} onClick={() => setMesSelecionado(mAtualMes.mes)} style={{ borderBottom: '0.5px solid #F5F5F2', cursor: 'pointer' }}
+                <tr key={i} onClick={() => setMesSelecionado(i+1)} style={{ borderBottom: '0.5px solid #F5F5F2', cursor: 'pointer' }}
                   onMouseEnter={e => (e.currentTarget.style.background = '#FAFAF8')}
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                   <td style={{ padding: '6px 8px', fontWeight: 600, color: '#3a3c3f' }}>{mAtualMes.label}</td>
