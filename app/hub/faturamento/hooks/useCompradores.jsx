@@ -1,8 +1,9 @@
 // src/hooks/useCompradores.jsx
 import { createContext, useContext, useState, useEffect } from 'react';
 import { filterRowsByUnit } from '@/lib/units';
+import { buscarTipo } from '../data/loader';
 
-const URL = 'https://script.google.com/macros/s/AKfycbyEoeYAWVUGc8n-_J61Sd91XDhkRPJOaVQnvUbk_-UcWyuaRtoyvFwtqMMcFq8_H80vwA/exec';
+// Dados vêm via buscarTipo(): CSV publicado → Web App → cópia local.
 
 const Ctx = createContext(null);
 
@@ -11,9 +12,8 @@ export function CompradoresProvider({ children, allowedLojas = '*' }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${URL}?tipo=compradores`)
-      .then(r => r.json())
-      .then(json => {
+    buscarTipo('compradores', 'compradores')
+      .then(({ json }) => {
         if (json.compradores) {
           setCompradores(filterRowsByUnit(json.compradores, 'Loja', allowedLojas));
         }
