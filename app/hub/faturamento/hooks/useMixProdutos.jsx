@@ -1,7 +1,8 @@
 // src/hooks/useMixProdutos.jsx
 import { createContext, useContext, useState, useEffect } from 'react';
+import { buscarTipo } from '../data/loader';
 
-const URL = 'https://script.google.com/macros/s/AKfycbyEoeYAWVUGc8n-_J61Sd91XDhkRPJOaVQnvUbk_-UcWyuaRtoyvFwtqMMcFq8_H80vwA/exec';
+// Dados vêm via buscarTipo(): CSV publicado → Web App → cópia local.
 
 const Ctx = createContext(null);
 
@@ -10,9 +11,8 @@ export function MixProdutosProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${URL}?tipo=mixProdutos`)
-      .then(r => r.json())
-      .then(json => {
+    buscarTipo('mixProdutos', 'mixProdutos')
+      .then(({ json }) => {
         if (json.mixProdutos) setMixProdutos(json.mixProdutos);
         setLoading(false);
       })
