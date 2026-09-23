@@ -1,10 +1,11 @@
 // src/hooks/useMetas.jsx
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { isUnitAllowed } from '@/lib/units';
+import { buscarTipo } from '../data/loader';
 
 const MetasContext   = createContext(null);
 const STORAGE_KEY    = 'quintal_metas_v1';
-const APPSCRIPT_URL  = 'https://script.google.com/macros/s/AKfycbyEoeYAWVUGc8n-_J61Sd91XDhkRPJOaVQnvUbk_-UcWyuaRtoyvFwtqMMcFq8_H80vwA/exec';
+// Metas vêm via buscarTipo(): CSV publicado → Web App → cópia local.
 
 function toKey(ano, mes) {
   return `${ano}-${String(mes).padStart(2, '0')}`;
@@ -37,10 +38,7 @@ export function MetasProvider({ children, allowedLojas = '*' }) {
   async function fetchMetas() {
     setSheetsStatus('loading');
     try {
-      const res  = await fetch(`${APPSCRIPT_URL}?tipo=metas`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      if (json.erro) throw new Error(json.erro);
+      const { json } = await buscarTipo('metas', 'metas');
       if (!json.metas?.length) {
         // Sem metas ainda — carrega do localStorage como fallback
         const saved = localStorage.getItem(STORAGE_KEY);
