@@ -1,8 +1,9 @@
 // src/hooks/useAlmoco.jsx
 import { createContext, useContext, useState, useEffect } from 'react';
 import { filterRowsByUnit, servesAlmoco } from '@/lib/units';
+import { buscarTipo } from '../data/loader';
 
-const URL = 'https://script.google.com/macros/s/AKfycbyEoeYAWVUGc8n-_J61Sd91XDhkRPJOaVQnvUbk_-UcWyuaRtoyvFwtqMMcFq8_H80vwA/exec';
+// Dados vêm via buscarTipo(): CSV publicado → Web App → cópia local.
 
 const Ctx = createContext(null);
 
@@ -11,9 +12,8 @@ export function AlmocoProvider({ children, allowedLojas = '*' }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${URL}?tipo=almoco`)
-      .then(r => r.json())
-      .then(json => {
+    buscarTipo('almoco', 'almoco')
+      .then(({ json }) => {
         if (json.almoco) {
           // Alguns lançamentos caem em "Almoço" só pelo horário do
           // registro (11h-15h), mesmo em lojas que não têm esse serviço
