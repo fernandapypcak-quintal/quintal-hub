@@ -20,14 +20,14 @@ const URL = 'https://script.google.com/macros/s/AKfycbyEoeYAWVUGc8n-_J61Sd91XDhk
 export const CSV_URLS = {
   dados:       'https://docs.google.com/spreadsheets/d/e/2PACX-1vSzX-kyRN9jZkSXCmxhJWTGNZkrOPhwuo80MaGjQBE1JPNPzJ0US_8POedPIzbKo92OrHk_Nj5JszIt/pub?gid=1314243622&single=true&output=csv',
   zig:         'https://docs.google.com/spreadsheets/d/e/2PACX-1vSzX-kyRN9jZkSXCmxhJWTGNZkrOPhwuo80MaGjQBE1JPNPzJ0US_8POedPIzbKo92OrHk_Nj5JszIt/pub?gid=248301916&single=true&output=csv',
-  metas:       '',
-  almoco:      '',
-  compradores: '',
-  descontos:   '',
+  metas:       'https://docs.google.com/spreadsheets/d/e/2PACX-1vSzX-kyRN9jZkSXCmxhJWTGNZkrOPhwuo80MaGjQBE1JPNPzJ0US_8POedPIzbKo92OrHk_Nj5JszIt/pub?gid=784496525&single=true&output=csv',
+  almoco:      'https://docs.google.com/spreadsheets/d/e/2PACX-1vSzX-kyRN9jZkSXCmxhJWTGNZkrOPhwuo80MaGjQBE1JPNPzJ0US_8POedPIzbKo92OrHk_Nj5JszIt/pub?gid=1613401771&single=true&output=csv',
+  compradores: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSzX-kyRN9jZkSXCmxhJWTGNZkrOPhwuo80MaGjQBE1JPNPzJ0US_8POedPIzbKo92OrHk_Nj5JszIt/pub?gid=1871489866&single=true&output=csv',
+  descontos:   'https://docs.google.com/spreadsheets/d/e/2PACX-1vSzX-kyRN9jZkSXCmxhJWTGNZkrOPhwuo80MaGjQBE1JPNPzJ0US_8POedPIzbKo92OrHk_Nj5JszIt/pub?gid=431969024&single=true&output=csv',
   margem:      '',
-  areas:       '',
-  mixProdutos: '',
-  ticket:      '',
+  areas:       'https://docs.google.com/spreadsheets/d/e/2PACX-1vSzX-kyRN9jZkSXCmxhJWTGNZkrOPhwuo80MaGjQBE1JPNPzJ0US_8POedPIzbKo92OrHk_Nj5JszIt/pub?gid=1989659953&single=true&output=csv',
+  mixProdutos: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSzX-kyRN9jZkSXCmxhJWTGNZkrOPhwuo80MaGjQBE1JPNPzJ0US_8POedPIzbKo92OrHk_Nj5JszIt/pub?gid=373319043&single=true&output=csv',
+  ticket:      'https://docs.google.com/spreadsheets/d/e/2PACX-1vSzX-kyRN9jZkSXCmxhJWTGNZkrOPhwuo80MaGjQBE1JPNPzJ0US_8POedPIzbKo92OrHk_Nj5JszIt/pub?gid=903865200&single=true&output=csv',
 };
 
 const MESES = ['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -38,6 +38,20 @@ const DATA_CORTE_ZIG = '2026-05-18';
 
 // Quantos dias mais recentes buscar direto da API.
 const DIAS_JANELA_VIVA = 3;
+
+// Colunas que identificam cada aba publicada (proteção contra gid trocado).
+const tem = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+const ASSINATURA_CSV = {
+  dados:       (o) => tem(o, 'Canal') && !tem(o, 'Metodo_Pagamento'),
+  zig:         (o) => tem(o, 'Metodo_Pagamento'),
+  metas:       (o) => tem(o, 'Meta'),
+  almoco:      (o) => tem(o, 'Valor') && !tem(o, 'Canal'),
+  compradores: (o) => tem(o, 'Pessoas') && !tem(o, 'Ticket_Medio'),
+  ticket:      (o) => tem(o, 'Ticket_Medio'),
+  descontos:   (o) => tem(o, 'Desconto'),
+  areas:       (o) => tem(o, 'Area_m2'),
+  mixProdutos: (o) => tem(o, 'Categoria'),
+};
 
 // ── Resiliência ─────────────────────────────────────────────────────────────
 const CACHE_PREFIX = 'fat_cache_v1:';
@@ -162,13 +176,18 @@ export async function buscarTipo(tipo, campo = tipo) {
   if (csvUrl && csvUrl.startsWith('http')) {
     try {
       const rows = await comRetry(() => buscarCSV(csvUrl), `csv:${tipo}`, 2);
-      // Trava contra link trocado: a aba pub_zig tem Metodo_Pagamento e a
-      // pub_dados não. Se vier ao contrário, ignora o CSV e usa o Web App.
-      const temMetodo = 'Metodo_Pagamento' in rows[0];
-      if ((tipo === 'zig' && !temMetodo) || (tipo === 'dados' && temMetodo)) {
+      // Trava contra link trocado: cada aba tem uma "assinatura" de colunas.
+      // Se o CSV não bater com o tipo pedido, ignora e usa o Web App.
+      const assinatura = ASSINATURA_CSV[tipo];
+      if (assinatura && !assinatura(rows[0])) {
         throw new Error('link do CSV parece ser de outra aba (confira CSV_URLS)');
       }
-      const json = { ok: true, total: rows.length, [campo]: rows };
+      // CSV vem tudo como texto — converte o que é número (Ano, Mes, Valor,
+      // Pessoas…) pra número, igual o Web App devolve. Sem isso comparações
+      // tipo r.Ano === 2026 nos hooks falhariam.
+      const coagir = (v) => (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v.trim())) ? Number(v) : v;
+      const tipadas = rows.map((o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, coagir(v)])));
+      const json = { ok: true, total: tipadas.length, [campo]: tipadas };
       salvarLocal(tipo, json);
       return { json, origem: 'csv' };
     } catch (e) {
