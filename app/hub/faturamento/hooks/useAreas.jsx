@@ -1,7 +1,8 @@
 // src/hooks/useAreas.jsx
 import { createContext, useContext, useState, useEffect } from 'react';
+import { buscarTipo } from '../data/loader';
 
-const URL = 'https://script.google.com/macros/s/AKfycbyEoeYAWVUGc8n-_J61Sd91XDhkRPJOaVQnvUbk_-UcWyuaRtoyvFwtqMMcFq8_H80vwA/exec';
+// Dados vêm via buscarTipo(): CSV publicado → Web App → cópia local.
 
 const Ctx = createContext(null);
 
@@ -10,9 +11,8 @@ export function AreasProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${URL}?tipo=areas`)
-      .then(r => r.json())
-      .then(json => {
+    buscarTipo('areas', 'areas')
+      .then(({ json }) => {
         if (json.areas) {
           const map = {};
           json.areas.forEach(a => { map[a.Loja] = a.Area_m2; });
