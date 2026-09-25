@@ -11,7 +11,14 @@
 //
 // Agrupa por gerente (lib/metas/gerentes.ts) e filtra pelas unidades
 // permitidas do usuário — quem tem lojas:'*' (admin/diretor) vê os 3
-// grupos; cada gerente só vê o próprio.
+// grupos + Consolidado + Top 5; cada gerente só vê o próprio.
+//
+// IMPORTANTE: os indicadores manuais são buscados do Apps Script UMA
+// ÚNICA VEZ (sheet inteira, sem filtro de mes_ref) e depois filtrados
+// no cliente por mês. Bater no Apps Script em paralelo (uma chamada
+// por mês, como era antes) faz o Google enfileirar/travar execuções
+// concorrentes e estourar timeout — por isso trimestre (3 meses em
+// paralelo) quebrava e mês (1 chamada) não.
 
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
 import { isUnitAllowed, unitIdFromString, ALL_UNIT_IDS } from '@/lib/units'
@@ -21,9 +28,7 @@ import {
   calcularResultadoGerente,
   TIPO_AGREGACAO,
 } from '@/lib/metas/scoring'
-import { loadData } from '@/app/hub/faturamento/data/loader'
-
-const FATURAMENTO_METAS_URL = 'https://script.google.com/macros/s/AKfycbyEoeYAWVUGc8n-_J61Sd91XDhkRPJOaVQnvUbk_-UcWyuaRtoyvFwtqMMcFq8_H80vwA/exec'
+import { loadData, buscarTipo } from '@/app/hub/faturamento/data/loader'
 
 const MetasDataContext = createContext(null)
 
@@ -49,8 +54,29 @@ function mesesDoTrimestre(anoMes) {
 }
 
 // -------------------------------------------------------------------
+// Indicadores manuais — busca a planilha INTEIRA de uma vez só (sem
+// mes_ref), cacheada em memória; filtragem por mês acontece no cliente.
+// Isso evita bater no Apps Script mais de uma vez por sessão (exceto
+// quando algo é salvo, que invalida o cache).
+// -------------------------------------------------------------------
+let _cacheManuaisTodos = null
+
+async function getTodosManuais() {
+  if (!_cacheManuaisTodos) {
+    const res = await fetch('/api/metas').then((r) => r.json())
+    if (res.erro) throw new Error(res.erro)
+    _cacheManuaisTodos = res.metas || []
+  }
+  return _cacheManuaisTodos
+}
+
+function invalidarCacheManuais() {
+  _cacheManuaisTodos = null
+}
+
+// -------------------------------------------------------------------
 // Faturamento Real por loja/mês — total Casa+Delivery. Cache simples
-// por mês pra não rebuscar o histórico completo repetidas vezes.
+// pra não rebuscar o histórico completo repetidas vezes.
 // -------------------------------------------------------------------
 let _cacheFaturamentoRows = null
 
@@ -77,15 +103,16 @@ async function buscarFaturamentoRealPorMes(anoMes) {
   }
 }
 
+// Meta de faturamento — reaproveita buscarTipo() do loader do Faturamento:
+// CSV publicado → Web App → cópia local salva no navegador, com retry.
+// Mesma fonte que o useMetas.jsx do Faturamento usa, só que lida aqui
+// direto (sem precisar do MetasProvider daquele módulo).
 let _cacheFaturamentoMetas = null
 
 async function buscarFaturamentoMetaPorMes(anoMes) {
   try {
     if (!_cacheFaturamentoMetas) {
-      const res = await fetch(`${FATURAMENTO_METAS_URL}?tipo=metas`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const json = await res.json()
-      if (json.erro) throw new Error(json.erro)
+      const { json } = await buscarTipo('metas', 'metas')
       _cacheFaturamentoMetas = json.metas || []
     }
     const porLoja = {}
@@ -106,8 +133,7 @@ async function buscarFaturamentoMetaPorMes(anoMes) {
 // Monta os inputs de indicador de UMA unidade a partir das linhas
 // manuais (de 1 ou mais meses) + faturamento (de 1 ou mais meses).
 // Quando são vários meses (trimestre), agrega por média (%) ou soma (R$)
-// antes de montar o input — assim o resto do pipeline nem sabe se é
-// mês ou trimestre.
+// antes de montar o input.
 // -------------------------------------------------------------------
 function agregarValores(tipo, valores) {
   const validos = valores.filter((v) => v != null)
@@ -176,21 +202,21 @@ export function MetasDataProvider({ children, allowedLojas = '*', isAdmin = fals
     try {
       const meses = visaoAtual === 'trimestre' ? mesesDoTrimestre(mesRef) : [mesRef]
 
-      const resultados = await Promise.all(
-        meses.map(async (m) => {
-          const [resManuais, real, meta] = await Promise.all([
-            fetch(`/api/metas?mes_ref=${primeiroDiaDoMes(m)}`).then((r) => r.json()),
-            buscarFaturamentoRealPorMes(m),
-            buscarFaturamentoMetaPorMes(m),
-          ])
-          if (resManuais.erro) throw new Error(resManuais.erro)
-          return { manuais: resManuais.metas || [], real, meta }
-        })
-      )
+      // busca a planilha inteira UMA VEZ (não uma vez por mês)
+      const todosManuais = await getTodosManuais()
+      const [faturamentoReal, faturamentoMeta] = await Promise.all([
+        Promise.all(meses.map((m) => buscarFaturamentoRealPorMes(m))),
+        Promise.all(meses.map((m) => buscarFaturamentoMetaPorMes(m))),
+      ])
 
-      setManuaisPorMes(resultados.map((r) => r.manuais))
-      setFaturamentoRealPorMes(resultados.map((r) => r.real))
-      setFaturamentoMetaPorMes(resultados.map((r) => r.meta))
+      const manuaisFiltrados = meses.map((m) => {
+        const mesFormatado = primeiroDiaDoMes(m)
+        return todosManuais.filter((l) => l.mes_ref === mesFormatado)
+      })
+
+      setManuaisPorMes(manuaisFiltrados)
+      setFaturamentoRealPorMes(faturamentoReal)
+      setFaturamentoMetaPorMes(faturamentoMeta)
     } catch (e) {
       setError(e.message)
     } finally {
@@ -268,6 +294,7 @@ export function MetasDataProvider({ children, allowedLojas = '*', isAdmin = fals
     })
     const json = await res.json()
     if (json.erro) throw new Error(json.erro)
+    invalidarCacheManuais() // dado mudou — próxima carga busca de novo
     await carregar(anoMes, visao)
   }, [anoMes, visao, carregar])
 
@@ -281,7 +308,7 @@ export function MetasDataProvider({ children, allowedLojas = '*', isAdmin = fals
       resultadoTop5,
       loading, error, isAdmin,
       salvarIndicador,
-      recarregar: () => carregar(anoMes, visao),
+      recarregar: () => { invalidarCacheManuais(); carregar(anoMes, visao) },
     }}>
       {children}
     </MetasDataContext.Provider>
