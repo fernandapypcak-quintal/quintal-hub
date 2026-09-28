@@ -88,16 +88,6 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
 
   // Pra onde foi a competência: agrupa os deals que FECHARAM nesse mês pelo
   // mês do EVENTO (data_evento) — só faz sentido no gráfico de Fechamento.
-  function agruparPorCompetencia(deals: DealResumo[]) {
-    const mapa: Record<string, { valor: number; qtd: number }> = {}
-    deals.forEach(d => {
-      const comp = String(d.data_evento||'').substring(0,7) || 'Sem data'
-      if (!mapa[comp]) mapa[comp] = { valor: 0, qtd: 0 }
-      mapa[comp].valor += parseFloat(String(d.valor))||0
-      mapa[comp].qtd++
-    })
-    return Object.entries(mapa).sort((a,b) => a[0].localeCompare(b[0]))
-  }
   // Por loja/unidade — vale nos dois gráficos (Competência e Fechamento),
   // não só no de Fechamento (diferente do "pra onde foi a competência",
   // que só faz sentido lá).
@@ -114,31 +104,87 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
     })
     return Object.entries(mapa).sort((a,b) => b[1].valor - a[1].valor)
   }
-  const competenciaAtual = ehFechamento ? agruparPorCompetencia(dealsAtualCortado) : []
-  const competenciaAnterior = ehFechamento ? agruparPorCompetencia(dealsAnteriorCortado) : []
+  // Tabela cruzada Loja × Competência — só faz sentido no gráfico de
+  // Fechamento (onde já existem as duas dimensões separadas). Junta as duas
+  // listas soltas numa coisa só, tipo pivot table, pra ficar claro qual
+  // loja recebeu qual competência.
+  type Celula = { valor: number; qtd: number }
+  function pivotLojaCompetencia(deals: DealResumo[]) {
+    const porLoja: Record<string, Record<string, Celula>> = {}
+    const totalMes: Record<string, Celula> = {}
+    const totalLoja: Record<string, Celula> = {}
+    deals.forEach(d => {
+      const mes = String(d.data_evento||'').substring(0,7) || 'Sem data'
+      const nomes = String(d.unidade_nome||'').split(',').map(x=>x.trim()).filter(Boolean)
+      const lojas = nomes.length ? nomes : ['Não informado']
+      const valor = parseFloat(String(d.valor))||0
+      lojas.forEach(loja => {
+        if (!porLoja[loja]) porLoja[loja] = {}
+        if (!porLoja[loja][mes]) porLoja[loja][mes] = { valor: 0, qtd: 0 }
+        porLoja[loja][mes].valor += valor; porLoja[loja][mes].qtd++
+        if (!totalLoja[loja]) totalLoja[loja] = { valor: 0, qtd: 0 }
+        totalLoja[loja].valor += valor; totalLoja[loja].qtd++
+        if (!totalMes[mes]) totalMes[mes] = { valor: 0, qtd: 0 }
+        totalMes[mes].valor += valor; totalMes[mes].qtd++
+      })
+    })
+    const meses = Object.keys(totalMes).sort()
+    const lojas = Object.keys(totalLoja).sort((a,b) => totalLoja[b].valor - totalLoja[a].valor)
+    return { meses, lojas, porLoja, totalMes, totalLoja }
+  }
+
+  const pivotAtual = ehFechamento ? pivotLojaCompetencia(dealsAtualCortado) : null
+  const pivotAnterior = ehFechamento ? pivotLojaCompetencia(dealsAnteriorCortado) : null
   const lojaAtual = agruparPorLoja(dealsAtualCortado)
   const lojaAnterior = agruparPorLoja(dealsAnteriorCortado)
 
-  const Coluna = ({ ano, deals, total, cor, competencia, loja }: { ano: number; deals: DealResumo[]; total: number; cor: string; competencia: [string,{valor:number;qtd:number}][]; loja: [string,{valor:number;qtd:number}][] }) => (
+  const Coluna = ({ ano, deals, total, cor, loja, pivot }: {
+    ano: number; deals: DealResumo[]; total: number; cor: string
+    loja: [string,{valor:number;qtd:number}][]
+    pivot: { meses: string[]; lojas: string[]; porLoja: Record<string,Record<string,{valor:number;qtd:number}>>; totalMes: Record<string,{valor:number;qtd:number}>; totalLoja: Record<string,{valor:number;qtd:number}> } | null
+  }) => (
     <div style={{ flex: 1, minWidth: 260 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10, paddingBottom: 8, borderBottom: `2px solid ${cor}` }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: cor }}>{ano}</span>
         <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(total)} <span style={{ fontWeight: 400, color: '#9a9c9f' }}>({deals.length})</span></span>
       </div>
 
-      {ehFechamento && competencia.length > 0 && (
-        <div style={{ marginBottom: 14, paddingBottom: 12, borderBottom: '1px dashed #E8E8E2' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', marginBottom: 6 }}>Pra onde foi a competência</div>
-          {competencia.map(([comp, v]) => (
-            <div key={comp} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '2px 0' }}>
-              <span style={{ color: '#5a5c5f' }}>{comp}</span>
-              <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 600 }}>{fmtBRLCompacto(v.valor)} <span style={{ color: '#9a9c9f' }}>({v.qtd})</span></span>
-            </div>
-          ))}
+      {/* Fechamento: uma tabela só cruzando Loja × Competência, em vez de
+          duas listas soltas que obrigavam ficar cruzando de cabeça */}
+      {ehFechamento && pivot && pivot.lojas.length > 0 && (
+        <div style={{ marginBottom: 16, paddingBottom: 14, borderBottom: '1px dashed #E8E8E2', overflowX: 'auto' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', marginBottom: 8 }}>Loja × competência (pra onde foi)</div>
+          <table style={{ borderCollapse: 'collapse', fontSize: 11, whiteSpace: 'nowrap' }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left', padding: '3px 8px 3px 0', color: '#9a9c9f', fontWeight: 600 }}>Loja</th>
+                {pivot.meses.map(m => <th key={m} style={{ textAlign: 'right', padding: '3px 8px', color: '#9a9c9f', fontWeight: 600 }}>{m}</th>)}
+                <th style={{ textAlign: 'right', padding: '3px 0 3px 8px', color: '#9a9c9f', fontWeight: 700 }}>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pivot.lojas.map(loj => (
+                <tr key={loj} style={{ borderTop: '0.5px solid #F0F0EC' }}>
+                  <td style={{ padding: '4px 8px 4px 0', fontWeight: 600, color: '#3a3c3f' }}>{loj}</td>
+                  {pivot.meses.map(m => {
+                    const c = pivot.porLoja[loj][m]
+                    return <td key={m} style={{ textAlign: 'right', padding: '4px 8px', fontFamily: 'DM Mono, monospace', color: c ? '#3a3c3f' : '#d8d8d2' }}>{c ? fmtBRLCompacto(c.valor) : '—'}</td>
+                  })}
+                  <td style={{ textAlign: 'right', padding: '4px 0 4px 8px', fontFamily: 'DM Mono, monospace', fontWeight: 700 }}>{fmtBRLCompacto(pivot.totalLoja[loj].valor)}</td>
+                </tr>
+              ))}
+              <tr style={{ borderTop: '1.5px solid #ccc' }}>
+                <td style={{ padding: '5px 8px 0 0', fontWeight: 700 }}>Total</td>
+                {pivot.meses.map(m => <td key={m} style={{ textAlign: 'right', padding: '5px 8px 0', fontFamily: 'DM Mono, monospace', fontWeight: 700 }}>{fmtBRLCompacto(pivot.totalMes[m].valor)}</td>)}
+                <td style={{ textAlign: 'right', padding: '5px 0 0 8px', fontFamily: 'DM Mono, monospace', fontWeight: 700 }}>{fmtBRLCompacto(total)}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       )}
 
-      {loja.length > 0 && (
+      {/* Competência: não tem segunda dimensão de data, então só a lista simples por loja */}
+      {!ehFechamento && loja.length > 0 && (
         <div style={{ marginBottom: 14, paddingBottom: 12, borderBottom: '1px dashed #E8E8E2' }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', marginBottom: 6 }}>Por loja</div>
           {loja.map(([nome, v]) => (
@@ -151,15 +197,20 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
       )}
 
       {deals.length === 0 && <div style={{ fontSize: 12, color: '#9a9c9f', padding: '10px 0' }}>Nenhum negócio nesse mês.</div>}
-      {deals.map(d => (
-        <div key={d.id} style={{ padding: '7px 0', borderBottom: '0.5px solid #F0F0EC', fontSize: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-            <span style={{ fontWeight: 600, color: '#3a3c3f', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.empresa || d.titulo}</span>
-            <span style={{ fontWeight: 700, fontFamily: 'DM Mono, monospace', flexShrink: 0 }}>{fmtBRLCompacto(parseFloat(String(d.valor))||0)}</span>
-          </div>
-          <div style={{ color: '#9a9c9f', fontSize: 10 }}>evento: {d.data_evento||'—'} · fechou: {d.won_time||'—'} · {d.vendedor}</div>
-        </div>
-      ))}
+      {deals.length > 0 && (
+        <details>
+          <summary style={{ fontSize: 11, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', cursor: 'pointer', marginBottom: 8 }}>Ver os {deals.length} negócios individuais</summary>
+          {deals.map(d => (
+            <div key={d.id} style={{ padding: '7px 0', borderBottom: '0.5px solid #F0F0EC', fontSize: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                <span style={{ fontWeight: 600, color: '#3a3c3f', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.empresa || d.titulo}</span>
+                <span style={{ fontWeight: 700, fontFamily: 'DM Mono, monospace', flexShrink: 0 }}>{fmtBRLCompacto(parseFloat(String(d.valor))||0)}</span>
+              </div>
+              <div style={{ color: '#9a9c9f', fontSize: 10 }}>evento: {d.data_evento||'—'} · fechou: {d.won_time||'—'} · {d.unidade_nome||'—'} · {d.vendedor}</div>
+            </div>
+          ))}
+        </details>
+      )}
     </div>
   )
 
@@ -194,18 +245,36 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
           <div style="color:#888;font-size:12px;">evento: ${esc(d.data_evento)||'—'} · fechou: ${esc(d.won_time)||'—'} · ${esc(d.vendedor)}</div>
         </div>`).join('')
     }
-    function competenciaHtml(comp: [string,{valor:number;qtd:number}][]) {
-      if (!ehFechamento || comp.length === 0) return ''
-      return `<div style="margin-bottom:16px;padding-bottom:12px;border-bottom:1px dashed #ddd;">
-        <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;margin-bottom:8px;">Pra onde foi a competência</div>
-        ${comp.map(([m,v]) => `<div style="display:flex;justify-content:space-between;font-size:14px;padding:3px 0;"><span>${esc(m)}</span><span>${esc(fmtBRLCompacto(v.valor))} (${v.qtd})</span></div>`).join('')}
-      </div>`
-    }
     function lojaHtml(loj: [string,{valor:number;qtd:number}][]) {
-      if (loj.length === 0) return ''
+      if (ehFechamento || loj.length === 0) return ''
       return `<div style="margin-bottom:16px;padding-bottom:12px;border-bottom:1px dashed #ddd;">
         <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;margin-bottom:8px;">Por loja</div>
         ${loj.map(([m,v]) => `<div style="display:flex;justify-content:space-between;font-size:14px;padding:3px 0;"><span>${esc(m)}</span><span>${esc(fmtBRLCompacto(v.valor))} (${v.qtd})</span></div>`).join('')}
+      </div>`
+    }
+    function pivotHtml(pivot: typeof pivotAtual, total: number) {
+      if (!ehFechamento || !pivot || pivot.lojas.length === 0) return ''
+      return `<div style="margin-bottom:16px;padding-bottom:12px;border-bottom:1px dashed #ddd;overflow-x:auto;">
+        <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;margin-bottom:8px;">Loja × competência (pra onde foi)</div>
+        <table style="border-collapse:collapse;font-size:12px;white-space:nowrap;width:100%;">
+          <thead><tr>
+            <th style="text-align:left;padding:3px 8px 3px 0;color:#888;">Loja</th>
+            ${pivot.meses.map(m => `<th style="text-align:right;padding:3px 8px;color:#888;">${esc(m)}</th>`).join('')}
+            <th style="text-align:right;padding:3px 0 3px 8px;color:#888;">Total</th>
+          </tr></thead>
+          <tbody>
+            ${pivot.lojas.map(loj => `<tr style="border-top:1px solid #eee;">
+              <td style="padding:4px 8px 4px 0;font-weight:600;">${esc(loj)}</td>
+              ${pivot.meses.map(m => { const c = pivot.porLoja[loj][m]; return `<td style="text-align:right;padding:4px 8px;${c?'':'color:#ccc;'}">${c ? esc(fmtBRLCompacto(c.valor)) : '—'}</td>` }).join('')}
+              <td style="text-align:right;padding:4px 0 4px 8px;font-weight:700;">${esc(fmtBRLCompacto(pivot.totalLoja[loj].valor))}</td>
+            </tr>`).join('')}
+            <tr style="border-top:2px solid #999;">
+              <td style="padding:5px 8px 0 0;font-weight:700;">Total</td>
+              ${pivot.meses.map(m => `<td style="text-align:right;padding:5px 8px 0;font-weight:700;">${esc(fmtBRLCompacto(pivot.totalMes[m].valor))}</td>`).join('')}
+              <td style="text-align:right;padding:5px 0 0 8px;font-weight:700;">${esc(fmtBRLCompacto(total))}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>`
     }
 
@@ -226,13 +295,13 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
       <div class="cols">
         <div>
           <div class="col-header"><span>${anoAnterior}</span><span>${esc(fmtBRLCompacto(totalAnterior))} (${dealsAnteriorCortado.length})</span></div>
-          ${competenciaHtml(competenciaAnterior)}
+          ${pivotHtml(pivotAnterior, totalAnterior)}
           ${lojaHtml(lojaAnterior)}
           ${linhasHtml(dealsAnteriorCortado)}
         </div>
         <div>
           <div class="col-header"><span>${anoAtual}</span><span>${esc(fmtBRLCompacto(totalAtual))} (${dealsAtualCortado.length})</span></div>
-          ${competenciaHtml(competenciaAtual)}
+          ${pivotHtml(pivotAtual, totalAtual)}
           ${lojaHtml(lojaAtual)}
           ${linhasHtml(dealsAtualCortado)}
         </div>
@@ -284,8 +353,8 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
           <div style={{ padding: 30, textAlign: 'center', color: '#9a9c9f' }}>Carregando...</div>
         ) : (
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginTop: ehMesCorrente ? 0 : 14 }}>
-            <Coluna ano={anoAnterior} deals={dealsAnteriorCortado} total={totalAnterior} cor="#8a8c8f" competencia={competenciaAnterior} loja={lojaAnterior} />
-            <Coluna ano={anoAtual} deals={dealsAtualCortado} total={totalAtual} cor="#185FA5" competencia={competenciaAtual} loja={lojaAtual} />
+            <Coluna ano={anoAnterior} deals={dealsAnteriorCortado} total={totalAnterior} cor="#8a8c8f" loja={lojaAnterior} pivot={pivotAnterior} />
+            <Coluna ano={anoAtual} deals={dealsAtualCortado} total={totalAtual} cor="#185FA5" loja={lojaAtual} pivot={pivotAtual} />
           </div>
         )}
       </div>
