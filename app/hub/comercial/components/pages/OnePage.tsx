@@ -34,7 +34,7 @@ const GAS_URL = '/api/pipedrive'
 
 type DealResumo = {
   id: string; empresa: string; titulo: string; status: string; stage_nome: string
-  valor: number; data_evento: string; won_time: string; vendedor: string
+  valor: number; data_evento: string; won_time: string; vendedor: string; unidade_nome: string
 }
 
 // Modal de comparação: mostra os negócios que compuseram o valor de um mês
@@ -98,10 +98,28 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
     })
     return Object.entries(mapa).sort((a,b) => a[0].localeCompare(b[0]))
   }
+  // Por loja/unidade — vale nos dois gráficos (Competência e Fechamento),
+  // não só no de Fechamento (diferente do "pra onde foi a competência",
+  // que só faz sentido lá).
+  function agruparPorLoja(deals: DealResumo[]) {
+    const mapa: Record<string, { valor: number; qtd: number }> = {}
+    deals.forEach(d => {
+      const nomes = String(d.unidade_nome||'').split(',').map(x=>x.trim()).filter(Boolean)
+      const lista = nomes.length ? nomes : ['Não informado']
+      lista.forEach(loja => {
+        if (!mapa[loja]) mapa[loja] = { valor: 0, qtd: 0 }
+        mapa[loja].valor += parseFloat(String(d.valor))||0
+        mapa[loja].qtd++
+      })
+    })
+    return Object.entries(mapa).sort((a,b) => b[1].valor - a[1].valor)
+  }
   const competenciaAtual = ehFechamento ? agruparPorCompetencia(dealsAtualCortado) : []
   const competenciaAnterior = ehFechamento ? agruparPorCompetencia(dealsAnteriorCortado) : []
+  const lojaAtual = agruparPorLoja(dealsAtualCortado)
+  const lojaAnterior = agruparPorLoja(dealsAnteriorCortado)
 
-  const Coluna = ({ ano, deals, total, cor, competencia }: { ano: number; deals: DealResumo[]; total: number; cor: string; competencia: [string,{valor:number;qtd:number}][] }) => (
+  const Coluna = ({ ano, deals, total, cor, competencia, loja }: { ano: number; deals: DealResumo[]; total: number; cor: string; competencia: [string,{valor:number;qtd:number}][]; loja: [string,{valor:number;qtd:number}][] }) => (
     <div style={{ flex: 1, minWidth: 260 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10, paddingBottom: 8, borderBottom: `2px solid ${cor}` }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: cor }}>{ano}</span>
@@ -114,6 +132,18 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
           {competencia.map(([comp, v]) => (
             <div key={comp} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '2px 0' }}>
               <span style={{ color: '#5a5c5f' }}>{comp}</span>
+              <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 600 }}>{fmtBRLCompacto(v.valor)} <span style={{ color: '#9a9c9f' }}>({v.qtd})</span></span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {loja.length > 0 && (
+        <div style={{ marginBottom: 14, paddingBottom: 12, borderBottom: '1px dashed #E8E8E2' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', marginBottom: 6 }}>Por loja</div>
+          {loja.map(([nome, v]) => (
+            <div key={nome} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '2px 0' }}>
+              <span style={{ color: '#5a5c5f' }}>{nome}</span>
               <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 600 }}>{fmtBRLCompacto(v.valor)} <span style={{ color: '#9a9c9f' }}>({v.qtd})</span></span>
             </div>
           ))}
@@ -171,6 +201,13 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
         ${comp.map(([m,v]) => `<div style="display:flex;justify-content:space-between;font-size:14px;padding:3px 0;"><span>${esc(m)}</span><span>${esc(fmtBRLCompacto(v.valor))} (${v.qtd})</span></div>`).join('')}
       </div>`
     }
+    function lojaHtml(loj: [string,{valor:number;qtd:number}][]) {
+      if (loj.length === 0) return ''
+      return `<div style="margin-bottom:16px;padding-bottom:12px;border-bottom:1px dashed #ddd;">
+        <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;margin-bottom:8px;">Por loja</div>
+        ${loj.map(([m,v]) => `<div style="display:flex;justify-content:space-between;font-size:14px;padding:3px 0;"><span>${esc(m)}</span><span>${esc(fmtBRLCompacto(v.valor))} (${v.qtd})</span></div>`).join('')}
+      </div>`
+    }
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(titulo)}</title>
       <style>
@@ -190,11 +227,13 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
         <div>
           <div class="col-header"><span>${anoAnterior}</span><span>${esc(fmtBRLCompacto(totalAnterior))} (${dealsAnteriorCortado.length})</span></div>
           ${competenciaHtml(competenciaAnterior)}
+          ${lojaHtml(lojaAnterior)}
           ${linhasHtml(dealsAnteriorCortado)}
         </div>
         <div>
           <div class="col-header"><span>${anoAtual}</span><span>${esc(fmtBRLCompacto(totalAtual))} (${dealsAtualCortado.length})</span></div>
           ${competenciaHtml(competenciaAtual)}
+          ${lojaHtml(lojaAtual)}
           ${linhasHtml(dealsAtualCortado)}
         </div>
       </div>
@@ -245,8 +284,8 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
           <div style={{ padding: 30, textAlign: 'center', color: '#9a9c9f' }}>Carregando...</div>
         ) : (
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginTop: ehMesCorrente ? 0 : 14 }}>
-            <Coluna ano={anoAnterior} deals={dealsAnteriorCortado} total={totalAnterior} cor="#8a8c8f" competencia={competenciaAnterior} />
-            <Coluna ano={anoAtual} deals={dealsAtualCortado} total={totalAtual} cor="#185FA5" competencia={competenciaAtual} />
+            <Coluna ano={anoAnterior} deals={dealsAnteriorCortado} total={totalAnterior} cor="#8a8c8f" competencia={competenciaAnterior} loja={lojaAnterior} />
+            <Coluna ano={anoAtual} deals={dealsAtualCortado} total={totalAtual} cor="#185FA5" competencia={competenciaAtual} loja={lojaAtual} />
           </div>
         )}
       </div>
