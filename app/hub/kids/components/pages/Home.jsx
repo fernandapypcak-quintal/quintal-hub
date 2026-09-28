@@ -117,7 +117,10 @@ export default function Home() {
   const inflaveisEntrada = useMemo(
     () => entradasKids.filter(e => {
       const p = (e.produto || '').toLowerCase()
-      return p.indexOf('inflável') !== -1 || p.indexOf('inflavel') !== -1
+      // "inflav" pega tanto "Inflável" quanto "Infláveis" (com ou sem
+      // acento) -- singular e plural mudam a terminação (-vel/-veis), mas
+      // o radical "inflav" é comum aos dois
+      return p.indexOf('inflav') !== -1
     }),
     [entradasKids]
   )
