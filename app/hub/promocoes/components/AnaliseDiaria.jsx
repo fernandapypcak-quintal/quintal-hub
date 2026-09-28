@@ -86,6 +86,18 @@ export default function AnaliseDiaria() {
     // com o relatório de Promoções Utilizadas linha a linha pra achar o CMV
     // exato de cada reserva. O CMV que dá pra confiar é por CATEGORIA (a
     // classificação é a mesma nos dois relatórios), calculado abaixo.
+    // Agrupa por nome normalizado (sem acento/maiúscula/espaço duplo) —
+    // "RODÍZIO DE ESPETOS CLÁSSICOS" e "Rodizio de espetos clássicos" viram
+    // uma linha só. Fica exibida a grafia que apareceu mais vezes.
+    function normalizarNomePromocao(s) {
+      return String(s || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+    }
+
     const porPromocao = {}
     for (const r of pacotesRaw) {
       const unitId = unitIdFromString(r.unidade || r.loja)
@@ -93,13 +105,22 @@ export default function AnaliseDiaria() {
       if (data !== diaExpandido || !unidadesSet.has(unitId)) continue
       if (!CATEGORIAS_BASE.includes(r.categoria)) continue
 
-      const nome = r.nome_do_pacote || '(sem nome)'
-      if (!porPromocao[nome]) porPromocao[nome] = { nome, categoria: r.categoria, faturamento: 0, pessoas: 0 }
-      porPromocao[nome].faturamento += (parseFloat(r.faturamento_r) || 0) + (parseFloat(r.emitido_nf_r) || 0)
-      porPromocao[nome].pessoas += parseFloat(r.confirmados) || 0
+      const nomeOriginal = r.nome_do_pacote || '(sem nome)'
+      const chave = normalizarNomePromocao(nomeOriginal)
+      if (!porPromocao[chave]) porPromocao[chave] = { categoria: r.categoria, faturamento: 0, pessoas: 0, variantes: {} }
+      porPromocao[chave].faturamento += (parseFloat(r.faturamento_r) || 0) + (parseFloat(r.emitido_nf_r) || 0)
+      porPromocao[chave].pessoas += parseFloat(r.confirmados) || 0
+      porPromocao[chave].variantes[nomeOriginal] = (porPromocao[chave].variantes[nomeOriginal] || 0) + 1
     }
 
-    return Object.values(porPromocao).sort((a, b) => b.faturamento - a.faturamento)
+    return Object.values(porPromocao)
+      .map(p => ({
+        nome: Object.entries(p.variantes).sort((a, b) => b[1] - a[1])[0][0],
+        categoria: p.categoria,
+        faturamento: p.faturamento,
+        pessoas: p.pessoas,
+      }))
+      .sort((a, b) => b.faturamento - a.faturamento)
   }, [diaExpandido, pacotesRaw, unidadesParaSomar.join(',')])
 
   // CMV por categoria nesse dia — confiável, porque a categorização (não o
