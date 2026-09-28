@@ -63,7 +63,17 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
       const p = new URLSearchParams({ tipo: 'deals', limit: '500', status: 'won', campo_data: campoData, ano: String(ano), mes: mesStr })
       if (filtros?.unidade)  p.set('unidade',  filtros.unidade)
       if (filtros?.vendedor) p.set('vendedor', filtros.vendedor)
-      return fetch(`${GAS_URL}?${p}`).then(r => r.json()).then(d => d.deals || [])
+      p.set('page', '1')
+      return fetch(`${GAS_URL}?${p}`).then(r => r.json()).then(async d => {
+        const primeira = d.deals || []
+        const paginas = Math.max(parseInt(String(d.pages || 1)), 1)
+        if (paginas <= 1) return primeira
+        const restantes = await Promise.all(Array.from({ length: paginas - 1 }, (_, i) => {
+          const pp = new URLSearchParams(p); pp.set('page', String(i + 2))
+          return fetch(`${GAS_URL}?${pp}`).then(r => r.json()).then(x => x.deals || [])
+        }))
+        return primeira.concat(...restantes)
+      })
     }
     Promise.all([buscar(anoAtual), buscar(anoAnterior)])
       .then(([a, b]) => { setDealsAtual(a); setDealsAnterior(b) })
@@ -544,6 +554,7 @@ function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior, mesAtualNum,
 }) {
   const [mesSelecionado, setMesSelecionado] = useState<number | null>(null)
   const [anosCompetenciaCortados, setAnosCompetenciaCortados] = useState<typeof anos | null>(null)
+  const [recalculandoCompetencia, setRecalculandoCompetencia] = useState(campo === 'receitaCompetencia')
   const campoData: 'won_time' | 'data_evento' = campo === 'receitaFechamento' ? 'won_time' : 'data_evento'
 
   // Competência precisa responder "quanto já estava vendido nesta mesma
@@ -551,8 +562,9 @@ function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior, mesAtualNum,
   // negócios de cada competência e mantém apenas won_time até DD/MM
   // equivalente em cada ano.
   useEffect(() => {
-    if (campo !== 'receitaCompetencia') { setAnosCompetenciaCortados(null); return }
+    if (campo !== 'receitaCompetencia') { setAnosCompetenciaCortados(null); setRecalculandoCompetencia(false); return }
     let cancelado = false
+    setRecalculandoCompetencia(true)
     const hoje = new Date()
     const mmCorte = String(hoje.getMonth()+1).padStart(2,'0')
     const ddCorte = String(hoje.getDate()).padStart(2,'0')
@@ -561,17 +573,24 @@ function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior, mesAtualNum,
         const p = new URLSearchParams({ tipo:'deals', status:'won', campo_data:'data_evento', ano:String(bloco.ano), mes:String(i+1).padStart(2,'0'), limit:'500' })
         if (filtros?.unidade) p.set('unidade', filtros.unidade)
         if (filtros?.vendedor) p.set('vendedor', filtros.vendedor)
+        p.set('page','1')
         const resposta = await fetch(`${GAS_URL}?${p}`).then(r => r.json())
+        const paginas = Math.max(parseInt(String(resposta.pages || 1)), 1)
+        const demaisPaginas = paginas > 1 ? await Promise.all(Array.from({ length: paginas - 1 }, (_, pagina) => {
+          const pp = new URLSearchParams(p); pp.set('page', String(pagina + 2))
+          return fetch(`${GAS_URL}?${pp}`).then(r => r.json()).then(x => x.deals || [])
+        })) : []
+        const todosDeals = (resposta.deals || []).concat(...demaisPaginas)
         const corte = `${bloco.ano}-${mmCorte}-${ddCorte}`
-        const deals = (resposta.deals || []).filter((d: DealResumo) => !!d.won_time && String(d.won_time).substring(0,10) <= corte)
+        const deals = todosDeals.filter((d: DealResumo) => !!d.won_time && String(d.won_time).substring(0,10) <= corte)
         const receitaCompetencia = deals.reduce((s:number,d:DealResumo) => s + (parseFloat(String(d.valor))||0), 0)
         return { ...m, receitaCompetencia: Math.round(receitaCompetencia) }
       }))
       return { ...bloco, meses }
     }
     Promise.all([calcular(anos.atual), calcular(anos.anterior)])
-      .then(([atual, anterior]) => { if (!cancelado) setAnosCompetenciaCortados({ atual, anterior }) })
-      .catch(() => { if (!cancelado) setAnosCompetenciaCortados(null) })
+      .then(([atual, anterior]) => { if (!cancelado) { setAnosCompetenciaCortados({ atual, anterior }); setRecalculandoCompetencia(false) } })
+      .catch(() => { if (!cancelado) { setAnosCompetenciaCortados(null); setRecalculandoCompetencia(false) } })
     return () => { cancelado = true }
   }, [campo, anos.atual.ano, anos.anterior.ano, filtros?.unidade, filtros?.vendedor])
 
@@ -604,6 +623,12 @@ function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior, mesAtualNum,
 
   const CorteTopo = ({ cor }: { cor: string }) => (
     <div style={{ width: 24, height: 6, marginBottom: -1, background: `repeating-linear-gradient(-45deg, ${cor}, ${cor} 3px, transparent 3px, transparent 6px)` }} />
+  )
+
+  if (campo === 'receitaCompetencia' && recalculandoCompetencia) return (
+    <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 28, textAlign: 'center', color: '#9a9c9f', fontSize: 13 }}>
+      Recalculando faturamento por competência com corte equivalente de data e todas as páginas de negócios...
+    </div>
   )
 
   return (
