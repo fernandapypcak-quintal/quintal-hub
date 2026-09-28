@@ -158,6 +158,45 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
     return totalB - totalA || a.localeCompare(b, 'pt-BR')
   })
 
+  // No fechamento, compara também "pra onde foi" mês a mês. O mês é
+  // alinhado pela posição em relação ao ano do fechamento: Set, Out, Nov...
+  // e Jan +1, Fev +1 quando o evento cai no ano seguinte. Isso permite
+  // comparar Set/2025 com Set/2026 e Fev/2026 com Fev/2027 sem misturar as
+  // competências. As casas usam uma lista única e permanecem na mesma linha.
+  const mesesAbrev = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+  type MapaMesCasa = Record<string, Record<number, { valor: number; qtd: number }>>
+  function mapaCompetenciaRelativa(deals: DealResumo[], anoBase: number): MapaMesCasa {
+    const mapa: MapaMesCasa = {}
+    deals.forEach(d => {
+      const data = String(d.data_evento || '')
+      if (!/^\d{4}-\d{2}/.test(data)) return
+      const anoEvento = parseInt(data.substring(0,4))
+      const mesEvento = parseInt(data.substring(5,7))
+      const chaveMes = (anoEvento - anoBase) * 12 + (mesEvento - 1)
+      const casas = String(d.unidade_nome||'').split(',').map(x=>x.trim()).filter(Boolean)
+      const lista = casas.length ? casas : ['Não informado']
+      const valor = parseFloat(String(d.valor)) || 0
+      lista.forEach(casa => {
+        if (!mapa[casa]) mapa[casa] = {}
+        if (!mapa[casa][chaveMes]) mapa[casa][chaveMes] = { valor: 0, qtd: 0 }
+        mapa[casa][chaveMes].valor += valor
+        mapa[casa][chaveMes].qtd++
+      })
+    })
+    return mapa
+  }
+  const compRelAnterior = ehFechamento ? mapaCompetenciaRelativa(dealsAnteriorCortado, anoAnterior) : {}
+  const compRelAtual = ehFechamento ? mapaCompetenciaRelativa(dealsAtualCortado, anoAtual) : {}
+  const chavesMesesCompetencia = Array.from(new Set([
+    ...Object.values(compRelAnterior).flatMap(m => Object.keys(m).map(Number)),
+    ...Object.values(compRelAtual).flatMap(m => Object.keys(m).map(Number)),
+  ])).sort((a,b) => a-b)
+  function labelMesRelativo(chave: number) {
+    const mes = ((chave % 12) + 12) % 12
+    const deslocamentoAno = Math.floor(chave / 12)
+    return `${mesesAbrev[mes]}${deslocamentoAno > 0 ? ` +${deslocamentoAno}` : deslocamentoAno < 0 ? ` ${deslocamentoAno}` : ''}`
+  }
+
   const Coluna = ({ ano, deals, total, cor, loja, pivot }: {
     ano: number; deals: DealResumo[]; total: number; cor: string
     loja: [string,{valor:number;qtd:number}][]
@@ -407,9 +446,67 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
                 </tbody>
               </table>
             </div>
+
+            {ehFechamento && chavesMesesCompetencia.length > 0 && (
+              <div style={{ marginBottom: 20, border: '0.5px solid #E8E8E2', borderRadius: 10 }}>
+                <div style={{ padding: '10px 12px 3px', fontSize: 11, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase' }}>Casa × competência — comparação mensal (pra onde foi)</div>
+                <div style={{ padding: '0 12px 9px', fontSize: 10, color: '#9a9c9f' }}>“+1” indica evento no ano seguinte ao fechamento. A casa permanece fixa durante a rolagem.</div>
+                <div style={{ overflowX: 'auto', position: 'relative' }}>
+                  <table style={{ borderCollapse: 'separate', borderSpacing: 0, fontSize: 11, whiteSpace: 'nowrap', minWidth: '100%' }}>
+                    <thead>
+                      <tr>
+                        <th rowSpan={2} style={{ position: 'sticky', left: 0, zIndex: 5, background: '#fff', textAlign: 'left', padding: '6px 14px', minWidth: 175, borderRight: '1px solid #E8E8E2', borderBottom: '1px solid #E8E8E2', boxShadow: '5px 0 7px -7px rgba(0,0,0,.45)' }}>Casa</th>
+                        {chavesMesesCompetencia.map(chave => (
+                          <th key={chave} colSpan={3} style={{ textAlign: 'center', padding: '6px 10px', color: '#5a5c5f', borderBottom: '0.5px solid #E8E8E2', borderRight: '1px solid #E8E8E2' }}>{labelMesRelativo(chave)}</th>
+                        ))}
+                        <th rowSpan={2} style={{ textAlign: 'right', padding: '6px 12px', borderBottom: '1px solid #E8E8E2' }}>Total var.</th>
+                      </tr>
+                      <tr>
+                        {chavesMesesCompetencia.map(chave => (
+                          <th key={chave} colSpan={3} style={{ padding: 0, borderRight: '1px solid #E8E8E2', borderBottom: '1px solid #E8E8E2' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(82px, 1fr))' }}>
+                              <span style={{ textAlign: 'right', padding: '5px 8px', color: '#8a8c8f' }}>{anoAnterior}</span>
+                              <span style={{ textAlign: 'right', padding: '5px 8px', color: '#185FA5' }}>{anoAtual}</span>
+                              <span style={{ textAlign: 'right', padding: '5px 8px', color: '#9a9c9f' }}>Var. %</span>
+                            </div>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {casasComparativo.map(casa => {
+                        const totalAnt = mapaLojaAnterior[casa]?.valor || 0
+                        const totalAtualCasa = mapaLojaAtual[casa]?.valor || 0
+                        const dTotal = delta(totalAtualCasa, totalAnt)
+                        return (
+                          <tr key={casa}>
+                            <td style={{ position: 'sticky', left: 0, zIndex: 4, background: '#fff', padding: '7px 14px', minWidth: 175, fontWeight: 600, color: '#3a3c3f', borderRight: '1px solid #E8E8E2', borderBottom: '0.5px solid #F0F0EC', boxShadow: '5px 0 7px -7px rgba(0,0,0,.45)' }}>{casa}</td>
+                            {chavesMesesCompetencia.map(chave => {
+                              const ant = compRelAnterior[casa]?.[chave]?.valor || 0
+                              const atual = compRelAtual[casa]?.[chave]?.valor || 0
+                              const d = delta(atual, ant)
+                              return (
+                                <td key={chave} colSpan={3} style={{ padding: 0, borderRight: '1px solid #E8E8E2', borderBottom: '0.5px solid #F0F0EC' }}>
+                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(82px, 1fr))' }}>
+                                    <span style={{ textAlign: 'right', padding: '7px 8px', fontFamily: 'DM Mono, monospace', color: '#8a8c8f' }}>{ant ? fmtBRLCompacto(ant) : '—'}</span>
+                                    <span style={{ textAlign: 'right', padding: '7px 8px', fontFamily: 'DM Mono, monospace', fontWeight: atual ? 700 : 400, color: atual ? '#185FA5' : '#d8d8d2' }}>{atual ? fmtBRLCompacto(atual) : '—'}</span>
+                                    <span style={{ textAlign: 'right', padding: '7px 8px', fontWeight: 700, color: d ? (d.up ? '#3B6D11' : '#a32d2d') : '#9a9c9f' }}>{fmtVariacao(atual, ant)}</span>
+                                  </div>
+                                </td>
+                              )
+                            })}
+                            <td style={{ textAlign: 'right', padding: '7px 12px', fontWeight: 700, color: dTotal ? (dTotal.up ? '#3B6D11' : '#a32d2d') : '#9a9c9f', borderBottom: '0.5px solid #F0F0EC' }}>{fmtVariacao(totalAtualCasa, totalAnt)}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-              <Coluna ano={anoAnterior} deals={dealsAnteriorCortado} total={totalAnterior} cor="#8a8c8f" loja={lojaAnterior} pivot={pivotAnterior} />
-              <Coluna ano={anoAtual} deals={dealsAtualCortado} total={totalAtual} cor="#185FA5" loja={lojaAtual} pivot={pivotAtual} />
+              <Coluna ano={anoAnterior} deals={dealsAnteriorCortado} total={totalAnterior} cor="#8a8c8f" loja={lojaAnterior} pivot={null} />
+              <Coluna ano={anoAtual} deals={dealsAtualCortado} total={totalAtual} cor="#185FA5" loja={lojaAtual} pivot={null} />
             </div>
           </>
         )}
