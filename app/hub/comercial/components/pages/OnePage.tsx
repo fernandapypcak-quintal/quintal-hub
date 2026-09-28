@@ -158,11 +158,11 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
     return totalB - totalA || a.localeCompare(b, 'pt-BR')
   })
 
-  // No fechamento, compara também "pra onde foi" mês a mês. O mês é
-  // alinhado pela posição em relação ao ano do fechamento: Set, Out, Nov...
-  // e Jan +1, Fev +1 quando o evento cai no ano seguinte. Isso permite
-  // comparar Set/2025 com Set/2026 e Fev/2026 com Fev/2027 sem misturar as
-  // competências. As casas usam uma lista única e permanecem na mesma linha.
+  // No fechamento, compara também "pra onde foi" mês a mês. Nesta visão só
+  // entram competências do próprio ano comparado: 2025 na coluna de 2025 e
+  // 2026 na coluna de 2026. Eventos de 2027 não aparecem enquanto a análise
+  // estiver em 2026; serão exibidos quando 2027 virar o ano da comparação.
+  // As casas usam uma lista única e permanecem sempre na mesma linha.
   const mesesAbrev = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
   type MapaMesCasa = Record<string, Record<number, { valor: number; qtd: number }>>
   function mapaCompetenciaRelativa(deals: DealResumo[], anoBase: number): MapaMesCasa {
@@ -172,7 +172,8 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
       if (!/^\d{4}-\d{2}/.test(data)) return
       const anoEvento = parseInt(data.substring(0,4))
       const mesEvento = parseInt(data.substring(5,7))
-      const chaveMes = (anoEvento - anoBase) * 12 + (mesEvento - 1)
+      if (anoEvento !== anoBase) return
+      const chaveMes = mesEvento - 1
       const casas = String(d.unidade_nome||'').split(',').map(x=>x.trim()).filter(Boolean)
       const lista = casas.length ? casas : ['Não informado']
       const valor = parseFloat(String(d.valor)) || 0
@@ -192,9 +193,7 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
     ...Object.values(compRelAtual).flatMap(m => Object.keys(m).map(Number)),
   ])).sort((a,b) => a-b)
   function labelMesRelativo(chave: number) {
-    const mes = ((chave % 12) + 12) % 12
-    const deslocamentoAno = Math.floor(chave / 12)
-    return `${mesesAbrev[mes]}${deslocamentoAno > 0 ? ` +${deslocamentoAno}` : deslocamentoAno < 0 ? ` ${deslocamentoAno}` : ''}`
+    return mesesAbrev[chave]
   }
 
   const Coluna = ({ ano, deals, total, cor, loja, pivot }: {
@@ -450,7 +449,7 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
             {ehFechamento && chavesMesesCompetencia.length > 0 && (
               <div style={{ marginBottom: 20, border: '0.5px solid #E8E8E2', borderRadius: 10 }}>
                 <div style={{ padding: '10px 12px 3px', fontSize: 11, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase' }}>Casa × competência — comparação mensal (pra onde foi)</div>
-                <div style={{ padding: '0 12px 9px', fontSize: 10, color: '#9a9c9f' }}>“+1” indica evento no ano seguinte ao fechamento. A casa permanece fixa durante a rolagem.</div>
+                <div style={{ padding: '0 12px 9px', fontSize: 10, color: '#9a9c9f' }}>Exibe somente competências do respectivo ano comparado. A casa permanece fixa durante a rolagem.</div>
                 <div style={{ overflowX: 'auto', position: 'relative' }}>
                   <table style={{ borderCollapse: 'separate', borderSpacing: 0, fontSize: 11, whiteSpace: 'nowrap', minWidth: '100%' }}>
                     <thead>
