@@ -107,8 +107,9 @@ export default function AnaliseDiaria() {
 
       const nomeOriginal = r.nome_do_pacote || '(sem nome)'
       const chave = normalizarNomePromocao(nomeOriginal)
-      if (!porPromocao[chave]) porPromocao[chave] = { categoria: r.categoria, faturamento: 0, pessoas: 0, variantes: {} }
+      if (!porPromocao[chave]) porPromocao[chave] = { categoria: r.categoria, faturamento: 0, valorPacote: 0, pessoas: 0, variantes: {} }
       porPromocao[chave].faturamento += (parseFloat(r.faturamento_r) || 0) + (parseFloat(r.emitido_nf_r) || 0)
+      porPromocao[chave].valorPacote += parseFloat(r.valor_do_pacote_r) || 0
       porPromocao[chave].pessoas += parseFloat(r.confirmados) || 0
       porPromocao[chave].variantes[nomeOriginal] = (porPromocao[chave].variantes[nomeOriginal] || 0) + 1
     }
@@ -118,6 +119,7 @@ export default function AnaliseDiaria() {
         nome: Object.entries(p.variantes).sort((a, b) => b[1] - a[1])[0][0],
         categoria: p.categoria,
         faturamento: p.faturamento,
+        valorPacote: p.valorPacote,
         pessoas: p.pessoas,
       }))
       .sort((a, b) => b.faturamento - a.faturamento)
@@ -303,24 +305,34 @@ export default function AnaliseDiaria() {
                               <tr className="text-right text-[10.5px] text-zinc-400 uppercase">
                                 <th className="pb-1.5 text-left">Promoção / Reserva</th>
                                 <th className="pb-1.5">Categoria</th>
+                                <th className="pb-1.5">Valor do Pacote</th>
                                 <th className="pb-1.5">Faturamento</th>
                                 <th className="pb-1.5">Pessoas</th>
+                                <th className="pb-1.5">CMV*</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {promocoesDoDia.map((p) => (
-                                <tr key={p.nome} className="border-t border-zinc-100">
-                                  <td className="py-1.5 font-medium text-brand-black">{p.nome}</td>
-                                  <td className="py-1.5 text-right text-zinc-500">{p.categoria}</td>
-                                  <td className="py-1.5 text-right font-mono tabular-nums">{brl(p.faturamento)}</td>
-                                  <td className="py-1.5 text-right font-mono tabular-nums">{num(p.pessoas)}</td>
-                                </tr>
-                              ))}
+                              {promocoesDoDia.map((p) => {
+                                const cmvCategoria = cmvPorCategoriaDoDia[p.categoria]
+                                const cmvEstimado = cmvCategoria != null ? cmvCategoria : null
+                                return (
+                                  <tr key={p.nome} className="border-t border-zinc-100">
+                                    <td className="py-1.5 font-medium text-brand-black">{p.nome}</td>
+                                    <td className="py-1.5 text-right text-zinc-500">{p.categoria}</td>
+                                    <td className="py-1.5 text-right font-mono tabular-nums text-zinc-500">{brl(p.valorPacote)}</td>
+                                    <td className="py-1.5 text-right font-mono tabular-nums">{brl(p.faturamento)}</td>
+                                    <td className="py-1.5 text-right font-mono tabular-nums">{num(p.pessoas)}</td>
+                                    <td className="py-1.5 text-right font-mono tabular-nums" style={{ color: cmvEstimado != null ? corCmv(cmvEstimado) : '#d4d4d8' }}>
+                                      {cmvEstimado != null ? pct(cmvEstimado) : '—'}
+                                    </td>
+                                  </tr>
+                                )
+                              })}
                             </tbody>
                           </table>
                         )}
                         <p className="text-[10.5px] text-zinc-400 mt-2">
-                          O nome que aparece aqui vem do relatório de Pacotes — pra eventos fechados costuma ser o nome do cliente/reserva, não o nome da promoção. Por isso o CMV é mostrado por categoria (acima), não linha a linha.
+                          *CMV estimado pela taxa da categoria daquela linha (mesmo valor pra todas as promoções da mesma categoria nesse dia) — o nome de cada linha vem do relatório de Pacotes e, pra eventos fechados, costuma ser o nome do cliente/reserva, não o nome da promoção, então não dá pra calcular um CMV específico por reserva.
                         </p>
                       </td>
                     </tr>
