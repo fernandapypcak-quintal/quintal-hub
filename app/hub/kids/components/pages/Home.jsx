@@ -112,6 +112,24 @@ export default function Home() {
     [combo]
   )
 
+  // Filtra só o produto "Inflável" dentro de entradasKids (que também tem
+  // Passaporte Kids e Ficha de Bichinho misturados)
+  const inflaveisEntrada = useMemo(
+    () => entradasKids.filter(e => {
+      const p = (e.produto || '').toLowerCase()
+      return p.indexOf('inflável') !== -1 || p.indexOf('inflavel') !== -1
+    }),
+    [entradasKids]
+  )
+  const inflaveisEntradaQtdPorUnidade = useMemo(
+    () => agruparPorUnidade(inflaveisEntrada, e => e.qtdVendida),
+    [inflaveisEntrada]
+  )
+  const inflaveisEntradaValorPorUnidade = useMemo(
+    () => agruparPorUnidade(inflaveisEntrada, e => e.valor),
+    [inflaveisEntrada]
+  )
+
   const gastoPorUnidade = useMemo(() => {
     const mapa = {}
     inflaveis.forEach(i => {
@@ -260,6 +278,21 @@ export default function Home() {
               dados={comboPorUnidade}
               cor="#7C3AED"
               formatarValor={v => v.toLocaleString('pt-BR')}
+            />
+          </Card>
+
+          <Card titulo="Infláveis (entrada) — Quantidade por Unidade">
+            <GraficoBarraUnidade
+              dados={inflaveisEntradaQtdPorUnidade}
+              cor="#0891B2"
+              formatarValor={v => v.toLocaleString('pt-BR')}
+            />
+          </Card>
+
+          <Card titulo="Infláveis (entrada) — Valor por Unidade">
+            <GraficoBarraUnidade
+              dados={inflaveisEntradaValorPorUnidade}
+              cor="#0E7490"
             />
           </Card>
 
