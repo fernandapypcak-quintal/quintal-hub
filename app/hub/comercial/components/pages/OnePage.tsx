@@ -53,6 +53,7 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
   const [dealsAtual, setDealsAtual] = useState<DealResumo[]>([])
   const [dealsAnterior, setDealsAnterior] = useState<DealResumo[]>([])
   const [loading, setLoading] = useState(true)
+  const [expandido, setExpandido] = useState(true)
   const mesStr = String(mesNum).padStart(2, '0')
   const ehFechamento = campoData === 'won_time'
 
@@ -79,15 +80,23 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
   // dia 01 até ONTEM nos dois anos, pra comparar só dias completos.
   const diaCorte = ehMesCorrente ? hoje.getDate() : 31
 
-  function filtrarPorDia(deals: DealResumo[]) {
-    if (!ehFechamento) return deals
+  function filtrarPorDia(deals: DealResumo[], ano: number) {
+    // Fechamento: no mês corrente, compara o mesmo número de dias.
+    // Competência: considera apenas negócios que já estavam ganhos até o
+    // mesmo dia do ano em cada exercício (ex.: 28/09/26 vs 28/09/25).
+    if (!ehFechamento) {
+      const mm = String(hoje.getMonth()+1).padStart(2,'0')
+      const dd = String(hoje.getDate()).padStart(2,'0')
+      const corte = `${ano}-${mm}-${dd}`
+      return deals.filter(d => !!d.won_time && String(d.won_time).substring(0,10) <= corte)
+    }
     return deals.filter(d => {
       const dia = parseInt(String(d.won_time||'').substring(8,10))
       return !dia || dia <= diaCorte
     })
   }
-  const dealsAtualCortado = filtrarPorDia(dealsAtual)
-  const dealsAnteriorCortado = filtrarPorDia(dealsAnterior)
+  const dealsAtualCortado = filtrarPorDia(dealsAtual, anoAtual)
+  const dealsAnteriorCortado = filtrarPorDia(dealsAnterior, anoAnterior)
 
   const totalAtual = dealsAtualCortado.reduce((s,d) => s + (parseFloat(String(d.valor))||0), 0)
   const totalAnterior = dealsAnteriorCortado.reduce((s,d) => s + (parseFloat(String(d.valor))||0), 0)
@@ -192,6 +201,11 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
     ...Object.values(compRelAnterior).flatMap(m => Object.keys(m).map(Number)),
     ...Object.values(compRelAtual).flatMap(m => Object.keys(m).map(Number)),
   ])).sort((a,b) => a-b)
+  const totaisMesesCompetencia = Object.fromEntries(chavesMesesCompetencia.map(chave => {
+    const anterior = Object.values(compRelAnterior).reduce((s,m) => s + (m[chave]?.valor || 0), 0)
+    const atual = Object.values(compRelAtual).reduce((s,m) => s + (m[chave]?.valor || 0), 0)
+    return [chave, { anterior, atual }]
+  }))
   function labelMesRelativo(chave: number) {
     return mesesAbrev[chave]
   }
@@ -292,16 +306,18 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
   // acabar imprimindo a aba de trás em vez da janela nova).
   function imprimir() {
     function esc(s: string) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
-    function linhasHtml(deals: DealResumo[]) {
-      if (deals.length === 0) return '<div style="color:#999;padding:10px 0;">Nenhum negócio nesse mês.</div>'
-      return deals.map(d => `
-        <div style="padding:8px 0;border-bottom:1px solid #eee;page-break-inside:avoid;">
-          <div style="display:flex;justify-content:space-between;gap:10px;">
-            <strong>${esc(d.empresa||d.titulo)}</strong>
-            <strong>${esc(fmtBRLCompacto(parseFloat(String(d.valor))||0))}</strong>
-          </div>
-          <div style="color:#888;font-size:12px;">evento: ${esc(d.data_evento)||'—'} · fechou: ${esc(d.won_time)||'—'} · casa: ${esc(d.unidade_nome)||'Não informado'} · ${esc(d.vendedor)}</div>
-        </div>`).join('')
+    function comparativoCasasHtml() {
+      return `<table class="resumo"><thead><tr><th>Casa</th><th>${anoAnterior}</th><th>${anoAtual}</th><th>Var. %</th></tr></thead><tbody>
+        ${casasComparativo.map(casa => { const ant=mapaLojaAnterior[casa]?.valor||0; const atu=mapaLojaAtual[casa]?.valor||0; return `<tr><td>${esc(casa)}</td><td>${esc(fmtBRLCompacto(ant))}</td><td>${esc(fmtBRLCompacto(atu))}</td><td>${esc(fmtVariacao(atu,ant))}</td></tr>` }).join('')}
+        <tr class="total"><td>Total</td><td>${esc(fmtBRLCompacto(totalAnterior))}</td><td>${esc(fmtBRLCompacto(totalAtual))}</td><td>${esc(fmtVariacao(totalAtual,totalAnterior))}</td></tr>
+      </tbody></table>`
+    }
+    function mensalHtml() {
+      if (!ehFechamento || chavesMesesCompetencia.length === 0) return ''
+      return chavesMesesCompetencia.map(chave => `<div class="mes-bloco"><h2>${esc(labelMesRelativo(chave))}</h2><table class="resumo"><thead><tr><th>Casa</th><th>${anoAnterior}</th><th>${anoAtual}</th><th>Var. %</th></tr></thead><tbody>
+        ${casasComparativo.map(casa => { const ant=compRelAnterior[casa]?.[chave]?.valor||0; const atu=compRelAtual[casa]?.[chave]?.valor||0; return `<tr><td>${esc(casa)}</td><td>${ant?esc(fmtBRLCompacto(ant)):'—'}</td><td>${atu?esc(fmtBRLCompacto(atu)):'—'}</td><td>${esc(fmtVariacao(atu,ant))}</td></tr>` }).join('')}
+        <tr class="total"><td>Total</td><td>${esc(fmtBRLCompacto(totaisMesesCompetencia[chave].anterior))}</td><td>${esc(fmtBRLCompacto(totaisMesesCompetencia[chave].atual))}</td><td>${esc(fmtVariacao(totaisMesesCompetencia[chave].atual,totaisMesesCompetencia[chave].anterior))}</td></tr>
+      </tbody></table></div>`).join('')
     }
     function lojaHtml(loj: [string,{valor:number;qtd:number}][]) {
       if (ehFechamento || loj.length === 0) return ''
@@ -339,31 +355,23 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(titulo)}</title>
       <style>
         * { box-sizing: border-box; }
-        @page { size: landscape; margin: 14mm; }
-        body { font-family: Arial, Helvetica, sans-serif; padding: 0; color: #222; font-size: 14px; line-height: 1.5; margin: 0; }
+        @page { size: landscape; margin: 10mm; }
+        body { font-family: Arial, Helvetica, sans-serif; padding: 0; color: #222; font-size: 11px; line-height: 1.35; margin: 0; }
         h1 { font-size: 19px; margin: 0 0 6px; }
-        .cols { display: flex; flex-direction: row; gap: 40px; margin-top: 18px; align-items: flex-start; }
-        .cols > div { flex: 1; min-width: 0; }
-        .col-header { display: flex; justify-content: space-between; border-bottom: 2px solid #333; padding-bottom: 8px; margin-bottom: 12px; font-size: 15px; font-weight: 700; }
+        h2 { font-size: 13px; margin: 12px 0 5px; }
+        .resumo { width:100%; border-collapse:collapse; margin-top:12px; }
+        .resumo th,.resumo td { padding:4px 7px; border-bottom:1px solid #e8e8e8; text-align:right; }
+        .resumo th:first-child,.resumo td:first-child { text-align:left; }
+        .resumo .total td { font-weight:700; border-top:2px solid #999; }
+        .mes-bloco { break-inside:avoid; page-break-inside:avoid; }
       </style>
     </head><body>
       <h1>${esc(titulo)}</h1>
       ${deltaAnual ? `<span style="display:inline-block;font-size:13px;font-weight:700;padding:4px 12px;border-radius:20px;background:${deltaAnual.up?'#eaf3de':'#fdeaea'};color:${deltaAnual.up?'#3B6D11':'#a32d2d'};">${deltaAnual.up?'↑':'↓'} ${deltaAnual.pct}% vs ${anoAnterior}</span>` : ''}
       ${ehMesCorrente ? `<div style="font-size:12px;color:#8a7405;margin-top:10px;">Mês em curso — comparando dia 01 a ${String(diaCorte).padStart(2,'0')} (hoje) nos dois anos.</div>` : ''}
-      <div class="cols">
-        <div>
-          <div class="col-header"><span>${anoAnterior}</span><span>${esc(fmtBRLCompacto(totalAnterior))} (${dealsAnteriorCortado.length})</span></div>
-          ${pivotHtml(pivotAnterior, totalAnterior)}
-          ${lojaHtml(lojaAnterior)}
-          ${linhasHtml(dealsAnteriorCortado)}
-        </div>
-        <div>
-          <div class="col-header"><span>${anoAtual}</span><span>${esc(fmtBRLCompacto(totalAtual))} (${dealsAtualCortado.length})</span></div>
-          ${pivotHtml(pivotAtual, totalAtual)}
-          ${lojaHtml(lojaAtual)}
-          ${linhasHtml(dealsAtualCortado)}
-        </div>
-      </div>
+      <h2>Comparativo por casa</h2>
+      ${comparativoCasasHtml()}
+      ${mensalHtml()}
     </body></html>`
 
     const iframe = document.createElement('iframe')
@@ -390,7 +398,7 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 20, width: '100%', maxWidth: 820, maxHeight: '85vh', overflow: 'auto' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 20, width: expandido ? '97vw' : '90vw', maxWidth: expandido ? '1600px' : '1100px', height: expandido ? '94vh' : 'auto', maxHeight: '94vh', overflow: 'auto', transition: 'max-width .2s ease' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap', gap: 8 }}>
           <span style={{ fontSize: 14, fontWeight: 700 }}>{titulo}</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -401,6 +409,7 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
             )}
             <button onClick={exportarCSV} style={{ padding: '5px 10px', borderRadius: 8, border: '0.5px solid #E8E8E2', background: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: '#5a5c5f' }}>⬇ Exportar CSV</button>
             <button onClick={imprimir} style={{ padding: '5px 10px', borderRadius: 8, border: '0.5px solid #E8E8E2', background: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: '#5a5c5f' }}>🖨 Imprimir</button>
+            <button onClick={() => setExpandido(v => !v)} style={{ padding: '5px 10px', borderRadius: 8, border: '0.5px solid #E8E8E2', background: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: '#5a5c5f' }}>{expandido ? '↙ Reduzir' : '↗ Expandir'}</button>
             <button onClick={onClose} style={{ border: 'none', background: 'transparent', fontSize: 18, cursor: 'pointer', color: '#9a9c9f' }}>×</button>
           </div>
         </div>
@@ -498,6 +507,16 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
                           </tr>
                         )
                       })}
+                      <tr>
+                        <td style={{ position: 'sticky', left: 0, zIndex: 4, background: '#fff', padding: '8px 14px', minWidth: 175, fontWeight: 700, borderRight: '1px solid #E8E8E2', borderTop: '1.5px solid #aaa', boxShadow: '5px 0 7px -7px rgba(0,0,0,.45)' }}>Total</td>
+                        {chavesMesesCompetencia.map(chave => {
+                          const ant = totaisMesesCompetencia[chave].anterior
+                          const atual = totaisMesesCompetencia[chave].atual
+                          const d = delta(atual, ant)
+                          return <td key={chave} colSpan={3} style={{ padding: 0, borderRight: '1px solid #E8E8E2', borderTop: '1.5px solid #aaa' }}><div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(82px, 1fr))' }}><span style={{ textAlign: 'right', padding: '8px', fontFamily: 'DM Mono, monospace', fontWeight: 700 }}>{fmtBRLCompacto(ant)}</span><span style={{ textAlign: 'right', padding: '8px', fontFamily: 'DM Mono, monospace', fontWeight: 700, color: '#185FA5' }}>{fmtBRLCompacto(atual)}</span><span style={{ textAlign: 'right', padding: '8px', fontWeight: 700, color: d ? (d.up ? '#3B6D11' : '#a32d2d') : '#9a9c9f' }}>{fmtVariacao(atual, ant)}</span></div></td>
+                        })}
+                        <td style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 700, borderTop: '1.5px solid #aaa' }}>{fmtVariacao(totalAtual, totalAnterior)}</td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
@@ -524,13 +543,45 @@ function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior, mesAtualNum,
   filtros: any
 }) {
   const [mesSelecionado, setMesSelecionado] = useState<number | null>(null)
+  const [anosCompetenciaCortados, setAnosCompetenciaCortados] = useState<typeof anos | null>(null)
   const campoData: 'won_time' | 'data_evento' = campo === 'receitaFechamento' ? 'won_time' : 'data_evento'
-  const todosValores = [...anos.atual.meses.map(m => m[campo]), ...anos.anterior.meses.map(m => m[campo])]
+
+  // Competência precisa responder "quanto já estava vendido nesta mesma
+  // data?", e não o fechamento final que hoje conhecemos de 2025. Busca os
+  // negócios de cada competência e mantém apenas won_time até DD/MM
+  // equivalente em cada ano.
+  useEffect(() => {
+    if (campo !== 'receitaCompetencia') { setAnosCompetenciaCortados(null); return }
+    let cancelado = false
+    const hoje = new Date()
+    const mmCorte = String(hoje.getMonth()+1).padStart(2,'0')
+    const ddCorte = String(hoje.getDate()).padStart(2,'0')
+    async function calcular(bloco: typeof anos.atual) {
+      const meses = await Promise.all(bloco.meses.map(async (m, i) => {
+        const p = new URLSearchParams({ tipo:'deals', status:'won', campo_data:'data_evento', ano:String(bloco.ano), mes:String(i+1).padStart(2,'0'), limit:'500' })
+        if (filtros?.unidade) p.set('unidade', filtros.unidade)
+        if (filtros?.vendedor) p.set('vendedor', filtros.vendedor)
+        const resposta = await fetch(`${GAS_URL}?${p}`).then(r => r.json())
+        const corte = `${bloco.ano}-${mmCorte}-${ddCorte}`
+        const deals = (resposta.deals || []).filter((d: DealResumo) => !!d.won_time && String(d.won_time).substring(0,10) <= corte)
+        const receitaCompetencia = deals.reduce((s:number,d:DealResumo) => s + (parseFloat(String(d.valor))||0), 0)
+        return { ...m, receitaCompetencia: Math.round(receitaCompetencia) }
+      }))
+      return { ...bloco, meses }
+    }
+    Promise.all([calcular(anos.atual), calcular(anos.anterior)])
+      .then(([atual, anterior]) => { if (!cancelado) setAnosCompetenciaCortados({ atual, anterior }) })
+      .catch(() => { if (!cancelado) setAnosCompetenciaCortados(null) })
+    return () => { cancelado = true }
+  }, [campo, anos.atual.ano, anos.anterior.ano, filtros?.unidade, filtros?.vendedor])
+
+  const anosGrafico = campo === 'receitaCompetencia' && anosCompetenciaCortados ? anosCompetenciaCortados : anos
+  const todosValores = [...anosGrafico.atual.meses.map(m => m[campo]), ...anosGrafico.anterior.meses.map(m => m[campo])]
 
   // Acumulado: soma Jan..mês atual, comparando os dois anos na MESMA janela
   // (senão o ano anterior, com 12 meses fechados, sempre pareceria "maior").
-  const acumuladoAtual = anos.atual.meses.slice(0, mesAtualNum).reduce((s,m) => s+m[campo], 0)
-  const acumuladoAnterior = anos.anterior.meses.slice(0, mesAtualNum).reduce((s,m) => s+m[campo], 0)
+  const acumuladoAtual = anosGrafico.atual.meses.slice(0, mesAtualNum).reduce((s,m) => s+m[campo], 0)
+  const acumuladoAnterior = anosGrafico.anterior.meses.slice(0, mesAtualNum).reduce((s,m) => s+m[campo], 0)
   const deltaAcumulado = delta(acumuladoAtual, acumuladoAnterior)
 
   // Eixo cortado: se o maior valor for um "fora da curva" (bem maior que o
@@ -559,13 +610,13 @@ function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior, mesAtualNum,
     <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 4, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 15, fontWeight: 700 }}>{titulo}</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#5a5c5f' }}><span style={{ width: 11, height: 11, borderRadius: 3, background: corAnterior, display: 'inline-block' }} />{anos.anterior.ano}</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#5a5c5f' }}><span style={{ width: 11, height: 11, borderRadius: 3, background: corAtual, display: 'inline-block' }} />{anos.atual.ano}</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#5a5c5f' }}><span style={{ width: 11, height: 11, borderRadius: 3, background: corAnterior, display: 'inline-block' }} />{anosGrafico.anterior.ano}</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#5a5c5f' }}><span style={{ width: 11, height: 11, borderRadius: 3, background: corAtual, display: 'inline-block' }} />{anosGrafico.atual.ano}</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginBottom: teto < maior ? 4 : 20 }}>
-        <span style={{ fontSize: 12, color: '#9a9c9f' }}>Acumulado Jan-{anos.atual.meses[mesAtualNum-1]?.label} {anos.atual.ano}:</span>
+        <span style={{ fontSize: 12, color: '#9a9c9f' }}>Acumulado Jan-{anosGrafico.atual.meses[mesAtualNum-1]?.label} {anosGrafico.atual.ano}:</span>
         <span style={{ fontSize: 15, fontWeight: 700, color: corAtual, fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(acumuladoAtual)}</span>
-        <span style={{ fontSize: 12, color: '#9a9c9f' }}>vs {anos.anterior.ano}: {fmtBRLCompacto(acumuladoAnterior)}</span>
+        <span style={{ fontSize: 12, color: '#9a9c9f' }}>vs {anosGrafico.anterior.ano}: {fmtBRLCompacto(acumuladoAnterior)}</span>
         {deltaAcumulado && (
           <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: deltaAcumulado.up ? '#eaf3de' : '#fdeaea', color: deltaAcumulado.up ? '#3B6D11' : '#a32d2d', fontWeight: 600 }}>
             {deltaAcumulado.up ? '↑' : '↓'} {deltaAcumulado.pct}%
@@ -573,14 +624,15 @@ function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior, mesAtualNum,
         )}
       </div>
       <div style={{ fontSize: 11, color: '#9a9c9f', marginBottom: teto < maior ? 8 : 0 }}>Clique num mês pra ver os negócios que compõem o valor, nos dois anos.</div>
+      {campo === 'receitaCompetencia' && <div style={{ fontSize: 11, color: '#8a7405', marginBottom: 8 }}>Corte de venda aplicado: negócios ganhos até {String(new Date().getDate()).padStart(2,'0')}/{String(new Date().getMonth()+1).padStart(2,'0')} em cada ano.</div>}
       {teto < maior && (
         <div style={{ fontSize: 11, color: '#9a9c9f', marginBottom: 16 }}>
           Escala com corte — barras hachuradas no topo estouram o teto do gráfico (valor exato sempre escrito, e na tabela abaixo).
         </div>
       )}
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14, height: 260, overflowX: 'auto', paddingBottom: 8, marginTop: teto < maior ? 0 : 20 }}>
-        {anos.atual.meses.map((mAtualMes, i) => {
-          const mAnt = anos.anterior.meses[i]
+        {anosGrafico.atual.meses.map((mAtualMes, i) => {
+          const mAnt = anosGrafico.anterior.meses[i]
           return (
             <div key={i} onClick={() => setMesSelecionado(i+1)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 78, flex: '1 0 78px', cursor: 'pointer' }}>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 5, height: 200 }}>
@@ -608,14 +660,14 @@ function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior, mesAtualNum,
           <thead>
             <tr style={{ borderBottom: '1px solid #E8E8E2' }}>
               <th style={{ textAlign: 'left', padding: '6px 8px', color: '#9a9c9f', fontWeight: 600 }}>Mês</th>
-              <th style={{ textAlign: 'right', padding: '6px 8px', color: '#9a9c9f', fontWeight: 600 }}>{anos.anterior.ano}</th>
-              <th style={{ textAlign: 'right', padding: '6px 8px', color: '#9a9c9f', fontWeight: 600 }}>{anos.atual.ano}</th>
+              <th style={{ textAlign: 'right', padding: '6px 8px', color: '#9a9c9f', fontWeight: 600 }}>{anosGrafico.anterior.ano}</th>
+              <th style={{ textAlign: 'right', padding: '6px 8px', color: '#9a9c9f', fontWeight: 600 }}>{anosGrafico.atual.ano}</th>
               <th style={{ textAlign: 'right', padding: '6px 8px', color: '#9a9c9f', fontWeight: 600 }}>Var.</th>
             </tr>
           </thead>
           <tbody>
-            {anos.atual.meses.map((mAtualMes, i) => {
-              const mAnt = anos.anterior.meses[i]
+            {anosGrafico.atual.meses.map((mAtualMes, i) => {
+              const mAnt = anosGrafico.anterior.meses[i]
               const d = delta(mAtualMes[campo], mAnt[campo])
               return (
                 <tr key={i} onClick={() => setMesSelecionado(i+1)} style={{ borderBottom: '0.5px solid #F5F5F2', cursor: 'pointer' }}
@@ -634,11 +686,11 @@ function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior, mesAtualNum,
 
       {mesSelecionado !== null && (
         <ModalComparacaoMeses
-          titulo={`${titulo} · ${anos.atual.meses[mesSelecionado-1]?.label}`}
+          titulo={`${titulo} · ${anosGrafico.atual.meses[mesSelecionado-1]?.label}`}
           campoData={campoData}
           mesNum={mesSelecionado}
-          anoAtual={anos.atual.ano}
-          anoAnterior={anos.anterior.ano}
+          anoAtual={anosGrafico.atual.ano}
+          anoAnterior={anosGrafico.anterior.ano}
           filtros={filtros}
           onClose={() => setMesSelecionado(null)}
         />
