@@ -15,6 +15,12 @@ function delta(atual: number, ant: number) {
   return { pct: Math.abs(pct).toFixed(1), up: atual >= ant }
 }
 
+function fmtVariacao(atual: number, anterior: number) {
+  const d = delta(atual, anterior)
+  if (!d) return anterior === 0 && atual > 0 ? 'Novo' : '—'
+  return `${d.up ? '↑' : '↓'} ${d.pct}%`
+}
+
 function DeltaTag({ atual, ant, label }: { atual: number; ant: number; label: string }) {
   const d = delta(atual, ant)
   if (!d) return null
@@ -138,6 +144,20 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
   const lojaAtual = agruparPorLoja(dealsAtualCortado)
   const lojaAnterior = agruparPorLoja(dealsAnteriorCortado)
 
+  // Comparativo consolidado: uma linha fixa por casa, com os dois anos e a
+  // variação percentual. Assim a leitura não depende da ordem/ranking de
+  // cada coluna e a mesma casa nunca "muda de linha" entre os anos.
+  const mapaLojaAtual = Object.fromEntries(lojaAtual)
+  const mapaLojaAnterior = Object.fromEntries(lojaAnterior)
+  const casasComparativo = Array.from(new Set([
+    ...Object.keys(mapaLojaAnterior),
+    ...Object.keys(mapaLojaAtual),
+  ])).sort((a, b) => {
+    const totalA = (mapaLojaAtual[a]?.valor || 0) + (mapaLojaAnterior[a]?.valor || 0)
+    const totalB = (mapaLojaAtual[b]?.valor || 0) + (mapaLojaAnterior[b]?.valor || 0)
+    return totalB - totalA || a.localeCompare(b, 'pt-BR')
+  })
+
   const Coluna = ({ ano, deals, total, cor, loja, pivot }: {
     ano: number; deals: DealResumo[]; total: number; cor: string
     loja: [string,{valor:number;qtd:number}][]
@@ -157,7 +177,7 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
           <table style={{ borderCollapse: 'collapse', fontSize: 11, whiteSpace: 'nowrap' }}>
             <thead>
               <tr>
-                <th style={{ textAlign: 'left', padding: '3px 8px 3px 0', color: '#9a9c9f', fontWeight: 600 }}>Loja</th>
+                <th style={{ position: 'sticky', left: 0, zIndex: 2, background: '#fff', textAlign: 'left', padding: '3px 12px 3px 0', color: '#9a9c9f', fontWeight: 600, minWidth: 150 }}>Casa</th>
                 {pivot.meses.map(m => <th key={m} style={{ textAlign: 'right', padding: '3px 8px', color: '#9a9c9f', fontWeight: 600 }}>{m}</th>)}
                 <th style={{ textAlign: 'right', padding: '3px 0 3px 8px', color: '#9a9c9f', fontWeight: 700 }}>Total</th>
               </tr>
@@ -165,7 +185,7 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
             <tbody>
               {pivot.lojas.map(loj => (
                 <tr key={loj} style={{ borderTop: '0.5px solid #F0F0EC' }}>
-                  <td style={{ padding: '4px 8px 4px 0', fontWeight: 600, color: '#3a3c3f' }}>{loj}</td>
+                  <td style={{ position: 'sticky', left: 0, zIndex: 1, background: '#fff', padding: '4px 12px 4px 0', fontWeight: 600, color: '#3a3c3f', minWidth: 150 }}>{loj}</td>
                   {pivot.meses.map(m => {
                     const c = pivot.porLoja[loj][m]
                     return <td key={m} style={{ textAlign: 'right', padding: '4px 8px', fontFamily: 'DM Mono, monospace', color: c ? '#3a3c3f' : '#d8d8d2' }}>{c ? fmtBRLCompacto(c.valor) : '—'}</td>
@@ -174,7 +194,7 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
                 </tr>
               ))}
               <tr style={{ borderTop: '1.5px solid #ccc' }}>
-                <td style={{ padding: '5px 8px 0 0', fontWeight: 700 }}>Total</td>
+                <td style={{ position: 'sticky', left: 0, zIndex: 1, background: '#fff', padding: '5px 12px 0 0', fontWeight: 700 }}>Total</td>
                 {pivot.meses.map(m => <td key={m} style={{ textAlign: 'right', padding: '5px 8px 0', fontFamily: 'DM Mono, monospace', fontWeight: 700 }}>{fmtBRLCompacto(pivot.totalMes[m].valor)}</td>)}
                 <td style={{ textAlign: 'right', padding: '5px 0 0 8px', fontFamily: 'DM Mono, monospace', fontWeight: 700 }}>{fmtBRLCompacto(total)}</td>
               </tr>
@@ -215,9 +235,9 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
   )
 
   function exportarCSV() {
-    const linhas = [['Ano','Empresa','Valor','DataEvento','Fechou','Vendedor']]
-    dealsAnteriorCortado.forEach(d => linhas.push([String(anoAnterior), d.empresa||d.titulo, String(parseFloat(String(d.valor))||0), d.data_evento||'', d.won_time||'', d.vendedor||'']))
-    dealsAtualCortado.forEach(d => linhas.push([String(anoAtual), d.empresa||d.titulo, String(parseFloat(String(d.valor))||0), d.data_evento||'', d.won_time||'', d.vendedor||'']))
+    const linhas = [['Ano','Empresa','Unidade/Casa do evento','Valor','DataEvento','Fechou','Vendedor']]
+    dealsAnteriorCortado.forEach(d => linhas.push([String(anoAnterior), d.empresa||d.titulo, d.unidade_nome||'Não informado', String(parseFloat(String(d.valor))||0), d.data_evento||'', d.won_time||'', d.vendedor||'']))
+    dealsAtualCortado.forEach(d => linhas.push([String(anoAtual), d.empresa||d.titulo, d.unidade_nome||'Não informado', String(parseFloat(String(d.valor))||0), d.data_evento||'', d.won_time||'', d.vendedor||'']))
     const csv = linhas.map(l => l.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n')
     const blob = new Blob(['\uFEFF'+csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
@@ -242,7 +262,7 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
             <strong>${esc(d.empresa||d.titulo)}</strong>
             <strong>${esc(fmtBRLCompacto(parseFloat(String(d.valor))||0))}</strong>
           </div>
-          <div style="color:#888;font-size:12px;">evento: ${esc(d.data_evento)||'—'} · fechou: ${esc(d.won_time)||'—'} · ${esc(d.vendedor)}</div>
+          <div style="color:#888;font-size:12px;">evento: ${esc(d.data_evento)||'—'} · fechou: ${esc(d.won_time)||'—'} · casa: ${esc(d.unidade_nome)||'Não informado'} · ${esc(d.vendedor)}</div>
         </div>`).join('')
     }
     function lojaHtml(loj: [string,{valor:number;qtd:number}][]) {
@@ -352,10 +372,46 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
         {loading ? (
           <div style={{ padding: 30, textAlign: 'center', color: '#9a9c9f' }}>Carregando...</div>
         ) : (
-          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginTop: ehMesCorrente ? 0 : 14 }}>
-            <Coluna ano={anoAnterior} deals={dealsAnteriorCortado} total={totalAnterior} cor="#8a8c8f" loja={lojaAnterior} pivot={pivotAnterior} />
-            <Coluna ano={anoAtual} deals={dealsAtualCortado} total={totalAtual} cor="#185FA5" loja={lojaAtual} pivot={pivotAtual} />
-          </div>
+          <>
+            <div style={{ marginTop: ehMesCorrente ? 0 : 14, marginBottom: 20, border: '0.5px solid #E8E8E2', borderRadius: 10, overflowX: 'auto' }}>
+              <div style={{ padding: '10px 12px 6px', fontSize: 11, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase' }}>Comparativo por casa</div>
+              <table style={{ width: '100%', minWidth: 560, borderCollapse: 'collapse', fontSize: 12, whiteSpace: 'nowrap' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #E8E8E2' }}>
+                    <th style={{ position: 'sticky', left: 0, zIndex: 2, background: '#fff', textAlign: 'left', padding: '7px 12px', color: '#9a9c9f', minWidth: 170 }}>Casa</th>
+                    <th style={{ textAlign: 'right', padding: '7px 12px', color: '#9a9c9f' }}>{anoAnterior}</th>
+                    <th style={{ textAlign: 'right', padding: '7px 12px', color: '#185FA5' }}>{anoAtual}</th>
+                    <th style={{ textAlign: 'right', padding: '7px 12px', color: '#9a9c9f' }}>Var. %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {casasComparativo.map(casa => {
+                    const anterior = mapaLojaAnterior[casa]?.valor || 0
+                    const atual = mapaLojaAtual[casa]?.valor || 0
+                    const d = delta(atual, anterior)
+                    return (
+                      <tr key={casa} style={{ borderBottom: '0.5px solid #F0F0EC' }}>
+                        <td style={{ position: 'sticky', left: 0, zIndex: 1, background: '#fff', padding: '7px 12px', fontWeight: 600, color: '#3a3c3f' }}>{casa}</td>
+                        <td style={{ textAlign: 'right', padding: '7px 12px', fontFamily: 'DM Mono, monospace', color: '#8a8c8f' }}>{fmtBRLCompacto(anterior)}</td>
+                        <td style={{ textAlign: 'right', padding: '7px 12px', fontFamily: 'DM Mono, monospace', fontWeight: 700, color: '#185FA5' }}>{fmtBRLCompacto(atual)}</td>
+                        <td style={{ textAlign: 'right', padding: '7px 12px', fontWeight: 700, color: d ? (d.up ? '#3B6D11' : '#a32d2d') : '#9a9c9f' }}>{fmtVariacao(atual, anterior)}</td>
+                      </tr>
+                    )
+                  })}
+                  <tr style={{ borderTop: '1.5px solid #ccc' }}>
+                    <td style={{ position: 'sticky', left: 0, zIndex: 1, background: '#fff', padding: '8px 12px', fontWeight: 700 }}>Total</td>
+                    <td style={{ textAlign: 'right', padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontWeight: 700 }}>{fmtBRLCompacto(totalAnterior)}</td>
+                    <td style={{ textAlign: 'right', padding: '8px 12px', fontFamily: 'DM Mono, monospace', fontWeight: 700, color: '#185FA5' }}>{fmtBRLCompacto(totalAtual)}</td>
+                    <td style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 700, color: deltaAnual ? (deltaAnual.up ? '#3B6D11' : '#a32d2d') : '#9a9c9f' }}>{fmtVariacao(totalAtual, totalAnterior)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+              <Coluna ano={anoAnterior} deals={dealsAnteriorCortado} total={totalAnterior} cor="#8a8c8f" loja={lojaAnterior} pivot={pivotAnterior} />
+              <Coluna ano={anoAtual} deals={dealsAtualCortado} total={totalAtual} cor="#185FA5" loja={lojaAtual} pivot={pivotAtual} />
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -702,8 +758,14 @@ export default function OnePage({ filtros }: { filtros: any }) {
   // Usa o MESMO filtro de ano/mês que já existe no topo do dashboard —
   // sem seletor duplicado aqui. Se "Todos os meses" estiver selecionado lá em
   // cima, cai no mês corrente de verdade (a onepage sempre mostra um mês só).
-  const mesFiltro = filtros?.mes ? `${filtros.ano}-${String(filtros.mes).padStart(2,'0')}` : hojeYm()
-  const { dados, loading, erro } = useOnePage(filtros, mesFiltro)
+  // A comparação anual nunca antecipa competência futura. Em 2026 mostra
+  // somente 2026 x 2025; 2027 só passa a entrar quando o próprio ano virar.
+  const anoVigente = new Date().getFullYear()
+  const anoSolicitado = Number(filtros?.ano) || anoVigente
+  const anoRelatorio = Math.min(anoSolicitado, anoVigente)
+  const filtrosRelatorio = { ...filtros, ano: String(anoRelatorio) }
+  const mesFiltro = filtros?.mes ? `${anoRelatorio}-${String(filtros.mes).padStart(2,'0')}` : `${anoRelatorio}-${hojeYm().split('-')[1]}`
+  const { dados, loading, erro } = useOnePage(filtrosRelatorio, mesFiltro)
 
   const nomesMesesLong = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 
