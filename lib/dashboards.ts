@@ -15,6 +15,7 @@ export const DASHBOARDS: Dashboard[] = [
   { id: 'turnover', name: 'Turnover & Headcount', description: 'Gestão de pessoas, turnover e custos com RH', url: 'https://turnovereheadcount.vercel.app', internalPath: '/hub/turnover', color: '#6366f1', icon: '👥' },
   { id: 'comercial', name: 'Comercial & Eventos', description: 'Funil de eventos B2B, calendário e deals', url: '', internalPath: '/hub/comercial', color: '#0ea5e9', icon: '🤝' },
   { id: 'relatorios', name: 'Relatório de Descontos', description: 'Descontos, estornos, contas em aberto e bônus', url: '', internalPath: '/hub/relatorios', color: '#EA580C', icon: '🧾' },
+  { id: 'vendas', name: 'Vendas ZIG', description: 'Produtos vendidos por período, unidade e canal', url: '', internalPath: '/hub/vendas', color: '#16A34A', icon: '🛒' },
   { id: 'financeiro', name: 'Financeiro — Saldo de Bancos', description: 'Saldo bancário, aplicações e recebíveis por unidade', url: '', internalPath: '/hub/financeiro', color: '#0369A1', icon: '🏦' },
   { id: 'promocoes', name: 'Promoções', description: 'Dashboard mensal de promoções/pacotes + simulador de CMV', url: '', internalPath: '/hub/promocoes', color: '#9A3412', icon: '🔥' },
   { id: 'kids', name: 'Kids', description: 'Crianças, Combo Quintal Feliz, shows e infláveis', url: '', internalPath: '/hub/kids', color: '#DB2777', icon: '🎈' },
