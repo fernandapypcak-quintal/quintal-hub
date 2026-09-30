@@ -1,128 +1,723 @@
 'use client'
 
-import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+// app/hub/vendas/ClientApp.tsx
+// Vendas por Produto (ZIG) — lê o resumo pré-agregado do Apps Script via
+// /api/vendas. O período inteiro é agregado no servidor; aqui só filtra,
+// ordena e desenha. Detalhe linha a linha é sempre de UM dia (CSV cru).
 
-type Meta = { primeiroDia: string | null; ultimoDia: string | null; atualizadoEm: string | null; lojas: string[]; canais: string[]; maxDias: number }
-type Produto = { id: string; sku: string; produto: string; categoria: string; tipo: string; qtd: number; liquido: number; estornoQtd: number; estornoValor: number }
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts'
+
+// ─── Tipos ────────────────────────────────────────────────────────────
+type Meta = {
+  primeiroDia: string | null
+  ultimoDia: string | null
+  atualizadoEm: string | null
+  lojas: string[]
+  canais: string[]
+  maxDias: number
+}
+type Produto = {
+  id: string; sku: string; produto: string; categoria: string; tipo: string
+  qtd: number; bruto: number; desconto: number; liquido: number; transacoes: number
+  estornoQtd: number; estornoValor: number
+}
 type Resumo = {
-  periodo: { dias: number; diasComDados: number; diasSemDados: string[]; diasSemTransacao: string[] }
-  filtros: { porItem: boolean }
-  kpis: { faturamento: number; bruto: number; desconto: number; itens: number; transacoes: number; ticketMedio: number | null; estornoValor: number }
-  porDia: { dia: string; temDados: boolean; liquido: number; qtd: number }[]
-  porLoja: { loja: string; canal: string; liquido: number; qtd: number; transacoes: number }[]
+  periodo: { inicio: string; fim: string; dias: number; diasComDados: number; diasSemDados: string[]; diasSemTransacao: string[] }
+  filtros: { porItem: boolean; adicoes: boolean }
+  kpis: {
+    faturamento: number; bruto: number; desconto: number; itens: number; transacoes: number
+    transacoesPorItem: boolean; ticketMedio: number | null; mediaDiaria: number; produtosDistintos: number
+    estornoQtd: number; estornoValor: number
+  }
+  porDia: { dia: string; temDados: boolean; liquido: number; qtd: number; transacoes: number }[]
+  porLoja: { loja: string; canal: string; liquido: number; qtd: number; transacoes: number; ticketMedio: number | null }[]
+  porCategoria: { categoria: string; liquido: number; qtd: number }[]
   categoriasDisponiveis: string[]
   produtos: Produto[]
 }
-type Detalhe = { colunas: string[]; linhas: (string | number)[][]; total: number; truncado: boolean; totais: { qtd: number; liquido: number } }
+type Detalhe = {
+  dia: string; colunas: string[]; linhas: (string | number)[][]; total: number; truncado: boolean
+  totais: { qtd: number; liquido: number }
+}
 
-const dinheiro = (n: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n || 0)
-const numero = (n: number) => new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 3 }).format(n || 0)
-const dataBR = (s: string) => s ? s.split('-').reverse().join('/') : '—'
+// ─── Formatação ─────────────────────────────────────────────────────────
+const brlFmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+const brl0Fmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
+const numFmt = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 })
+const pctFmt = new Intl.NumberFormat('pt-BR', { style: 'percent', maximumFractionDigits: 1 })
+const brl = (v: number) => brlFmt.format(v || 0)
+const brl0 = (v: number) => brl0Fmt.format(v || 0)
+const num = (v: number) => numFmt.format(v || 0)
+const pct = (v: number) => pctFmt.format(v || 0)
+const brlCompact = (v: number) => {
+  const a = Math.abs(v || 0)
+  if (a >= 1e6) return `R$ ${(v / 1e6).toFixed(1).replace('.', ',')}M`
+  if (a >= 1e3) return `R$ ${(v / 1e3).toFixed(1).replace('.', ',')}k`
+  return brl0(v)
+}
+const dataCurta = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
+const dataLonga = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`
+const DIAS_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
+const diaSemana = (iso: string) => DIAS_SEMANA[new Date(iso + 'T12:00:00').getDay()]
 
-async function consultar<T>(params: URLSearchParams, signal?: AbortSignal): Promise<T> {
-  const res = await fetch('/api/vendas?' + params, { signal, cache: 'no-store' })
-  const data = await res.json()
-  if (!res.ok || !data.ok) throw new Error(data.erro || 'Não foi possível carregar os dados')
+function addDias(iso: string, n: number) {
+  const d = new Date(iso + 'T12:00:00')
+  d.setDate(d.getDate() + n)
+  return d.toISOString().slice(0, 10)
+}
+function diasEntre(a: string, b: string) {
+  return Math.round((new Date(b + 'T12:00:00').getTime() - new Date(a + 'T12:00:00').getTime()) / 86400000) + 1
+}
+
+// ─── Estilo ─────────────────────────────────────────────────────────────
+const C = {
+  borda: '#EBEBEB', bordaForte: '#1a1a1a', texto: '#1a1a1a', suave: '#888', muito: '#BBB',
+  verde: '#97A624', verdeFundo: '#F4F6E6', vermelho: '#8C1414', vermelhoFundo: '#FBEFEF', fundo: '#FAFAF8',
+}
+const MONO: React.CSSProperties = { fontFamily: "'DM Mono', monospace" }
+const card: React.CSSProperties = { background: '#fff', border: `1px solid ${C.borda}`, borderRadius: 10 }
+const pill = (ativo: boolean): React.CSSProperties => ({
+  height: 32, padding: '0 12px', borderRadius: 99, fontSize: 12.5, fontFamily: 'inherit', cursor: 'pointer',
+  border: `1px solid ${ativo ? C.bordaForte : '#E8E8E8'}`, background: '#fff',
+  color: ativo ? C.texto : '#666', fontWeight: ativo ? 600 : 400, outline: 'none', whiteSpace: 'nowrap',
+})
+const th: React.CSSProperties = {
+  textAlign: 'left', fontSize: 11.5, fontWeight: 600, color: C.suave, padding: '10px 12px',
+  borderBottom: `1px solid ${C.borda}`, background: '#fff', position: 'sticky', top: 0, whiteSpace: 'nowrap',
+}
+const td: React.CSSProperties = { fontSize: 13, padding: '9px 12px', borderBottom: '1px solid #F3F3F3', verticalAlign: 'top' }
+const tdNum: React.CSSProperties = { ...td, ...MONO, textAlign: 'right', whiteSpace: 'nowrap' }
+
+// ─── Hook de fetch ────────────────────────────────────────────────────────
+async function getJSON<T>(params: URLSearchParams, signal?: AbortSignal): Promise<T> {
+  const res = await fetch(`/api/vendas?${params.toString()}`, { signal, cache: 'no-store' })
+  const data = await res.json().catch(() => null)
+  if (!res.ok || !data || data.ok === false) throw new Error(data?.erro || `Erro ${res.status}`)
   return data as T
 }
 
-export default function VendasClient() {
-  const [meta, setMeta] = useState<Meta | null>(null)
-  const [inicio, setInicio] = useState('')
-  const [fim, setFim] = useState('')
-  const [loja, setLoja] = useState('')
-  const [canal, setCanal] = useState('')
-  const [categoria, setCategoria] = useState('')
-  const [busca, setBusca] = useState('')
-  const [adicoes, setAdicoes] = useState(false)
-  const [resumo, setResumo] = useState<Resumo | null>(null)
-  const [detalhe, setDetalhe] = useState<Detalhe | null>(null)
-  const [dia, setDia] = useState('')
-  const [loading, setLoading] = useState(false)
+// ─── Componentes pequenos ───────────────────────────────────────────────────
+function Spinner({ texto = 'Carregando vendas...' }: { texto?: string }) {
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, padding: 60 }}>
+      <div style={{ width: 28, height: 28, border: '2px solid #E8E8E8', borderTopColor: C.texto, borderRadius: '50%', animation: 'vspin 0.7s linear infinite' }} />
+      <div style={{ fontSize: 13, color: '#999' }}>{texto}</div>
+      <style>{`@keyframes vspin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  )
+}
+
+function Aviso({ tipo = 'erro', children }: { tipo?: 'erro' | 'info'; children: React.ReactNode }) {
+  const erro = tipo === 'erro'
+  return (
+    <div style={{
+      fontSize: 13, padding: '10px 14px', borderRadius: 8,
+      background: erro ? C.vermelhoFundo : '#F5F5F2', color: erro ? C.vermelho : '#555',
+    }}>{children}</div>
+  )
+}
+
+function Kpi({ label, valor, sub, cor }: { label: string; valor: string; sub?: string; cor?: string }) {
+  return (
+    <div style={{ ...card, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+      <span style={{ fontSize: 12, color: C.suave }}>{label}</span>
+      <span style={{ ...MONO, fontSize: 22, fontWeight: 500, color: cor || C.texto, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{valor}</span>
+      {sub && <span style={{ fontSize: 11.5, color: C.muito }}>{sub}</span>}
+    </div>
+  )
+}
+
+function MultiSelect({ label, labelTodos, opcoes, valor, onChange }: {
+  label: string; labelTodos: string; opcoes: string[]; valor: string[]; onChange: (v: string[]) => void
+}) {
+  const [aberto, setAberto] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!aberto) return
+    const fechar = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setAberto(false) }
+    document.addEventListener('mousedown', fechar)
+    return () => document.removeEventListener('mousedown', fechar)
+  }, [aberto])
+
+  const texto = valor.length === 0 ? labelTodos : valor.length === 1 ? valor[0] : `${valor.length} ${label}`
+  const alternar = (o: string) => onChange(valor.includes(o) ? valor.filter(v => v !== o) : [...valor, o])
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button type="button" onClick={() => setAberto(a => !a)} style={{ ...pill(valor.length > 0), maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {texto} <span style={{ color: C.muito, marginLeft: 4 }}>▾</span>
+      </button>
+      {aberto && (
+        <div style={{ ...card, position: 'absolute', top: 38, left: 0, zIndex: 40, minWidth: 230, maxHeight: 340, overflowY: 'auto', padding: 6, boxShadow: '0 8px 24px rgb(0 0 0 / 0.08)' }}>
+          <button type="button" onClick={() => onChange([])}
+            style={{ width: '100%', textAlign: 'left', border: 'none', background: 'none', padding: '8px 10px', fontSize: 12.5, color: valor.length ? '#666' : C.texto, fontWeight: valor.length ? 400 : 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+            {labelTodos}
+          </button>
+          {opcoes.map(o => (
+            <label key={o} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', fontSize: 12.5, cursor: 'pointer', borderRadius: 6 }}>
+              <input type="checkbox" checked={valor.includes(o)} onChange={() => alternar(o)} style={{ accentColor: C.texto }} />
+              {o}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Chip({ children, onRemover }: { children: React.ReactNode; onRemover: () => void }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '4px 6px 4px 10px', borderRadius: 99, background: '#F0F0EC', color: '#333' }}>
+      {children}
+      <button type="button" onClick={onRemover} aria-label="Remover filtro"
+        style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#888', fontSize: 14, lineHeight: 1, padding: '0 2px' }}>×</button>
+    </span>
+  )
+}
+
+function Painel({ titulo, direita, children, style }: { titulo: string; direita?: React.ReactNode; children: React.ReactNode; style?: React.CSSProperties }) {
+  return (
+    <section style={{ ...card, display: 'flex', flexDirection: 'column', minWidth: 0, ...style }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '14px 16px 10px' }}>
+        <h2 style={{ fontSize: 14, fontWeight: 600, margin: 0, color: C.texto }}>{titulo}</h2>
+        {direita}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+async function exportarExcel(nome: string, linhas: Record<string, any>[]) {
+  if (!linhas.length) return
+  const XLSX = await import('xlsx')
+  const ws = XLSX.utils.json_to_sheet(linhas)
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Vendas')
+  XLSX.writeFile(wb, `${nome}.xlsx`)
+}
+
+// ─── Tabela de produtos ──────────────────────────────────────────────────────
+type Ordem = { campo: 'produto' | 'categoria' | 'qtd' | 'precoMedio' | 'desconto' | 'liquido' | 'transacoes'; dir: 1 | -1 }
+
+function TabelaProdutos({ produtos, total, mostrarTx, onSelecionar, skuAtivo }: {
+  produtos: Produto[]; total: number; mostrarTx: boolean; onSelecionar: (p: Produto) => void; skuAtivo: string | null
+}) {
+  const [ordem, setOrdem] = useState<Ordem>({ campo: 'liquido', dir: -1 })
+  const [limite, setLimite] = useState(50)
+  useEffect(() => { setLimite(50) }, [produtos])
+
+  const ordenados = useMemo(() => {
+    const val = (p: Produto) => {
+      if (ordem.campo === 'precoMedio') return p.qtd ? p.liquido / p.qtd : 0
+      return (p as any)[ordem.campo]
+    }
+    return [...produtos].sort((a, b) => {
+      const va = val(a), vb = val(b)
+      if (typeof va === 'string') return va.localeCompare(vb) * ordem.dir
+      return ((va || 0) - (vb || 0)) * ordem.dir
+    })
+  }, [produtos, ordem])
+
+  const cab = (campo: Ordem['campo'], texto: string, direita = false) => (
+    <th style={{ ...th, textAlign: direita ? 'right' : 'left', cursor: 'pointer', color: ordem.campo === campo ? C.texto : C.suave }}
+      onClick={() => setOrdem(o => ({ campo, dir: o.campo === campo ? (o.dir === 1 ? -1 : 1) : (campo === 'produto' || campo === 'categoria' ? 1 : -1) }))}>
+      {texto}{ordem.campo === campo ? (ordem.dir === -1 ? ' ↓' : ' ↑') : ''}
+    </th>
+  )
+
+  if (!produtos.length) {
+    return <div style={{ padding: '24px 16px', fontSize: 13, color: C.suave }}>Nenhum produto vendido com esses filtros.</div>
+  }
+
+  return (
+    <>
+      <div style={{ overflowX: 'auto', maxHeight: 620, overflowY: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
+          <thead>
+            <tr>
+              {cab('produto', 'Produto')}
+              {cab('categoria', 'Categoria')}
+              {cab('qtd', 'Qtd', true)}
+              {cab('precoMedio', 'Preço médio', true)}
+              {cab('desconto', 'Descontos', true)}
+              {cab('liquido', 'Faturamento', true)}
+              <th style={{ ...th, textAlign: 'right' }}>% total</th>
+              {mostrarTx && cab('transacoes', 'Transações', true)}
+            </tr>
+          </thead>
+          <tbody>
+            {ordenados.slice(0, limite).map(p => {
+              const ativo = skuAtivo === p.id
+              return (
+                <tr key={p.id + p.tipo} onClick={() => onSelecionar(p)} title="Filtrar o painel por este produto"
+                  style={{ cursor: 'pointer', background: ativo ? C.verdeFundo : undefined }}>
+                  <td style={td}>
+                    <div style={{ fontWeight: 500 }}>{p.produto || '(sem nome)'}</div>
+                    <div style={{ ...MONO, fontSize: 11, color: C.muito, marginTop: 2 }}>
+                      {p.sku ? `SKU ${p.sku}` : 'sem SKU'}{p.tipo === 'Adição' ? ' · adição de combo' : ''}
+                    </div>
+                  </td>
+                  <td style={{ ...td, color: '#666' }}>{p.categoria}</td>
+                  <td style={tdNum}>{num(p.qtd)}</td>
+                  <td style={tdNum}>{p.qtd ? brl(p.liquido / p.qtd) : '—'}</td>
+                  <td style={{ ...tdNum, color: p.desconto ? C.vermelho : C.muito }}>{p.desconto ? brl(p.desconto) : '—'}</td>
+                  <td style={{ ...tdNum, fontWeight: 500 }}>{brl(p.liquido)}</td>
+                  <td style={{ ...tdNum, color: C.suave }}>{total ? pct(p.liquido / total) : '—'}</td>
+                  {mostrarTx && <td style={tdNum}>{num(p.transacoes)}</td>}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', fontSize: 12, color: C.suave }}>
+        <span>Mostrando {num(Math.min(limite, ordenados.length))} de {num(ordenados.length)} produtos</span>
+        {limite < ordenados.length && (
+          <button type="button" onClick={() => setLimite(l => l + 100)} style={pill(false)}>Mostrar mais 100</button>
+        )}
+      </div>
+    </>
+  )
+}
+
+// ─── Painel lateral de detalhe (um dia) ─────────────────────────────────────────
+const COLS_DETALHE: { campo: string; label: string; num?: 'brl' | 'qtd' }[] = [
+  { campo: 'loja', label: 'Loja' }, { campo: 'canal', label: 'Canal' }, { campo: 'produto', label: 'Produto' },
+  { campo: 'sku', label: 'SKU' }, { campo: 'quantidade', label: 'Qtd', num: 'qtd' },
+  { campo: 'valorTotal', label: 'Valor', num: 'brl' }, { campo: 'desconto', label: 'Desconto', num: 'brl' },
+  { campo: 'funcionario', label: 'Funcionário' }, { campo: 'estacao', label: 'Estação' },
+  { campo: 'cliente', label: 'Cliente' }, { campo: 'estornado', label: 'Estornado' },
+]
+
+function PainelDetalhe({ dia, filtros, onFechar }: { dia: string; filtros: URLSearchParams; onFechar: () => void }) {
+  const [dados, setDados] = useState<Detalhe | null>(null)
   const [erro, setErro] = useState('')
+  const chave = filtros.toString()
 
   useEffect(() => {
-    const controller = new AbortController()
-    consultar<Meta>(new URLSearchParams({ acao: 'meta' }), controller.signal)
+    const ctrl = new AbortController()
+    setDados(null); setErro('')
+    const p = new URLSearchParams(chave)
+    p.set('acao', 'detalhe'); p.set('dia', dia); p.delete('inicio'); p.delete('fim')
+    getJSON<Detalhe>(p, ctrl.signal).then(setDados).catch(e => { if (e.name !== 'AbortError') setErro(e.message) })
+    return () => ctrl.abort()
+  }, [dia, chave])
+
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onFechar() }
+    window.addEventListener('keydown', esc)
+    return () => window.removeEventListener('keydown', esc)
+  }, [onFechar])
+
+  const ix = useMemo(() => {
+    const m: Record<string, number> = {}
+    dados?.colunas.forEach((c, i) => { m[c] = i })
+    return m
+  }, [dados])
+
+  const exportar = () => {
+    if (!dados) return
+    exportarExcel(`vendas_detalhe_${dia}`, dados.linhas.map(l => {
+      const o: Record<string, any> = {}
+      dados.colunas.forEach((c, i) => { o[c] = l[i] })
+      return o
+    }))
+  }
+
+  return (
+    <div role="dialog" aria-label={`Vendas de ${dataLonga(dia)}`}
+      style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', justifyContent: 'flex-end', background: 'rgb(0 0 0 / 0.25)' }}
+      onMouseDown={e => { if (e.target === e.currentTarget) onFechar() }}>
+      <div style={{ width: 'min(1100px, 100%)', height: '100%', background: '#fff', display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 30px rgb(0 0 0 / 0.1)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '16px 20px', borderBottom: `1px solid ${C.borda}` }}>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>Vendas de {dataLonga(dia)} ({diaSemana(dia)})</div>
+            <div style={{ fontSize: 12, color: C.suave, marginTop: 2 }}>Linha a linha, com os mesmos filtros do painel</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {dados && dados.linhas.length > 0 && <button type="button" onClick={exportar} style={pill(false)}>Exportar Excel</button>}
+            <button type="button" onClick={onFechar} style={pill(true)}>Fechar</button>
+          </div>
+        </div>
+
+        {erro ? <div style={{ padding: 20 }}><Aviso>{erro}</Aviso></div>
+          : !dados ? <Spinner texto="Abrindo o dia..." />
+          : (
+            <>
+              <div style={{ display: 'flex', gap: 24, padding: '12px 20px', fontSize: 13, flexWrap: 'wrap' }}>
+                <span><span style={{ color: C.suave }}>Linhas </span><b style={MONO}>{num(dados.total)}</b></span>
+                <span><span style={{ color: C.suave }}>Itens </span><b style={MONO}>{num(dados.totais.qtd)}</b></span>
+                <span><span style={{ color: C.suave }}>Faturamento </span><b style={MONO}>{brl(dados.totais.liquido)}</b></span>
+              </div>
+              {dados.truncado && (
+                <div style={{ padding: '0 20px 10px' }}>
+                  <Aviso tipo="info">Mostrando as primeiras {num(dados.linhas.length)} linhas de {num(dados.total)}. Os totais acima consideram todas. Filtre por loja ou produto pra ver o resto.</Aviso>
+                </div>
+              )}
+              <div style={{ flex: 1, overflow: 'auto', borderTop: `1px solid ${C.borda}` }}>
+                {dados.linhas.length === 0
+                  ? <div style={{ padding: 20, fontSize: 13, color: C.suave }}>Nenhuma venda nesse dia com os filtros atuais.</div>
+                  : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 980 }}>
+                      <thead><tr>{COLS_DETALHE.map(c => <th key={c.campo} style={{ ...th, textAlign: c.num ? 'right' : 'left' }}>{c.label}</th>)}</tr></thead>
+                      <tbody>
+                        {dados.linhas.map((l, i) => {
+                          const estornado = l[ix.estornado] === 'Sim'
+                          return (
+                            <tr key={i} style={{ color: estornado ? C.vermelho : undefined, textDecoration: estornado ? 'line-through' : undefined }}>
+                              {COLS_DETALHE.map(c => {
+                                const v = ix[c.campo] === undefined ? '' : l[ix[c.campo]]
+                                if (c.num) return <td key={c.campo} style={tdNum}>{c.num === 'brl' ? brl(Number(v)) : num(Number(v))}</td>
+                                return <td key={c.campo} style={{ ...td, fontSize: 12.5 }}>{String(v ?? '')}</td>
+                              })}
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+              </div>
+            </>
+          )}
+      </div>
+    </div>
+  )
+}
+
+// ─── App ────────────────────────────────────────────────────────────────────────
+export default function VendasClientApp() {
+  const [meta, setMeta] = useState<Meta | null>(null)
+  const [erroMeta, setErroMeta] = useState('')
+
+  const [inicio, setInicio] = useState('')
+  const [fim, setFim] = useState('')
+  const [lojas, setLojas] = useState<string[]>([])
+  const [canal, setCanal] = useState<'todos' | 'Salão' | 'Delivery'>('todos')
+  const [categorias, setCategorias] = useState<string[]>([])
+  const [busca, setBusca] = useState('')
+  const [buscaDeb, setBuscaDeb] = useState('')
+  const [adicoes, setAdicoes] = useState(false)
+  const [produtoSel, setProdutoSel] = useState<{ id: string; nome: string } | null>(null)
+
+  const [dados, setDados] = useState<Resumo | null>(null)
+  const [carregando, setCarregando] = useState(false)
+  const [erro, setErro] = useState('')
+  const [diaDetalhe, setDiaDetalhe] = useState<string | null>(null)
+
+  // Meta: período disponível + lojas liberadas pro usuário
+  useEffect(() => {
+    getJSON<Meta>(new URLSearchParams({ acao: 'meta' }))
       .then(m => {
         setMeta(m)
         if (m.ultimoDia) {
+          const ini = m.ultimoDia.slice(0, 8) + '01'
+          setInicio(m.primeiroDia && ini < m.primeiroDia ? m.primeiroDia : ini)
           setFim(m.ultimoDia)
-          setInicio(m.ultimoDia.slice(0, 7) + '-01')
         }
-      }).catch(e => { if (e.name !== 'AbortError') setErro(e.message) })
-    return () => controller.abort()
+      })
+      .catch(e => setErroMeta(e.message))
   }, [])
 
-  const params = useMemo(() => {
-    const p = new URLSearchParams({ inicio, fim })
-    if (loja) p.set('lojas', loja)
-    if (canal) p.set('canais', canal)
-    if (categoria) p.set('categorias', categoria)
-    if (busca.trim()) p.set('busca', busca.trim())
+  useEffect(() => {
+    const t = setTimeout(() => setBuscaDeb(busca.trim()), 450)
+    return () => clearTimeout(t)
+  }, [busca])
+
+  const filtros = useMemo(() => {
+    const p = new URLSearchParams()
+    if (lojas.length) p.set('lojas', lojas.join('|'))
+    if (canal !== 'todos') p.set('canais', canal)
+    if (categorias.length) p.set('categorias', categorias.join('|'))
+    if (produtoSel) p.set('skus', produtoSel.id)
+    if (buscaDeb) p.set('busca', buscaDeb)
     if (adicoes) p.set('adicoes', '1')
     return p
-  }, [inicio, fim, loja, canal, categoria, busca, adicoes])
+  }, [lojas, canal, categorias, produtoSel, buscaDeb, adicoes])
 
-  useEffect(() => {
-    if (!inicio || !fim) return
-    const controller = new AbortController()
-    const timer = setTimeout(() => {
-      setLoading(true)
-      setErro('')
-      setDetalhe(null)
-      setDia('')
-      const p = new URLSearchParams(params)
-      p.set('acao', 'resumo')
-      consultar<Resumo>(p, controller.signal)
-        .then(setResumo)
-        .catch(e => { if (e.name !== 'AbortError') { setErro(e.message); setResumo(null) } })
-        .finally(() => { if (!controller.signal.aborted) setLoading(false) })
-    }, 300)
-    return () => { clearTimeout(timer); controller.abort() }
-  }, [inicio, fim, params])
+  const maxDias = meta?.maxDias || 186
+  const periodoInvalido = !inicio || !fim ? 'Escolha o período' : fim < inicio ? 'A data final está antes da inicial' : diasEntre(inicio, fim) > maxDias ? `Período máximo de ${maxDias} dias` : ''
 
-  async function abrirDia(d: string) {
-    setDia(d)
-    setDetalhe(null)
-    setErro('')
-    const p = new URLSearchParams(params)
-    p.set('acao', 'detalhe')
-    p.set('dia', d)
-    try { setDetalhe(await consultar<Detalhe>(p)) }
-    catch (e) { setErro(e instanceof Error ? e.message : 'Falha ao abrir o dia') }
+  const pedido = useRef<AbortController | null>(null)
+  const carregar = useCallback((semCache = false) => {
+    if (periodoInvalido) return
+    pedido.current?.abort()
+    const ctrl = new AbortController()
+    pedido.current = ctrl
+    const p = new URLSearchParams(filtros)
+    p.set('acao', 'resumo'); p.set('inicio', inicio); p.set('fim', fim)
+    if (semCache) p.set('nocache', '1')
+    setCarregando(true); setErro('')
+    getJSON<Resumo>(p, ctrl.signal)
+      .then(d => { if (!ctrl.signal.aborted) setDados(d) })
+      .catch(e => { if (e.name !== 'AbortError') setErro(e.message) })
+      .finally(() => { if (pedido.current === ctrl) setCarregando(false) })
+  }, [filtros, inicio, fim, periodoInvalido])
+
+  useEffect(() => { carregar() }, [carregar])
+
+  const presets = useMemo(() => {
+    const u = meta?.ultimoDia
+    if (!u) return []
+    const inicioMes = u.slice(0, 8) + '01'
+    const fimMesAnt = addDias(inicioMes, -1)
+    return [
+      { label: 'Último dia', ini: u, fim: u },
+      { label: '7 dias', ini: addDias(u, -6), fim: u },
+      { label: '30 dias', ini: addDias(u, -29), fim: u },
+      { label: 'Mês atual', ini: inicioMes, fim: u },
+      { label: 'Mês anterior', ini: fimMesAnt.slice(0, 8) + '01', fim: fimMesAnt },
+    ]
+  }, [meta])
+
+  const limparFiltros = () => {
+    setLojas([]); setCanal('todos'); setCategorias([]); setBusca(''); setBuscaDeb(''); setProdutoSel(null); setAdicoes(false)
+  }
+  const temFiltro = lojas.length > 0 || canal !== 'todos' || categorias.length > 0 || !!buscaDeb || !!produtoSel || adicoes
+
+  const k = dados?.kpis
+  const porItem = !!k?.transacoesPorItem
+  const diasSemTx = dados?.periodo.diasSemTransacao.length || 0
+
+  const exportarProdutos = () => {
+    if (!dados) return
+    exportarExcel(`vendas_produtos_${inicio}_a_${fim}`, dados.produtos.map(p => ({
+      Produto: p.produto, SKU: p.sku, Categoria: p.categoria, Tipo: p.tipo,
+      Quantidade: p.qtd, 'Valor bruto': p.bruto, Descontos: p.desconto, Faturamento: p.liquido,
+      'Preço médio': p.qtd ? Math.round((p.liquido / p.qtd) * 100) / 100 : 0,
+      Transações: p.transacoes, 'Qtd estornada': p.estornoQtd, 'Valor estornado': p.estornoValor,
+    })))
   }
 
-  const campo = 'rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-green-600 focus:outline-none'
-  return <div className="min-h-screen bg-zinc-50 text-zinc-900">
-    <div className="bg-zinc-950 px-6 py-3 text-sm"><Link href="/hub" className="text-zinc-300 hover:text-white">← Voltar ao HUB</Link></div>
-    <main className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6">
-      <header><h1 className="text-2xl font-bold">Vendas ZIG</h1><p className="mt-1 text-sm text-zinc-500">Vendas de produtos por data do evento. Último dia disponível: {dataBR(meta?.ultimoDia || '')}.</p></header>
-      <section className="grid gap-3 rounded-xl border bg-white p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
-        <label className="flex flex-col gap-1 text-xs font-semibold">De<input className={campo} type="date" value={inicio} min={meta?.primeiroDia || undefined} max={fim || undefined} onChange={e => setInicio(e.target.value)} /></label>
-        <label className="flex flex-col gap-1 text-xs font-semibold">Até<input className={campo} type="date" value={fim} max={meta?.ultimoDia || undefined} onChange={e => setFim(e.target.value)} /></label>
-        <label className="flex flex-col gap-1 text-xs font-semibold">Unidade<select className={campo} value={loja} onChange={e => setLoja(e.target.value)}><option value="">Todas permitidas</option>{meta?.lojas.map(x => <option key={x}>{x}</option>)}</select></label>
-        <label className="flex flex-col gap-1 text-xs font-semibold">Canal<select className={campo} value={canal} onChange={e => setCanal(e.target.value)}><option value="">Todos</option>{meta?.canais.map(x => <option key={x}>{x}</option>)}</select></label>
-        <label className="flex flex-col gap-1 text-xs font-semibold">Categoria<select className={campo} value={categoria} onChange={e => setCategoria(e.target.value)}><option value="">Todas</option>{resumo?.categoriasDisponiveis.map(x => <option key={x}>{x}</option>)}</select></label>
-        <label className="flex flex-col gap-1 text-xs font-semibold sm:col-span-2">Buscar produto ou SKU<input className={campo} value={busca} onChange={e => setBusca(e.target.value)} placeholder="Nome ou código" /></label>
-        <label className="flex items-center gap-2 self-end py-2 text-sm"><input type="checkbox" checked={adicoes} onChange={e => setAdicoes(e.target.checked)} /> Incluir itens de combos</label>
-      </section>
-      {erro && <p role="alert" className="rounded-lg bg-red-50 p-4 text-sm text-red-700">{erro}</p>}
-      {loading && <p className="text-sm text-zinc-500">Carregando resumo…</p>}
-      {resumo && <>
-        {!!resumo.periodo.diasSemDados.length && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Há {resumo.periodo.diasSemDados.length} dia(s) sem arquivo no período. Os totais abaixo são apenas dos dias carregados.</p>}
-        {!!resumo.periodo.diasSemTransacao.length && <p className="rounded-lg bg-blue-50 p-3 text-sm text-blue-900">Alguns CSVs antigos não têm identificador de transação. O ticket e o número de transações desse período podem estar incompletos.</p>}
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {([['Faturamento', dinheiro(resumo.kpis.faturamento)], ['Itens vendidos', numero(resumo.kpis.itens)], ['Transações', resumo.filtros.porItem ? '—' : numero(resumo.kpis.transacoes)], ['Ticket médio', resumo.kpis.ticketMedio === null ? '—' : dinheiro(resumo.kpis.ticketMedio)], ['Bruto', dinheiro(resumo.kpis.bruto)], ['Descontos', dinheiro(resumo.kpis.desconto)], ['Estornos', dinheiro(resumo.kpis.estornoValor)], ['Dias carregados', `${resumo.periodo.diasComDados}/${resumo.periodo.dias}`]] as [string, string][]).map(([label, valor]) => <div key={label} className="rounded-xl border bg-white p-4 shadow-sm"><p className="text-xs text-zinc-500">{label}</p><p className="mt-2 text-xl font-semibold">{valor}</p></div>)}
-        </section>
-        <section className="grid gap-5 lg:grid-cols-2">
-          <div className="rounded-xl border bg-white p-4"><h2 className="mb-3 font-semibold">Unidades e canais</h2><div className="max-h-96 overflow-auto"><table className="w-full text-left text-sm"><thead><tr><th className="py-2">Unidade</th><th>Canal</th><th className="text-right">Faturamento</th></tr></thead><tbody>{resumo.porLoja.map((x, i) => <tr key={i} className="border-t"><td className="py-2">{x.loja}</td><td>{x.canal}</td><td className="text-right">{dinheiro(x.liquido)}</td></tr>)}</tbody></table></div></div>
-          <div className="rounded-xl border bg-white p-4"><h2 className="mb-3 font-semibold">Dias — clique para ver os lançamentos</h2><div className="max-h-96 overflow-auto"><table className="w-full text-left text-sm"><thead><tr><th className="py-2">Dia</th><th className="text-right">Itens</th><th className="text-right">Faturamento</th></tr></thead><tbody>{resumo.porDia.map(x => <tr key={x.dia} className="border-t"><td className="py-2"><button className="text-green-700 underline disabled:text-zinc-400" disabled={!x.temDados} onClick={() => abrirDia(x.dia)}>{dataBR(x.dia)}</button></td><td className="text-right">{x.temDados ? numero(x.qtd) : 'Sem arquivo'}</td><td className="text-right">{x.temDados ? dinheiro(x.liquido) : '—'}</td></tr>)}</tbody></table></div></div>
-        </section>
-        <section className="rounded-xl border bg-white p-4"><h2 className="mb-3 font-semibold">Produtos ({resumo.produtos.length})</h2><div className="max-h-[580px] overflow-auto"><table className="w-full min-w-[650px] text-left text-sm"><thead className="sticky top-0 bg-white"><tr><th className="py-2">Produto</th><th>SKU</th><th>Categoria</th><th className="text-right">Quantidade</th><th className="text-right">Faturamento</th></tr></thead><tbody>{resumo.produtos.map((x, i) => <tr key={`${x.id}-${x.tipo}-${i}`} className="border-t"><td className="py-2">{x.produto}{x.tipo === 'Adição' && <span className="ml-2 text-xs text-zinc-500">Adição</span>}</td><td>{x.sku || '—'}</td><td>{x.categoria}</td><td className="text-right">{numero(x.qtd)}</td><td className="text-right">{dinheiro(x.liquido)}</td></tr>)}</tbody></table></div></section>
-      </>}
-      {dia && <section className="rounded-xl border bg-white p-4"><h2 className="font-semibold">Lançamentos de {dataBR(dia)}</h2>{!detalhe ? <p className="mt-3 text-sm">Carregando detalhe…</p> : <><p className="my-2 text-sm text-zinc-500">{numero(detalhe.total)} linhas · {dinheiro(detalhe.totais.liquido)}{detalhe.truncado ? ' · exibindo apenas as primeiras 3.000 linhas' : ''}</p><div className="max-h-[600px] overflow-auto"><table className="min-w-max text-left text-xs"><thead className="sticky top-0 bg-white"><tr>{detalhe.colunas.map((x, i) => <th key={i} className="px-3 py-2">{x}</th>)}</tr></thead><tbody>{detalhe.linhas.map((row, i) => <tr key={i} className="border-t">{row.map((v, j) => <td key={j} className="px-3 py-2">{String(v)}</td>)}</tr>)}</tbody></table></div></>}</section>}
-    </main>
-  </div>
+  // ─── Render ───
+  const topo = (
+    <div className="flex items-center gap-3 px-4 py-2 bg-brand-black border-b border-zinc-800">
+      <Link href="/hub" className="flex items-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-white transition-colors">← Voltar ao HUB</Link>
+      <span className="text-zinc-700 text-xs">|</span>
+      <span className="text-xs text-zinc-500">Vendas por Produto</span>
+    </div>
+  )
+
+  if (erroMeta) {
+    return (
+      <div style={{ minHeight: '100vh', background: C.fundo }}>{topo}
+        <div style={{ maxWidth: 560, margin: '60px auto', padding: 20 }}><Aviso>Não foi possível abrir o painel: {erroMeta}</Aviso></div>
+      </div>
+    )
+  }
+  if (!meta) return <div style={{ minHeight: '100vh', background: C.fundo, display: 'flex', flexDirection: 'column' }}>{topo}<Spinner /></div>
+  if (!meta.ultimoDia) {
+    return (
+      <div style={{ minHeight: '100vh', background: C.fundo }}>{topo}
+        <div style={{ maxWidth: 560, margin: '60px auto', padding: 20 }}>
+          <Aviso tipo="info">Ainda não há vendas resumidas. Rode reconstruirResumo() no Apps Script de vendas e recarregue esta página.</Aviso>
+        </div>
+      </div>
+    )
+  }
+
+  const maxCat = Math.max(1, ...(dados?.porCategoria || []).map(c => c.liquido))
+  const totalLojas = (dados?.porLoja || []).reduce((s, l) => s + l.liquido, 0)
+
+  return (
+    <div style={{ minHeight: '100vh', background: C.fundo, display: 'flex', flexDirection: 'column' }}>
+      {topo}
+
+      {/* Cabeçalho + filtros */}
+      <header style={{ background: '#fff', borderBottom: '1px solid #F0F0F0', padding: '14px 24px', position: 'sticky', top: 0, zIndex: 30 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
+          <div>
+            <h1 style={{ fontSize: 19, fontWeight: 700, margin: 0, color: C.texto }}>Vendas por Produto</h1>
+            <div style={{ fontSize: 12, color: '#999', marginTop: 2 }}>
+              Dados de {dataLonga(meta.primeiroDia || meta.ultimoDia)} até {dataLonga(meta.ultimoDia)} · atualiza toda manhã com o dia anterior
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {presets.map(p => (
+              <button key={p.label} type="button" onClick={() => { setInicio(p.ini); setFim(p.fim) }} style={pill(inicio === p.ini && fim === p.fim)}>{p.label}</button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <input type="date" value={inicio} min={meta.primeiroDia || undefined} max={meta.ultimoDia} onChange={e => setInicio(e.target.value)} style={{ ...pill(true), padding: '0 10px', cursor: 'text' }} aria-label="Data inicial" />
+          <span style={{ fontSize: 12, color: C.muito }}>até</span>
+          <input type="date" value={fim} min={meta.primeiroDia || undefined} max={meta.ultimoDia} onChange={e => setFim(e.target.value)} style={{ ...pill(true), padding: '0 10px', cursor: 'text' }} aria-label="Data final" />
+
+          <span style={{ width: 1, height: 20, background: C.borda, margin: '0 4px' }} />
+
+          <MultiSelect label="lojas" labelTodos="Todas as lojas" opcoes={meta.lojas} valor={lojas} onChange={setLojas} />
+
+          <div style={{ display: 'inline-flex', border: '1px solid #E8E8E8', borderRadius: 99, overflow: 'hidden', height: 32 }}>
+            {(['todos', 'Salão', 'Delivery'] as const).map(c => (
+              <button key={c} type="button" onClick={() => setCanal(c)}
+                style={{ border: 'none', padding: '0 12px', fontSize: 12.5, fontFamily: 'inherit', cursor: 'pointer', background: canal === c ? C.texto : '#fff', color: canal === c ? '#fff' : '#666', fontWeight: canal === c ? 600 : 400 }}>
+                {c === 'todos' ? 'Salão + Delivery' : c}
+              </button>
+            ))}
+          </div>
+
+          <MultiSelect label="categorias" labelTodos="Todas as categorias" opcoes={dados?.categoriasDisponiveis || []} valor={categorias} onChange={setCategorias} />
+
+          <input type="search" value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar produto ou SKU"
+            style={{ ...pill(!!busca), cursor: 'text', width: 210, padding: '0 14px' }} aria-label="Buscar produto ou SKU" />
+
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#666', cursor: 'pointer', marginLeft: 4 }}>
+            <input type="checkbox" checked={adicoes} onChange={e => setAdicoes(e.target.checked)} style={{ accentColor: C.texto }} />
+            Incluir adições de combo
+          </label>
+
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            {temFiltro && <button type="button" onClick={limparFiltros} style={{ ...pill(false), border: 'none', textDecoration: 'underline', color: '#999' }}>Limpar filtros</button>}
+            <button type="button" onClick={() => carregar(true)} style={pill(false)} title="Buscar de novo, ignorando o cache de 10 min">Atualizar</button>
+          </div>
+        </div>
+
+        {produtoSel && (
+          <div style={{ marginTop: 10 }}>
+            <Chip onRemover={() => setProdutoSel(null)}>Produto: {produtoSel.nome}</Chip>
+          </div>
+        )}
+        {carregando && <div style={{ position: 'absolute', left: 0, right: 0, bottom: -2, height: 2, background: C.verde, animation: 'vbar 1.1s ease-in-out infinite' }} />}
+        <style>{`@keyframes vbar{0%{transform:scaleX(0);transform-origin:left}50%{transform:scaleX(1);transform-origin:left}51%{transform-origin:right}100%{transform:scaleX(0);transform-origin:right}}`}</style>
+      </header>
+
+      <main style={{ flex: 1, padding: '20px 24px 40px', display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 1480, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
+        {periodoInvalido && <Aviso>{periodoInvalido}.</Aviso>}
+        {erro && <Aviso>{erro}</Aviso>}
+        {!dados && !erro && !periodoInvalido && <Spinner />}
+
+        {dados && k && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, opacity: carregando ? 0.55 : 1, transition: 'opacity .15s' }}>
+            {dados.periodo.diasSemDados.length > 0 && (
+              <Aviso tipo="info">
+                {dados.periodo.diasSemDados.length === 1 ? '1 dia' : `${dados.periodo.diasSemDados.length} dias`} do período sem dados
+                ({dados.periodo.diasSemDados.slice(0, 6).map(dataCurta).join(', ')}{dados.periodo.diasSemDados.length > 6 ? '…' : ''}).
+              </Aviso>
+            )}
+
+            {/* KPIs */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+              <Kpi label="Faturamento" valor={brl0(k.faturamento)} sub={`média de ${brl0(k.mediaDiaria)} por dia`} />
+              <Kpi label="Itens vendidos" valor={num(k.itens)} sub={`${num(k.produtosDistintos)} produtos diferentes`} />
+              <Kpi label={porItem ? 'Transações com o item' : 'Transações'} valor={num(k.transacoes)}
+                sub={diasSemTx && !porItem ? `${diasSemTx} dia(s) sem esse dado` : undefined} />
+              <Kpi label="Ticket médio" valor={k.ticketMedio === null ? '—' : brl(k.ticketMedio)}
+                sub={porItem ? 'não se aplica com filtro de produto' : diasSemTx ? 'só dias com dado de transação' : undefined} />
+              <Kpi label="Descontos" valor={brl0(k.desconto)} sub={k.bruto ? `${pct(k.desconto / k.bruto)} do bruto` : undefined} cor={k.desconto ? C.vermelho : undefined} />
+              <Kpi label="Estornos" valor={brl0(k.estornoValor)} sub={`${num(k.estornoQtd)} itens, fora do faturamento`} cor={k.estornoValor ? C.vermelho : undefined} />
+            </div>
+
+            {/* Por dia */}
+            <Painel titulo="Faturamento por dia" direita={<span style={{ fontSize: 12, color: C.muito }}>Clique num dia pra ver as vendas linha a linha</span>}>
+              <div style={{ height: 240, padding: '0 8px 12px' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={dados.porDia} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid vertical={false} stroke="#F0F0F0" />
+                    <XAxis dataKey="dia" tickFormatter={dataCurta} tick={{ fontSize: 11, fill: '#999' }} tickLine={false} axisLine={false} minTickGap={12} />
+                    <YAxis tickFormatter={(v: number) => brlCompact(v)} tick={{ fontSize: 11, fill: '#999' }} tickLine={false} axisLine={false} width={64} />
+                    <Tooltip cursor={{ fill: '#F4F4F0' }} content={({ active, payload }: any) => {
+                      if (!active || !payload?.length) return null
+                      const d = payload[0].payload
+                      return (
+                        <div style={{ ...card, padding: '10px 12px', fontSize: 12.5, boxShadow: '0 4px 16px rgb(0 0 0 / 0.08)' }}>
+                          <div style={{ fontWeight: 600, marginBottom: 4 }}>{dataLonga(d.dia)} ({diaSemana(d.dia)})</div>
+                          {d.temDados ? (
+                            <>
+                              <div style={MONO}>{brl(d.liquido)}</div>
+                              <div style={{ color: C.suave }}>{num(d.qtd)} itens{d.transacoes ? ` · ${num(d.transacoes)} transações` : ''}</div>
+                            </>
+                          ) : <div style={{ color: C.suave }}>sem dados</div>}
+                        </div>
+                      )
+                    }} />
+                    <Bar dataKey="liquido" radius={[3, 3, 0, 0]} cursor="pointer"
+                      onClick={(d: any) => { const dia = d?.payload?.dia ?? d?.dia; if (dia) setDiaDetalhe(dia) }}>
+                      {dados.porDia.map(d => {
+                        const dow = new Date(d.dia + 'T12:00:00').getDay()
+                        return <Cell key={d.dia} fill={!d.temDados ? '#E8E8E2' : dow === 0 || dow === 6 ? '#6F7A1A' : C.verde} />
+                      })}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div style={{ display: 'flex', gap: 16, padding: '0 16px 14px', fontSize: 11.5, color: C.suave }}>
+                <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: C.verde, marginRight: 6 }} />dia de semana</span>
+                <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: '#6F7A1A', marginRight: 6 }} />sábado e domingo</span>
+              </div>
+            </Painel>
+
+            {/* Lojas + categorias */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 16 }}>
+              <Painel titulo="Por loja e canal" direita={<span style={{ fontSize: 12, color: C.muito }}>Clique pra filtrar</span>}>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr>
+                        <th style={th}>Loja</th><th style={th}>Canal</th>
+                        <th style={{ ...th, textAlign: 'right' }}>Faturamento</th>
+                        <th style={{ ...th, textAlign: 'right' }}>%</th>
+                        <th style={{ ...th, textAlign: 'right' }}>{porItem ? 'Transações c/ item' : 'Transações'}</th>
+                        {!porItem && <th style={{ ...th, textAlign: 'right' }}>Ticket</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dados.porLoja.filter(l => l.liquido || l.qtd || l.transacoes).map(l => (
+                        <tr key={l.loja + l.canal} style={{ cursor: 'pointer', background: lojas.length === 1 && lojas[0] === l.loja ? C.verdeFundo : undefined }}
+                          onClick={() => setLojas(lojas.length === 1 && lojas[0] === l.loja ? [] : [l.loja])}>
+                          <td style={{ ...td, fontWeight: 500 }}>{l.loja}</td>
+                          <td style={{ ...td, color: '#666' }}>{l.canal}</td>
+                          <td style={tdNum}>{brl(l.liquido)}</td>
+                          <td style={{ ...tdNum, color: C.suave }}>{totalLojas ? pct(l.liquido / totalLojas) : '—'}</td>
+                          <td style={tdNum}>{num(l.transacoes)}</td>
+                          {!porItem && <td style={tdNum}>{l.ticketMedio === null ? '—' : brl(l.ticketMedio)}</td>}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Painel>
+
+              <Painel titulo="Por categoria" direita={<span style={{ fontSize: 12, color: C.muito }}>Clique pra filtrar</span>}>
+                <div style={{ padding: '4px 16px 16px', display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 420, overflowY: 'auto' }}>
+                  {dados.porCategoria.length === 0 && <div style={{ fontSize: 13, color: C.suave }}>Sem vendas.</div>}
+                  {dados.porCategoria.map(c => {
+                    const ativo = categorias.includes(c.categoria)
+                    return (
+                      <button key={c.categoria} type="button"
+                        onClick={() => setCategorias(ativo ? categorias.filter(x => x !== c.categoria) : [c.categoria])}
+                        style={{ border: 'none', background: ativo ? C.verdeFundo : 'transparent', textAlign: 'left', padding: '6px 8px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12.5 }}>
+                          <span style={{ color: C.texto, fontWeight: ativo ? 600 : 400 }}>{c.categoria}</span>
+                          <span style={{ ...MONO, color: '#555', whiteSpace: 'nowrap' }}>{brl0(c.liquido)} <span style={{ color: C.muito }}>· {num(c.qtd)} un</span></span>
+                        </div>
+                        <div style={{ height: 4, background: '#F0F0EC', borderRadius: 2, marginTop: 5 }}>
+                          <div style={{ height: 4, width: `${Math.max(0, (c.liquido / maxCat) * 100)}%`, background: C.verde, borderRadius: 2 }} />
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </Painel>
+            </div>
+
+            {/* Produtos */}
+            <Painel titulo="Produtos" direita={
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 12, color: C.muito }}>Clique num produto pra filtrar o painel</span>
+                <button type="button" onClick={exportarProdutos} style={pill(false)} disabled={!dados.produtos.length}>Exportar Excel</button>
+              </div>
+            }>
+              <TabelaProdutos produtos={dados.produtos} total={k.faturamento} mostrarTx={!diasSemTx || porItem}
+                skuAtivo={produtoSel?.id || null}
+                onSelecionar={p => setProdutoSel(produtoSel?.id === p.id ? null : { id: p.id, nome: p.produto || p.sku })} />
+            </Painel>
+          </div>
+        )}
+      </main>
+
+      {diaDetalhe && <PainelDetalhe dia={diaDetalhe} filtros={filtros} onFechar={() => setDiaDetalhe(null)} />}
+    </div>
+  )
 }
