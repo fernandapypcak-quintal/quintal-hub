@@ -309,7 +309,7 @@ export function usePorLojaDetalhe(filtros: Pick<Filtros, 'unidade' | 'vendedor'>
 }
 
 export type PontoCurvaMaturacao = {
-  idadeMeses: number; amostras: number
+  idadeMeses: number; amostras: number; leadsTotais: number
   convAbsolutaMedia: number; convRelativa: number | null
 }
 export type SafraProjecao = {
@@ -321,6 +321,8 @@ export type SafraProjecao = {
 export type ProjecaoConversaoData = {
   curvaMaturacao: PontoCurvaMaturacao[]
   idadeConsideradaMadura: number
+  tempoMedioFechamentoDias: number | null
+  tempoMedianoFechamentoDias: number | null
   safras: SafraProjecao[]
   aviso: string
 }
