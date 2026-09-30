@@ -15,7 +15,10 @@ function PainelProjecaoConversao({ filtros }: { filtros: any }) {
   const { dados, loading, erro } = useProjecaoConversao(filtros)
 
   if (loading) return null
-  if (erro || !dados || !dados.safras.length) return null
+  // Checa a forma da resposta antes de usar — se o backend ainda estiver
+  // numa versão antiga (sem esse tipo) ou devolver algo inesperado, o
+  // painel simplesmente não aparece, em vez de derrubar a página inteira.
+  if (erro || !dados || !Array.isArray(dados.safras) || dados.safras.length === 0) return null
 
   const safraAtual = dados.safras[dados.safras.length - 1]
   const historico = dados.safras.slice().reverse().filter(s => !s.madura).slice(0, 6)
