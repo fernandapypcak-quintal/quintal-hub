@@ -199,7 +199,7 @@ async function exportarExcel(nome: string, linhas: Record<string, any>[]) {
 }
 
 // ─── Tabela de produtos ──────────────────────────────────────────────────────
-type Ordem = { campo: 'produto' | 'categoria' | 'qtd' | 'precoMedio' | 'desconto' | 'liquido' | 'transacoes'; dir: 1 | -1 }
+type Ordem = { campo: 'produto' | 'categoria' | 'qtd' | 'valorUnitario' | 'desconto' | 'liquido' | 'transacoes'; dir: 1 | -1 }
 
 function TabelaProdutos({ produtos, total, mostrarTx, onSelecionar, skuAtivo }: {
   produtos: Produto[]; total: number; mostrarTx: boolean; onSelecionar: (p: Produto) => void; skuAtivo: string | null
@@ -210,7 +210,7 @@ function TabelaProdutos({ produtos, total, mostrarTx, onSelecionar, skuAtivo }: 
 
   const ordenados = useMemo(() => {
     const val = (p: Produto) => {
-      if (ordem.campo === 'precoMedio') return p.qtd ? p.liquido / p.qtd : 0
+      if (ordem.campo === 'valorUnitario') return p.qtd ? p.bruto / p.qtd : 0
       return (p as any)[ordem.campo]
     }
     return [...produtos].sort((a, b) => {
@@ -240,9 +240,9 @@ function TabelaProdutos({ produtos, total, mostrarTx, onSelecionar, skuAtivo }: 
               {cab('produto', 'Produto')}
               {cab('categoria', 'Categoria')}
               {cab('qtd', 'Qtd', true)}
-              {cab('precoMedio', 'Preço médio', true)}
+              {cab('valorUnitario', 'Valor unitário', true)}
               {cab('desconto', 'Descontos', true)}
-              {cab('liquido', 'Faturamento', true)}
+              {cab('liquido', 'Valor total', true)}
               <th style={{ ...th, textAlign: 'right' }}>% total</th>
               {mostrarTx && cab('transacoes', 'Transações', true)}
             </tr>
@@ -261,7 +261,7 @@ function TabelaProdutos({ produtos, total, mostrarTx, onSelecionar, skuAtivo }: 
                   </td>
                   <td style={{ ...td, color: '#666' }}>{p.categoria}</td>
                   <td style={tdNum}>{num(p.qtd)}</td>
-                  <td style={tdNum}>{p.qtd ? brl(p.liquido / p.qtd) : '—'}</td>
+                  <td style={tdNum}>{p.qtd ? brl(p.bruto / p.qtd) : '—'}</td>
                   <td style={{ ...tdNum, color: p.desconto ? C.vermelho : C.muito }}>{p.desconto ? brl(p.desconto) : '—'}</td>
                   <td style={{ ...tdNum, fontWeight: 500 }}>{brl(p.liquido)}</td>
                   <td style={{ ...tdNum, color: C.suave }}>{total ? pct(p.liquido / total) : '—'}</td>
@@ -484,8 +484,9 @@ export default function VendasClientApp() {
     if (!dados) return
     exportarExcel(`vendas_produtos_${inicio}_a_${fim}`, dados.produtos.map(p => ({
       Produto: p.produto, SKU: p.sku, Categoria: p.categoria, Tipo: p.tipo,
-      Quantidade: p.qtd, 'Valor bruto': p.bruto, Descontos: p.desconto, Faturamento: p.liquido,
-      'Preço médio': p.qtd ? Math.round((p.liquido / p.qtd) * 100) / 100 : 0,
+      Quantidade: p.qtd,
+      'Valor unitário': p.qtd ? Math.round((p.bruto / p.qtd) * 100) / 100 : 0,
+      'Valor bruto': p.bruto, Descontos: p.desconto, 'Valor total': p.liquido,
       Transações: p.transacoes, 'Qtd estornada': p.estornoQtd, 'Valor estornado': p.estornoValor,
     })))
   }
