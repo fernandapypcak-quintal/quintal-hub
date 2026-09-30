@@ -22,6 +22,7 @@ type Produto = {
   id: string; sku: string; produto: string; categoria: string; tipo: string
   qtd: number; bruto: number; desconto: number; liquido: number; transacoes: number
   estornoQtd: number; estornoValor: number
+  loja?: string; canal?: string
 }
 type Resumo = {
   periodo: { inicio: string; fim: string; dias: number; diasComDados: number; diasSemDados: string[]; diasSemTransacao: string[] }
@@ -360,10 +361,10 @@ function DetalheProduto({ produto, consulta, filtrado, onAlternarFiltro }: {
 }
 
 // ─── Tabela de produtos ──────────────────────────────────────────────────────
-type Ordem = { campo: 'produto' | 'categoria' | 'qtd' | 'valorUnitario' | 'desconto' | 'liquido' | 'transacoes'; dir: 1 | -1 }
+type Ordem = { campo: 'produto' | 'loja' | 'categoria' | 'qtd' | 'valorUnitario' | 'desconto' | 'liquido' | 'transacoes'; dir: 1 | -1 }
 
-function TabelaProdutos({ produtos, total, mostrarTx, consulta, selecionados, onAlternarFiltro }: {
-  produtos: Produto[]; total: number; mostrarTx: boolean; consulta: URLSearchParams
+function TabelaProdutos({ produtos, total, mostrarTx, consulta, selecionados, onAlternarFiltro, porLoja = false }: {
+  produtos: Produto[]; total: number; mostrarTx: boolean; consulta: URLSearchParams; porLoja?: boolean
   selecionados: string[]; onAlternarFiltro: (p: Produto) => void
 }) {
   const [ordem, setOrdem] = useState<Ordem>({ campo: 'liquido', dir: -1 })
@@ -385,7 +386,7 @@ function TabelaProdutos({ produtos, total, mostrarTx, consulta, selecionados, on
 
   const cab = (campo: Ordem['campo'], texto: string, direita = false) => (
     <th style={{ ...th, textAlign: direita ? 'right' : 'left', cursor: 'pointer', color: ordem.campo === campo ? C.texto : C.suave }}
-      onClick={() => setOrdem(o => ({ campo, dir: o.campo === campo ? (o.dir === 1 ? -1 : 1) : (campo === 'produto' || campo === 'categoria' ? 1 : -1) }))}>
+      onClick={() => setOrdem(o => ({ campo, dir: o.campo === campo ? (o.dir === 1 ? -1 : 1) : (campo === 'produto' || campo === 'categoria' || campo === 'loja' ? 1 : -1) }))}>
       {texto}{ordem.campo === campo ? (ordem.dir === -1 ? ' ↓' : ' ↑') : ''}
     </th>
   )
@@ -394,7 +395,7 @@ function TabelaProdutos({ produtos, total, mostrarTx, consulta, selecionados, on
     return <div style={{ padding: '24px 16px', fontSize: 13, color: C.suave }}>Nenhum produto vendido com esses filtros.</div>
   }
 
-  const nCols = mostrarTx ? 8 : 7
+  const nCols = (mostrarTx ? 8 : 7) + (porLoja ? 2 : 0)
 
   return (
     <>
@@ -403,6 +404,8 @@ function TabelaProdutos({ produtos, total, mostrarTx, consulta, selecionados, on
           <thead>
             <tr>
               {cab('produto', 'Produto')}
+              {porLoja && cab('loja', 'Loja')}
+              {porLoja && <th style={th}>Canal</th>}
               {cab('categoria', 'Categoria')}
               {cab('qtd', 'Qtd', true)}
               {cab('valorUnitario', 'Valor unitário', true)}
@@ -414,9 +417,9 @@ function TabelaProdutos({ produtos, total, mostrarTx, consulta, selecionados, on
           </thead>
           <tbody>
             {ordenados.slice(0, limite).map(p => {
-              const k = chaveProduto(p)
+              const k = chaveProduto(p) + (porLoja ? `|${p.loja}|${p.canal}` : '')
               const expandido = aberto === k
-              const filtrado = selecionados.includes(k)
+              const filtrado = selecionados.includes(chaveProduto(p))
               return (
                 <FragmentoLinha key={k}>
                   <tr onClick={() => setAberto(expandido ? null : k)} title="Ver onde vendeu e as adições"
@@ -432,6 +435,8 @@ function TabelaProdutos({ produtos, total, mostrarTx, consulta, selecionados, on
                         </div>
                       </div>
                     </td>
+                    {porLoja && <td style={{ ...td, fontWeight: 500, whiteSpace: 'nowrap' }}>{p.loja}</td>}
+                    {porLoja && <td style={{ ...td, color: '#666' }}>{p.canal}</td>}
                     <td style={{ ...td, color: '#666' }}>{p.categoria}</td>
                     <td style={tdNum}>{num(p.qtd)}</td>
                     <td style={tdNum}>{p.qtd ? brl(p.bruto / p.qtd) : '—'}</td>
@@ -454,7 +459,7 @@ function TabelaProdutos({ produtos, total, mostrarTx, consulta, selecionados, on
         </table>
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', fontSize: 12, color: C.suave }}>
-        <span>Mostrando {num(Math.min(limite, ordenados.length))} de {num(ordenados.length)} produtos</span>
+        <span>Mostrando {num(Math.min(limite, ordenados.length))} de {num(ordenados.length)} {porLoja ? 'linhas (produto + casa)' : 'produtos'}</span>
         {limite < ordenados.length && (
           <button type="button" onClick={() => setLimite(l => l + 100)} style={pill(false)}>Mostrar mais 100</button>
         )}
@@ -590,6 +595,10 @@ export default function VendasClientApp() {
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState('')
   const [diaDetalhe, setDiaDetalhe] = useState<string | null>(null)
+  const [visao, setVisao] = useState<'produto' | 'loja'>('produto')
+  const [linhasLoja, setLinhasLoja] = useState<Produto[] | null>(null)
+  const [erroLoja, setErroLoja] = useState('')
+  const [exportando, setExportando] = useState(false)
 
   // Meta: período disponível + lojas liberadas pro usuário
   useEffect(() => {
@@ -644,6 +653,23 @@ export default function VendasClientApp() {
 
   useEffect(() => { carregar() }, [carregar])
 
+  const paramsProdutoLoja = useCallback(() => {
+    const p = new URLSearchParams(filtros)
+    p.set('acao', 'produtoLoja'); p.set('inicio', inicio); p.set('fim', fim)
+    return p
+  }, [filtros, inicio, fim])
+
+  // Visão "por produto e casa": busca produto × loja × canal no período
+  useEffect(() => {
+    if (visao !== 'loja' || periodoInvalido) return
+    const ctrl = new AbortController()
+    setLinhasLoja(null); setErroLoja('')
+    getJSON<{ linhas: Produto[] }>(paramsProdutoLoja(), ctrl.signal)
+      .then(d => setLinhasLoja(d.linhas))
+      .catch(e => { if (e.name !== 'AbortError') setErroLoja(e.message) })
+    return () => ctrl.abort()
+  }, [visao, paramsProdutoLoja, periodoInvalido])
+
   const presets = useMemo(() => {
     const u = meta?.ultimoDia
     if (!u) return []
@@ -674,15 +700,23 @@ export default function VendasClientApp() {
   const porItem = !!k?.transacoesPorItem
   const diasSemTx = dados?.periodo.diasSemTransacao.length || 0
 
-  const exportarProdutos = () => {
-    if (!dados) return
-    exportarExcel(`vendas_produtos_${inicio}_a_${fim}`, dados.produtos.map(p => ({
-      Produto: p.produto, SKU: p.sku, Categoria: p.categoria, Tipo: p.tipo,
-      Quantidade: p.qtd,
-      'Valor unitário': p.qtd ? Math.round((p.bruto / p.qtd) * 100) / 100 : 0,
-      'Valor bruto': p.bruto, Descontos: p.desconto, 'Valor total': p.liquido,
-      Transações: p.transacoes, 'Qtd estornada': p.estornoQtd, 'Valor estornado': p.estornoValor,
-    })))
+  // Excel sempre sai uma linha por produto + casa + canal
+  const exportarProdutos = async () => {
+    setExportando(true)
+    try {
+      const linhas = linhasLoja && visao === 'loja' ? linhasLoja : (await getJSON<{ linhas: Produto[] }>(paramsProdutoLoja())).linhas
+      await exportarExcel(`vendas_produtos_por_casa_${inicio}_a_${fim}`, linhas.map(p => ({
+        Loja: p.loja, Canal: p.canal, Produto: p.produto, SKU: p.sku, Categoria: p.categoria, Tipo: p.tipo,
+        Quantidade: p.qtd,
+        'Valor unitário': p.qtd ? Math.round((p.bruto / p.qtd) * 100) / 100 : 0,
+        'Valor bruto': p.bruto, Descontos: p.desconto, 'Valor total': p.liquido,
+        Transações: p.transacoes, 'Qtd estornada': p.estornoQtd, 'Valor estornado': p.estornoValor,
+      })))
+    } catch (e: any) {
+      alert('Não foi possível exportar: ' + (e?.message || e))
+    } finally {
+      setExportando(false)
+    }
   }
 
   // ─── Render ───
@@ -909,12 +943,26 @@ export default function VendasClientApp() {
             {/* Produtos */}
             <Painel titulo="Produtos" direita={
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 12, color: C.muito }}>Clique num produto pra ver onde vendeu e as adições</span>
-                <button type="button" onClick={exportarProdutos} style={pill(false)} disabled={!dados.produtos.length}>Exportar Excel</button>
+                <div style={{ display: 'inline-flex', border: '1px solid #E8E8E8', borderRadius: 99, overflow: 'hidden', height: 32 }}>
+                  {([['produto', 'Por produto'], ['loja', 'Por produto e casa']] as const).map(([v, t]) => (
+                    <button key={v} type="button" onClick={() => setVisao(v)}
+                      style={{ border: 'none', padding: '0 12px', fontSize: 12.5, fontFamily: 'inherit', cursor: 'pointer', background: visao === v ? C.texto : '#fff', color: visao === v ? '#fff' : '#666', fontWeight: visao === v ? 600 : 400 }}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
+                <button type="button" onClick={exportarProdutos} style={pill(false)} disabled={!dados.produtos.length || exportando}>
+                  {exportando ? 'Gerando...' : 'Exportar Excel (por casa)'}
+                </button>
               </div>
             }>
-              <TabelaProdutos produtos={dados.produtos} total={k.faturamento} mostrarTx={!diasSemTx || porItem}
-                consulta={consultaProduto} selecionados={produtosSel.map(x => x.chave)} onAlternarFiltro={alternarProduto} />
+              {visao === 'loja' && erroLoja ? <div style={{ padding: 16 }}><Aviso>{erroLoja}</Aviso></div>
+                : visao === 'loja' && !linhasLoja ? <Spinner texto="Abrindo por casa..." />
+                : (
+                  <TabelaProdutos produtos={visao === 'loja' && linhasLoja ? linhasLoja : dados.produtos} porLoja={visao === 'loja'}
+                    total={k.faturamento} mostrarTx={!diasSemTx || porItem}
+                    consulta={consultaProduto} selecionados={produtosSel.map(x => x.chave)} onAlternarFiltro={alternarProduto} />
+                )}
             </Painel>
           </div>
         )}
