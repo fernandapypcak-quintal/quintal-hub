@@ -39,7 +39,7 @@ function PainelProjecaoConversao({ filtros }: { filtros: any }) {
             <div style={{ fontSize: 20, color: '#c9c9c4' }}>→</div>
             <div>
               <div style={{ fontSize: 28, fontWeight: 600, fontFamily: 'DM Mono, monospace', color: '#3B6D11' }}>
-                {safraAtual.conversaoProjetada !== null ? `~${fmtPct(safraAtual.conversaoProjetada)}` : '—'}
+                {safraAtual.conversaoProjetada !== null ? `proj. ${fmtPct(safraAtual.conversaoProjetada)}` : '—'}
               </div>
               <div style={{ fontSize: 11, color: '#9a9c9f' }}>projeção final (baseada no histórico de safras maduras)</div>
             </div>
@@ -49,6 +49,12 @@ function PainelProjecaoConversao({ filtros }: { filtros: any }) {
           <div style={{ fontSize: 12, color: '#9a9c9f', fontStyle: 'italic' }}>safra madura — este já é o número final</div>
         )}
       </div>
+
+      {(dados.tempoMedioFechamentoDias !== null || dados.tempoMedianoFechamentoDias !== null) && (
+        <div style={{ fontSize: 12, color: '#5a5c5f', marginBottom: 12 }}>
+          Tempo até fechar (leads ganhos): médio de <strong>{dados.tempoMedioFechamentoDias} dias</strong>, mediana de <strong>{dados.tempoMedianoFechamentoDias} dias</strong>
+        </div>
+      )}
 
       {historico.length > 0 && (
         <div style={{ borderTop: '0.5px solid #F0F0EC', paddingTop: 12 }}>
@@ -60,7 +66,7 @@ function PainelProjecaoConversao({ filtros }: { filtros: any }) {
               <span style={{ fontWeight: 500 }}>{labelMes(s.mes)}</span>
               <span style={{ color: '#9a9c9f' }}>{s.leadsCriados}{!s.amostraSuficiente && <span style={{ color: '#c9855a' }}> (amostra pequena)</span>}</span>
               <span style={{ fontFamily: 'DM Mono, monospace' }}>{fmtPct(s.conversaoAtual)}</span>
-              <span style={{ fontFamily: 'DM Mono, monospace', color: '#3B6D11', fontWeight: 600 }}>{s.conversaoProjetada !== null ? `~${fmtPct(s.conversaoProjetada)}` : '—'}</span>
+              <span style={{ fontFamily: 'DM Mono, monospace', color: '#3B6D11', fontWeight: 600 }}>{s.conversaoProjetada !== null ? fmtPct(s.conversaoProjetada) : '—'}</span>
             </div>
           ))}
         </div>
