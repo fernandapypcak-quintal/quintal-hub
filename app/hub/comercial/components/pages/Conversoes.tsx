@@ -13,6 +13,7 @@ function labelMes(mes: string) { const [ano,m] = mes.split('-'); return `${MESES
 
 function PainelProjecaoConversao({ filtros }: { filtros: any }) {
   const { dados, loading, erro } = useProjecaoConversao(filtros)
+  const [mostrarComo, setMostrarComo] = useState(false)
 
   if (loading) return null
   // Checa a forma da resposta antes de usar — se o backend ainda estiver
@@ -22,6 +23,7 @@ function PainelProjecaoConversao({ filtros }: { filtros: any }) {
 
   const safraAtual = dados.safras[dados.safras.length - 1]
   const historico = dados.safras.slice().reverse().filter(s => !s.madura).slice(0, 6)
+  const pontoCurvaAtual = dados.curvaMaturacao.find(c => c.idadeMeses === safraAtual.idadeMeses)
 
   return (
     <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: '18px 20px', marginBottom: 20, borderTop: '3px solid #97A624' }}>
@@ -71,6 +73,39 @@ function PainelProjecaoConversao({ filtros }: { filtros: any }) {
           ))}
         </div>
       )}
+
+      <div style={{ marginTop: 12, paddingTop: 10, borderTop: '0.5px solid #F0F0EC' }}>
+        <button onClick={() => setMostrarComo(v => !v)}
+          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 11, color: '#185FA5', fontWeight: 600 }}>
+          {mostrarComo ? '▾' : '▸'} Como calculamos essa projeção?
+        </button>
+        {mostrarComo && (
+          <div style={{ fontSize: 12, color: '#5a5c5f', marginTop: 8, lineHeight: 1.6 }}>
+            <p style={{ margin: '0 0 8px' }}>
+              Agrupamos os leads pelo mês em que entraram (a &quot;safra&quot;). Pra cada <strong>idade</strong> da safra
+              (quantos meses já se passaram desde a criação), olhamos os últimos 36 meses de histórico pra ver que fração
+              da conversão final aquela idade costuma já ter atingido — <strong>ponderando pelo volume de leads de cada mês</strong>,
+              não tirando a média simples entre meses (senão um mês antigo e pequeno pesaria igual a um mês recente com milhares de leads).
+            </p>
+            <p style={{ margin: '0 0 8px' }}>
+              {labelMes(safraAtual.mes)} tem <strong>{safraAtual.idadeMeses} {safraAtual.idadeMeses === 1 ? 'mês' : 'meses'}</strong> de idade.
+              Historicamente, safras nessa idade já atingiram, em média, <strong>{pontoCurvaAtual ? fmtPct(pontoCurvaAtual.convRelativa) : '—'}</strong> do
+              resultado final delas (base: {pontoCurvaAtual?.amostras ?? '—'} safras diferentes, {pontoCurvaAtual?.leadsTotais?.toLocaleString('pt-BR') ?? '—'} leads no total).
+            </p>
+            {!safraAtual.madura ? (
+              <p style={{ margin: '0 0 8px' }}>
+                Projeção = conversão atual ÷ essa fração: <strong>{fmtPct(safraAtual.conversaoAtual)} ÷ {pontoCurvaAtual ? fmtPct(pontoCurvaAtual.convRelativa) : '—'} ≈ {safraAtual.conversaoProjetada !== null ? fmtPct(safraAtual.conversaoProjetada) : '—'}</strong>.
+              </p>
+            ) : (
+              <p style={{ margin: '0 0 8px' }}>Essa safra já passou da idade de maturidade — o número atual já é considerado o final, sem projeção.</p>
+            )}
+            <p style={{ margin: 0 }}>
+              A partir de <strong>{dados.idadeConsideradaMadura} {dados.idadeConsideradaMadura === 1 ? 'mês' : 'meses'}</strong> de idade,
+              a curva já não sobe de forma relevante — essas safras são tratadas como número final, sem mais projeção.
+            </p>
+          </div>
+        )}
+      </div>
 
       <div style={{ fontSize: 10, color: '#c9c9c4', fontStyle: 'italic', marginTop: 12 }}>{dados.aviso}</div>
     </div>
