@@ -35,7 +35,14 @@ type Resumo = {
   porLoja: { loja: string; canal: string; liquido: number; qtd: number; transacoes: number; ticketMedio: number | null }[]
   porCategoria: { categoria: string; liquido: number; qtd: number }[]
   categoriasDisponiveis: string[]
+  catalogo?: CatItem[]
   produtos: Produto[]
+}
+type CatItem = { id: string; sku: string; produto: string; categoria: string; tipo: string; liquido: number }
+type DetalheProdutoResp = {
+  id: string; produto: string; total: { qtd: number; liquido: number }
+  porLoja: { loja: string; canal: string; qtd: number; bruto: number; desconto: number; liquido: number }[]
+  adicoes: { id: string; sku: string; produto: string; qtd: number; lojas: { loja: string; qtd: number }[] }[]
 }
 type Detalhe = {
   dia: string; colunas: string[]; linhas: (string | number)[][]; total: number; truncado: boolean
@@ -61,6 +68,9 @@ const dataCurta = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 const dataLonga = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`
 const DIAS_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
 const diaSemana = (iso: string) => DIAS_SEMANA[new Date(iso + 'T12:00:00').getDay()]
+
+const normalizar = (s: string) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+const chaveProduto = (p: { id: string; tipo: string }) => p.id + '|' + p.tipo
 
 function addDias(iso: string, n: number) {
   const d = new Date(iso + 'T12:00:00')
@@ -198,14 +208,167 @@ async function exportarExcel(nome: string, linhas: Record<string, any>[]) {
   XLSX.writeFile(wb, `${nome}.xlsx`)
 }
 
+// ─── Seletor de produtos (multi) ───────────────────────────────────────────────
+function SeletorProdutos({ catalogo, selecionados, onAlternar, onAplicarBusca }: {
+  catalogo: CatItem[]; selecionados: string[]; onAlternar: (c: CatItem) => void; onAplicarBusca: (texto: string) => void
+}) {
+  const [texto, setTexto] = useState('')
+  const [aberto, setAberto] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!aberto) return
+    const fechar = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setAberto(false) }
+    document.addEventListener('mousedown', fechar)
+    return () => document.removeEventListener('mousedown', fechar)
+  }, [aberto])
+
+  const alvo = normalizar(texto)
+  const encontrados = useMemo(() => {
+    const lista = alvo ? catalogo.filter(c => normalizar(`${c.produto} ${c.sku}`).includes(alvo)) : catalogo
+    return lista
+  }, [catalogo, alvo])
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <input type="search" value={texto} placeholder="Buscar e selecionar produtos"
+        onChange={e => { setTexto(e.target.value); setAberto(true) }}
+        onFocus={() => setAberto(true)}
+        onKeyDown={e => {
+          if (e.key === 'Escape') setAberto(false)
+          if (e.key === 'Enter' && texto.trim()) { onAplicarBusca(texto.trim()); setTexto(''); setAberto(false) }
+        }}
+        style={{ ...pill(selecionados.length > 0), cursor: 'text', width: 240, padding: '0 14px' }} aria-label="Buscar e selecionar produtos" />
+      {aberto && (
+        <div style={{ ...card, position: 'absolute', top: 38, left: 0, zIndex: 40, width: 380, maxHeight: 400, overflowY: 'auto', padding: 6, boxShadow: '0 8px 24px rgb(0 0 0 / 0.08)' }}>
+          {texto.trim() && encontrados.length > 0 && (
+            <button type="button" onClick={() => { onAplicarBusca(texto.trim()); setTexto(''); setAberto(false) }}
+              style={{ width: '100%', textAlign: 'left', border: 'none', background: '#F5F5F2', borderRadius: 6, padding: '8px 10px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', marginBottom: 4 }}>
+              Filtrar todos que contêm “{texto.trim()}” <span style={{ color: C.suave }}>({num(encontrados.length)})</span>
+            </button>
+          )}
+          {encontrados.length === 0 && <div style={{ padding: '10px', fontSize: 12.5, color: C.suave }}>Nenhum produto encontrado no período.</div>}
+          {encontrados.slice(0, 80).map(c => {
+            const marcado = selecionados.includes(chaveProduto(c))
+            return (
+              <label key={chaveProduto(c)} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '7px 10px', fontSize: 12.5, cursor: 'pointer', borderRadius: 6, background: marcado ? C.verdeFundo : undefined }}>
+                <input type="checkbox" checked={marcado} onChange={() => onAlternar(c)} style={{ accentColor: C.texto, marginTop: 2 }} />
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: 'block' }}>{c.produto || '(sem nome)'}</span>
+                  <span style={{ ...MONO, fontSize: 11, color: C.muito }}>{c.sku ? `SKU ${c.sku}` : 'sem SKU'} · {c.categoria}</span>
+                </span>
+              </label>
+            )
+          })}
+          {encontrados.length > 80 && <div style={{ padding: '8px 10px', fontSize: 11.5, color: C.muito }}>Mostrando 80 de {num(encontrados.length)}. Digite mais pra refinar.</div>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Detalhe de um produto (onde vendeu + adições) ────────────────────────────────
+function DetalheProduto({ produto, consulta, filtrado, onAlternarFiltro }: {
+  produto: Produto; consulta: URLSearchParams; filtrado: boolean; onAlternarFiltro: () => void
+}) {
+  const [dados, setDados] = useState<DetalheProdutoResp | null>(null)
+  const [erro, setErro] = useState('')
+  const chave = consulta.toString()
+
+  useEffect(() => {
+    const ctrl = new AbortController()
+    setDados(null); setErro('')
+    const p = new URLSearchParams(chave)
+    p.set('acao', 'produto'); p.set('id', produto.id); p.set('tipo', produto.tipo)
+    getJSON<DetalheProdutoResp>(p, ctrl.signal).then(setDados).catch(e => { if (e.name !== 'AbortError') setErro(e.message) })
+    return () => ctrl.abort()
+  }, [chave, produto.id, produto.tipo])
+
+  const ehAdicao = produto.tipo === 'Adição'
+  const sub: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: C.texto, margin: '0 0 8px' }
+
+  return (
+    <div style={{ padding: '14px 16px 18px', background: '#FBFBF8', borderBottom: `1px solid ${C.borda}` }}>
+      {erro ? <Aviso>{erro}</Aviso> : !dados ? <div style={{ fontSize: 12.5, color: C.suave }}>Carregando...</div> : (
+        <div style={{ display: 'grid', gridTemplateColumns: ehAdicao ? '1fr' : 'repeat(auto-fit, minmax(340px, 1fr))', gap: 20 }}>
+          <div>
+            <h3 style={sub}>Onde vendeu</h3>
+            <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff', border: `1px solid ${C.borda}`, borderRadius: 8 }}>
+              <thead><tr>
+                <th style={{ ...th, position: 'static' }}>Loja</th><th style={{ ...th, position: 'static' }}>Canal</th>
+                <th style={{ ...th, position: 'static', textAlign: 'right' }}>Qtd</th>
+                <th style={{ ...th, position: 'static', textAlign: 'right' }}>Valor total</th>
+                <th style={{ ...th, position: 'static', textAlign: 'right' }}>% qtd</th>
+              </tr></thead>
+              <tbody>
+                {dados.porLoja.map(l => (
+                  <tr key={l.loja + l.canal}>
+                    <td style={{ ...td, fontWeight: 500 }}>{l.loja}</td>
+                    <td style={{ ...td, color: '#666' }}>{l.canal}</td>
+                    <td style={tdNum}>{num(l.qtd)}</td>
+                    <td style={tdNum}>{brl(l.liquido)}</td>
+                    <td style={{ ...tdNum, color: C.suave }}>{dados.total.qtd ? pct(l.qtd / dados.total.qtd) : '—'}</td>
+                  </tr>
+                ))}
+                {dados.porLoja.length === 0 && <tr><td style={td} colSpan={5}>Sem vendas nas lojas filtradas.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+
+          {!ehAdicao && (
+            <div>
+              <h3 style={sub}>Adições escolhidas <span style={{ fontWeight: 400, color: C.suave }}>(montáveis e combos)</span></h3>
+              {dados.adicoes.length === 0 ? (
+                <div style={{ fontSize: 12.5, color: C.suave, background: '#fff', border: `1px solid ${C.borda}`, borderRadius: 8, padding: 12 }}>
+                  Nenhuma adição registrada neste produto no período.
+                </div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff', border: `1px solid ${C.borda}`, borderRadius: 8 }}>
+                  <thead><tr>
+                    <th style={{ ...th, position: 'static' }}>Adição</th>
+                    <th style={{ ...th, position: 'static', textAlign: 'right' }}>Qtd</th>
+                    <th style={{ ...th, position: 'static', textAlign: 'right' }} title="Quantas vezes, em média, saiu por unidade do produto">Por unidade</th>
+                    <th style={{ ...th, position: 'static' }}>Onde mais saiu</th>
+                  </tr></thead>
+                  <tbody>
+                    {dados.adicoes.map(a => (
+                      <tr key={a.id}>
+                        <td style={td}>
+                          <div style={{ fontWeight: 500 }}>{a.produto || '(sem nome)'}</div>
+                          <div style={{ ...MONO, fontSize: 11, color: C.muito }}>{a.sku ? `SKU ${a.sku}` : 'sem SKU'}</div>
+                        </td>
+                        <td style={tdNum}>{num(a.qtd)}</td>
+                        <td style={tdNum}>{dados.total.qtd ? num(a.qtd / dados.total.qtd) : '—'}</td>
+                        <td style={{ ...td, fontSize: 12, color: '#666' }}>
+                          {a.lojas.slice(0, 3).map(l => `${l.loja} (${num(l.qtd)})`).join(', ')}{a.lojas.length > 3 ? '…' : ''}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      <div style={{ marginTop: 12 }}>
+        <button type="button" onClick={onAlternarFiltro} style={pill(filtrado)}>
+          {filtrado ? 'Tirar este produto do filtro' : 'Filtrar o painel por este produto'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ─── Tabela de produtos ──────────────────────────────────────────────────────
 type Ordem = { campo: 'produto' | 'categoria' | 'qtd' | 'valorUnitario' | 'desconto' | 'liquido' | 'transacoes'; dir: 1 | -1 }
 
-function TabelaProdutos({ produtos, total, mostrarTx, onSelecionar, skuAtivo }: {
-  produtos: Produto[]; total: number; mostrarTx: boolean; onSelecionar: (p: Produto) => void; skuAtivo: string | null
+function TabelaProdutos({ produtos, total, mostrarTx, consulta, selecionados, onAlternarFiltro }: {
+  produtos: Produto[]; total: number; mostrarTx: boolean; consulta: URLSearchParams
+  selecionados: string[]; onAlternarFiltro: (p: Produto) => void
 }) {
   const [ordem, setOrdem] = useState<Ordem>({ campo: 'liquido', dir: -1 })
   const [limite, setLimite] = useState(50)
+  const [aberto, setAberto] = useState<string | null>(null)
   useEffect(() => { setLimite(50) }, [produtos])
 
   const ordenados = useMemo(() => {
@@ -231,9 +394,11 @@ function TabelaProdutos({ produtos, total, mostrarTx, onSelecionar, skuAtivo }: 
     return <div style={{ padding: '24px 16px', fontSize: 13, color: C.suave }}>Nenhum produto vendido com esses filtros.</div>
   }
 
+  const nCols = mostrarTx ? 8 : 7
+
   return (
     <>
-      <div style={{ overflowX: 'auto', maxHeight: 620, overflowY: 'auto' }}>
+      <div style={{ overflowX: 'auto', maxHeight: 720, overflowY: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
           <thead>
             <tr>
@@ -249,24 +414,40 @@ function TabelaProdutos({ produtos, total, mostrarTx, onSelecionar, skuAtivo }: 
           </thead>
           <tbody>
             {ordenados.slice(0, limite).map(p => {
-              const ativo = skuAtivo === p.id
+              const k = chaveProduto(p)
+              const expandido = aberto === k
+              const filtrado = selecionados.includes(k)
               return (
-                <tr key={p.id + p.tipo} onClick={() => onSelecionar(p)} title="Filtrar o painel por este produto"
-                  style={{ cursor: 'pointer', background: ativo ? C.verdeFundo : undefined }}>
-                  <td style={td}>
-                    <div style={{ fontWeight: 500 }}>{p.produto || '(sem nome)'}</div>
-                    <div style={{ ...MONO, fontSize: 11, color: C.muito, marginTop: 2 }}>
-                      {p.sku ? `SKU ${p.sku}` : 'sem SKU'}{p.tipo === 'Adição' ? ' · adição de combo' : ''}
-                    </div>
-                  </td>
-                  <td style={{ ...td, color: '#666' }}>{p.categoria}</td>
-                  <td style={tdNum}>{num(p.qtd)}</td>
-                  <td style={tdNum}>{p.qtd ? brl(p.bruto / p.qtd) : '—'}</td>
-                  <td style={{ ...tdNum, color: p.desconto ? C.vermelho : C.muito }}>{p.desconto ? brl(p.desconto) : '—'}</td>
-                  <td style={{ ...tdNum, fontWeight: 500 }}>{brl(p.liquido)}</td>
-                  <td style={{ ...tdNum, color: C.suave }}>{total ? pct(p.liquido / total) : '—'}</td>
-                  {mostrarTx && <td style={tdNum}>{num(p.transacoes)}</td>}
-                </tr>
+                <FragmentoLinha key={k}>
+                  <tr onClick={() => setAberto(expandido ? null : k)} title="Ver onde vendeu e as adições"
+                    style={{ cursor: 'pointer', background: expandido ? '#FBFBF8' : filtrado ? C.verdeFundo : undefined }}>
+                    <td style={td}>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <span style={{ color: C.muito, fontSize: 11, width: 10, paddingTop: 2 }}>{expandido ? '▾' : '▸'}</span>
+                        <div>
+                          <div style={{ fontWeight: 500 }}>{p.produto || '(sem nome)'}</div>
+                          <div style={{ ...MONO, fontSize: 11, color: C.muito, marginTop: 2 }}>
+                            {p.sku ? `SKU ${p.sku}` : 'sem SKU'}{p.tipo === 'Adição' ? ' · adição de combo' : ''}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ ...td, color: '#666' }}>{p.categoria}</td>
+                    <td style={tdNum}>{num(p.qtd)}</td>
+                    <td style={tdNum}>{p.qtd ? brl(p.bruto / p.qtd) : '—'}</td>
+                    <td style={{ ...tdNum, color: p.desconto ? C.vermelho : C.muito }}>{p.desconto ? brl(p.desconto) : '—'}</td>
+                    <td style={{ ...tdNum, fontWeight: 500 }}>{brl(p.liquido)}</td>
+                    <td style={{ ...tdNum, color: C.suave }}>{total ? pct(p.liquido / total) : '—'}</td>
+                    {mostrarTx && <td style={tdNum}>{num(p.transacoes)}</td>}
+                  </tr>
+                  {expandido && (
+                    <tr>
+                      <td colSpan={nCols} style={{ padding: 0 }}>
+                        <DetalheProduto produto={p} consulta={consulta} filtrado={filtrado} onAlternarFiltro={() => onAlternarFiltro(p)} />
+                      </td>
+                    </tr>
+                  )}
+                </FragmentoLinha>
               )
             })}
           </tbody>
@@ -280,6 +461,10 @@ function TabelaProdutos({ produtos, total, mostrarTx, onSelecionar, skuAtivo }: 
       </div>
     </>
   )
+}
+
+function FragmentoLinha({ children }: { children: React.ReactNode }) {
+  return <>{children}</>
 }
 
 // ─── Painel lateral de detalhe (um dia) ─────────────────────────────────────────
@@ -397,9 +582,9 @@ export default function VendasClientApp() {
   const [canal, setCanal] = useState<'todos' | 'Salão' | 'Delivery'>('todos')
   const [categorias, setCategorias] = useState<string[]>([])
   const [busca, setBusca] = useState('')
-  const [buscaDeb, setBuscaDeb] = useState('')
+  const [catalogo, setCatalogo] = useState<CatItem[]>([])
   const [adicoes, setAdicoes] = useState(false)
-  const [produtoSel, setProdutoSel] = useState<{ id: string; nome: string } | null>(null)
+  const [produtosSel, setProdutosSel] = useState<{ chave: string; id: string; nome: string }[]>([])
 
   const [dados, setDados] = useState<Resumo | null>(null)
   const [carregando, setCarregando] = useState(false)
@@ -420,21 +605,23 @@ export default function VendasClientApp() {
       .catch(e => setErroMeta(e.message))
   }, [])
 
-  useEffect(() => {
-    const t = setTimeout(() => setBuscaDeb(busca.trim()), 450)
-    return () => clearTimeout(t)
-  }, [busca])
+  const alternarProduto = useCallback((p: { id: string; tipo: string; produto: string; sku: string }) => {
+    const chave = chaveProduto(p)
+    setProdutosSel(sel => sel.some(x => x.chave === chave)
+      ? sel.filter(x => x.chave !== chave)
+      : [...sel, { chave, id: p.id, nome: p.produto || p.sku }])
+  }, [])
 
   const filtros = useMemo(() => {
     const p = new URLSearchParams()
     if (lojas.length) p.set('lojas', lojas.join('|'))
     if (canal !== 'todos') p.set('canais', canal)
     if (categorias.length) p.set('categorias', categorias.join('|'))
-    if (produtoSel) p.set('skus', produtoSel.id)
-    if (buscaDeb) p.set('busca', buscaDeb)
+    if (produtosSel.length) p.set('skus', Array.from(new Set(produtosSel.map(x => x.id))).join('|'))
+    if (busca) p.set('busca', busca)
     if (adicoes) p.set('adicoes', '1')
     return p
-  }, [lojas, canal, categorias, produtoSel, buscaDeb, adicoes])
+  }, [lojas, canal, categorias, produtosSel, busca, adicoes])
 
   const maxDias = meta?.maxDias || 186
   const periodoInvalido = !inicio || !fim ? 'Escolha o período' : fim < inicio ? 'A data final está antes da inicial' : diasEntre(inicio, fim) > maxDias ? `Período máximo de ${maxDias} dias` : ''
@@ -450,7 +637,7 @@ export default function VendasClientApp() {
     if (semCache) p.set('nocache', '1')
     setCarregando(true); setErro('')
     getJSON<Resumo>(p, ctrl.signal)
-      .then(d => { if (!ctrl.signal.aborted) setDados(d) })
+      .then(d => { if (!ctrl.signal.aborted) { setDados(d); if (d.catalogo) setCatalogo(d.catalogo) } })
       .catch(e => { if (e.name !== 'AbortError') setErro(e.message) })
       .finally(() => { if (pedido.current === ctrl) setCarregando(false) })
   }, [filtros, inicio, fim, periodoInvalido])
@@ -472,9 +659,16 @@ export default function VendasClientApp() {
   }, [meta])
 
   const limparFiltros = () => {
-    setLojas([]); setCanal('todos'); setCategorias([]); setBusca(''); setBuscaDeb(''); setProdutoSel(null); setAdicoes(false)
+    setLojas([]); setCanal('todos'); setCategorias([]); setBusca(''); setProdutosSel([]); setAdicoes(false)
   }
-  const temFiltro = lojas.length > 0 || canal !== 'todos' || categorias.length > 0 || !!buscaDeb || !!produtoSel || adicoes
+  const temFiltro = lojas.length > 0 || canal !== 'todos' || categorias.length > 0 || !!busca || produtosSel.length > 0 || adicoes
+
+  const consultaProduto = useMemo(() => {
+    const p = new URLSearchParams({ inicio, fim })
+    if (lojas.length) p.set('lojas', lojas.join('|'))
+    if (canal !== 'todos') p.set('canais', canal)
+    return p
+  }, [inicio, fim, lojas, canal])
 
   const k = dados?.kpis
   const porItem = !!k?.transacoesPorItem
@@ -561,8 +755,8 @@ export default function VendasClientApp() {
 
           <MultiSelect label="categorias" labelTodos="Todas as categorias" opcoes={dados?.categoriasDisponiveis || []} valor={categorias} onChange={setCategorias} />
 
-          <input type="search" value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar produto ou SKU"
-            style={{ ...pill(!!busca), cursor: 'text', width: 210, padding: '0 14px' }} aria-label="Buscar produto ou SKU" />
+          <SeletorProdutos catalogo={catalogo} selecionados={produtosSel.map(x => x.chave)}
+            onAlternar={alternarProduto} onAplicarBusca={setBusca} />
 
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#666', cursor: 'pointer', marginLeft: 4 }}>
             <input type="checkbox" checked={adicoes} onChange={e => setAdicoes(e.target.checked)} style={{ accentColor: C.texto }} />
@@ -575,9 +769,18 @@ export default function VendasClientApp() {
           </div>
         </div>
 
-        {produtoSel && (
-          <div style={{ marginTop: 10 }}>
-            <Chip onRemover={() => setProdutoSel(null)}>Produto: {produtoSel.nome}</Chip>
+        {(produtosSel.length > 0 || busca) && (
+          <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            {busca && <Chip onRemover={() => setBusca('')}>Contém: {busca}</Chip>}
+            {produtosSel.map(x => (
+              <Chip key={x.chave} onRemover={() => setProdutosSel(sel => sel.filter(y => y.chave !== x.chave))}>{x.nome}</Chip>
+            ))}
+            {produtosSel.length > 1 && (
+              <button type="button" onClick={() => setProdutosSel([])}
+                style={{ border: 'none', background: 'none', fontSize: 12, color: '#999', textDecoration: 'underline', cursor: 'pointer', fontFamily: 'inherit' }}>
+                limpar produtos
+              </button>
+            )}
           </div>
         )}
         {carregando && <div style={{ position: 'absolute', left: 0, right: 0, bottom: -2, height: 2, background: C.verde, animation: 'vbar 1.1s ease-in-out infinite' }} />}
@@ -706,13 +909,12 @@ export default function VendasClientApp() {
             {/* Produtos */}
             <Painel titulo="Produtos" direita={
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 12, color: C.muito }}>Clique num produto pra filtrar o painel</span>
+                <span style={{ fontSize: 12, color: C.muito }}>Clique num produto pra ver onde vendeu e as adições</span>
                 <button type="button" onClick={exportarProdutos} style={pill(false)} disabled={!dados.produtos.length}>Exportar Excel</button>
               </div>
             }>
               <TabelaProdutos produtos={dados.produtos} total={k.faturamento} mostrarTx={!diasSemTx || porItem}
-                skuAtivo={produtoSel?.id || null}
-                onSelecionar={p => setProdutoSel(produtoSel?.id === p.id ? null : { id: p.id, nome: p.produto || p.sku })} />
+                consulta={consultaProduto} selecionados={produtosSel.map(x => x.chave)} onAlternarFiltro={alternarProduto} />
             </Painel>
           </div>
         )}
