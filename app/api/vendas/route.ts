@@ -1,56 +1,85 @@
+// app/api/vendas/route.ts
+// Proxy server-side para o Apps Script de Vendas por Produto (ApiVendas.gs).
+// - evita CORS
+// - guarda a API_KEY do Apps Script só no servidor (env var)
+// - aplica a permissão por unidade: usuário restrito só consegue consultar
+//   as lojas liberadas pra ele, mesmo mexendo na URL na mão
+
 import { NextRequest, NextResponse } from 'next/server'
 import { getUserAccess, hasDashboardAccess } from '@/lib/permissions'
-import { UNITS, unitIdFromString } from '@/lib/units'
+import { isUnitAllowed } from '@/lib/units'
+
+// Configurar na Vercel (Settings > Environment Variables):
+//   VENDAS_GAS_URL -> URL /exec da implantação Web App do ApiVendas.gs
+//   VENDAS_GAS_KEY -> mesmo valor da propriedade API_KEY do script
+const GAS_URL = process.env.VENDAS_GAS_URL || ''
+const GAS_KEY = process.env.VENDAS_GAS_KEY || ''
+
+// Nomes exatamente como o Apps Script grava (array LOJAS do ZigVendasDiarias.gs)
+const LOJAS_GAS = [
+  'Carinás', 'Lapa', 'Tatuapé', 'Pavão', 'Chácara Sto Antônio',
+  'Vila Mariana', 'Vila Madalena', 'Perdizes', 'Santana', 'Santo André',
+]
+
+const ACOES = new Set(['meta', 'resumo', 'detalhe'])
 
 export const maxDuration = 60
-export const dynamic = 'force-dynamic'
-
-const allowedParams = ['inicio', 'fim', 'dia', 'canais', 'categorias', 'skus', 'busca', 'adicoes']
-const validDate = /^\d{4}-\d{2}-\d{2}$/
-const gasNames: Record<string, string> = { chacara: 'Chácara Sto Antônio', santo_andre: 'Santo André' }
-const gasName = (id: string, label: string) => gasNames[id] || label
 
 export async function GET(req: NextRequest) {
   const access = await getUserAccess()
-  if (!access) return NextResponse.json({ erro: 'Não autenticado' }, { status: 401 })
-  if (!hasDashboardAccess(access, 'vendas')) return NextResponse.json({ erro: 'Acesso negado' }, { status: 403 })
-
-  const endpoint = process.env.ZIG_VENDAS_GAS_URL
-  const key = process.env.ZIG_VENDAS_API_KEY
-  if (!endpoint || !key) return NextResponse.json({ erro: 'Integração de vendas ainda não configurada' }, { status: 503 })
-
-  const input = req.nextUrl.searchParams
-  const acao = input.get('acao') || 'resumo'
-  if (!['meta', 'resumo', 'detalhe'].includes(acao)) return NextResponse.json({ erro: 'Ação inválida' }, { status: 400 })
-  if (acao === 'detalhe' && !validDate.test(input.get('dia') || '')) return NextResponse.json({ erro: 'Dia inválido' }, { status: 400 })
-  if (acao === 'resumo' && (!validDate.test(input.get('inicio') || '') || !validDate.test(input.get('fim') || ''))) {
-    return NextResponse.json({ erro: 'Período inválido' }, { status: 400 })
+  if (!access) return NextResponse.json({ ok: false, erro: 'Não autenticado' }, { status: 401 })
+  if (!hasDashboardAccess(access, 'vendas')) return NextResponse.json({ ok: false, erro: 'Acesso negado' }, { status: 403 })
+  if (!GAS_URL || !GAS_KEY) {
+    return NextResponse.json({ ok: false, erro: 'VENDAS_GAS_URL / VENDAS_GAS_KEY não configuradas na Vercel' }, { status: 500 })
   }
 
-  // A lista de lojas enviada pelo navegador jamais pode ampliar a permissão.
-  const allStores = UNITS.filter(u => u.id !== 'holding').map(u => gasName(u.id, u.label))
-  const authorized = access.lojas === '*' ? allStores : UNITS.filter(u => access.lojas.includes(u.id) && u.id !== 'holding').map(u => gasName(u.id, u.label))
-  const wanted = (input.get('lojas') || '').split('|').filter(Boolean)
-  const selected = wanted.length ? authorized.filter(loja => wanted.some(raw => unitIdFromString(raw) === unitIdFromString(loja))) : authorized
-  if (!selected.length) return NextResponse.json({ erro: 'Nenhuma loja autorizada para esta consulta' }, { status: 403 })
+  const params = new URLSearchParams(new URL(req.url).searchParams)
+  params.delete('key')
+  const acao = params.get('acao') || 'resumo'
+  if (!ACOES.has(acao)) return NextResponse.json({ ok: false, erro: 'Ação inválida' }, { status: 400 })
+  params.set('acao', acao)
 
-  const params = new URLSearchParams({ key, acao })
-  if (acao !== 'meta') {
-    params.set('lojas', selected.join('|'))
-    for (const field of allowedParams) {
-      const value = input.get(field)
-      if (value) params.set(field, value.slice(0, 500))
+  const restrito = access.lojas !== '*'
+  const permitidas = restrito ? LOJAS_GAS.filter(n => isUnitAllowed(n, access.lojas)) : LOJAS_GAS
+  if (restrito && permitidas.length === 0) {
+    return NextResponse.json({ ok: false, erro: 'Nenhuma unidade liberada para o seu usuário' }, { status: 403 })
+  }
+
+  if (restrito && acao !== 'meta') {
+    const pedidas = (params.get('lojas') || '').split('|').map(s => s.trim()).filter(Boolean)
+    const finais = pedidas.length ? pedidas.filter(p => permitidas.includes(p)) : permitidas
+    if (finais.length === 0) {
+      return NextResponse.json({ ok: false, erro: 'Sem acesso às unidades selecionadas' }, { status: 403 })
     }
+    params.set('lojas', finais.join('|'))
   }
+
+  params.set('key', GAS_KEY)
 
   try {
-    const response = await fetch(`${endpoint}?${params}`, { cache: 'no-store', signal: AbortSignal.timeout(55000) })
-    if (!response.ok) throw new Error(`Servidor de dados respondeu ${response.status}`)
-    const result = await response.json()
-    if (!result.ok) return NextResponse.json({ erro: result.erro || 'Falha ao consultar vendas' }, { status: result.status === 400 ? 400 : 502 })
-    if (acao === 'meta') result.lojas = authorized
-    return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } })
-  } catch (error) {
-    return NextResponse.json({ erro: error instanceof Error ? error.message : 'Falha de conexão' }, { status: 502 })
+    const res = await fetch(`${GAS_URL}?${params.toString()}`, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(55000),
+    })
+    const text = await res.text()
+    let data: any
+    try {
+      data = JSON.parse(text)
+    } catch {
+      return NextResponse.json({ ok: false, erro: `Resposta inválida do Apps Script (${res.status}): ${text.slice(0, 200)}` }, { status: 502 })
+    }
+
+    if (data?.ok === false) {
+      return NextResponse.json({ ok: false, erro: data.erro || 'Erro no Apps Script' }, { status: data.status || 500 })
+    }
+
+    if (acao === 'meta' && restrito && Array.isArray(data.lojas)) {
+      data.lojas = data.lojas.filter((n: string) => permitidas.includes(n))
+    }
+
+    return NextResponse.json(data)
+  } catch (e: any) {
+    const msg = e?.name === 'TimeoutError' ? 'O Apps Script demorou demais para responder — tente um período menor' : (e?.message || 'Erro desconhecido')
+    return NextResponse.json({ ok: false, erro: msg }, { status: 504 })
   }
 }
