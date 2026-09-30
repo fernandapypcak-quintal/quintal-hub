@@ -308,6 +308,44 @@ export function usePorLojaDetalhe(filtros: Pick<Filtros, 'unidade' | 'vendedor'>
   return { dados, loading, erro }
 }
 
+export type PontoCurvaMaturacao = {
+  idadeMeses: number; amostras: number
+  convAbsolutaMedia: number; convRelativa: number | null
+}
+export type SafraProjecao = {
+  mes: string; leadsCriados: number; ganhosAteHoje: number
+  idadeMeses: number; madura: boolean
+  conversaoAtual: number; conversaoProjetada: number | null
+  amostraSuficiente: boolean
+}
+export type ProjecaoConversaoData = {
+  curvaMaturacao: PontoCurvaMaturacao[]
+  idadeConsideradaMadura: number
+  safras: SafraProjecao[]
+  aviso: string
+}
+
+export function useProjecaoConversao(filtros: Pick<Filtros, 'unidade' | 'vendedor'>) {
+  const [dados, setDados] = useState<ProjecaoConversaoData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [erro, setErro] = useState<string | null>(null)
+
+  useEffect(() => {
+    setLoading(true); setErro(null)
+    const p = new URLSearchParams({ tipo: 'projecao_conversao' })
+    if (filtros.unidade)  p.set('unidade',  filtros.unidade)
+    if (filtros.vendedor) p.set('vendedor', filtros.vendedor)
+    fetch(`${GAS_URL}?${p}`)
+      .then(r => r.json())
+      .then(data => { if (data.erro) throw new Error(data.erro); setDados(data) })
+      .catch(e => setErro(e.message))
+      .finally(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtros.unidade, filtros.vendedor])
+
+  return { dados, loading, erro }
+}
+
 export function usePorLoja(filtros: Filtros) {
   const [lojas, setLojas] = useState<Record<string, LojaSumario>>({})
   const [loading, setLoading] = useState(true)
