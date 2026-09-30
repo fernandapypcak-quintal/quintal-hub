@@ -21,7 +21,7 @@ const LOJAS_GAS = [
   'Vila Mariana', 'Vila Madalena', 'Perdizes', 'Santana', 'Santo André',
 ]
 
-const ACOES = new Set(['meta', 'resumo', 'detalhe', 'produto'])
+const ACOES = new Set(['meta', 'resumo', 'detalhe', 'produto', 'produtoLoja'])
 
 export const maxDuration = 60
 
