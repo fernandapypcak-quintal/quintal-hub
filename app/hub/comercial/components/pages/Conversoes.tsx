@@ -1,12 +1,72 @@
 'use client'
 
 import { useState } from 'react'
-import { Deal } from '../../useComercial'
+import { Deal, useProjecaoConversao } from '../../useComercial'
 import DealModal from '../ui/DealModal'
 
 const GAS_URL = '/api/pipedrive'
 
 function fmtDate(s: string) { if(!s)return'—'; const p=s.split('T')[0].split('-'); if(p.length<3)return s; return`${p[2]}/${p[1]}/${p[0]}` }
+function fmtPct(v: number | null) { if (v === null || v === undefined) return '—'; return `${(v*100).toLocaleString('pt-BR',{maximumFractionDigits:1,minimumFractionDigits:1})}%` }
+const MESES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+function labelMes(mes: string) { const [ano,m] = mes.split('-'); return `${MESES_PT[parseInt(m,10)-1]}/${ano}` }
+
+function PainelProjecaoConversao({ filtros }: { filtros: any }) {
+  const { dados, loading, erro } = useProjecaoConversao(filtros)
+
+  if (loading) return null
+  if (erro || !dados || !dados.safras.length) return null
+
+  const safraAtual = dados.safras[dados.safras.length - 1]
+  const historico = dados.safras.slice().reverse().filter(s => !s.madura).slice(0, 6)
+
+  return (
+    <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: '18px 20px', marginBottom: 20, borderTop: '3px solid #97A624' }}>
+      <div style={{ fontSize: 10, fontWeight: 600, color: '#9a9c9f', textTransform: 'uppercase', marginBottom: 12 }}>
+        Projeção de conversão · {labelMes(safraAtual.mes)}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap', marginBottom: historico.length ? 18 : 0 }}>
+        <div>
+          <div style={{ fontSize: 28, fontWeight: 600, fontFamily: 'DM Mono, monospace', color: '#0D0F14' }}>{fmtPct(safraAtual.conversaoAtual)}</div>
+          <div style={{ fontSize: 11, color: '#9a9c9f' }}>conversão até hoje ({safraAtual.leadsCriados} leads, {safraAtual.ganhosAteHoje} ganhos)</div>
+        </div>
+        {!safraAtual.madura && (
+          <>
+            <div style={{ fontSize: 20, color: '#c9c9c4' }}>→</div>
+            <div>
+              <div style={{ fontSize: 28, fontWeight: 600, fontFamily: 'DM Mono, monospace', color: '#3B6D11' }}>
+                {safraAtual.conversaoProjetada !== null ? `~${fmtPct(safraAtual.conversaoProjetada)}` : '—'}
+              </div>
+              <div style={{ fontSize: 11, color: '#9a9c9f' }}>projeção final (baseada no histórico de safras maduras)</div>
+            </div>
+          </>
+        )}
+        {safraAtual.madura && (
+          <div style={{ fontSize: 12, color: '#9a9c9f', fontStyle: 'italic' }}>safra madura — este já é o número final</div>
+        )}
+      </div>
+
+      {historico.length > 0 && (
+        <div style={{ borderTop: '0.5px solid #F0F0EC', paddingTop: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 90px 90px', gap: 8, fontSize: 10, fontWeight: 600, color: '#9a9c9f', textTransform: 'uppercase', marginBottom: 6 }}>
+            <span>Mês</span><span>Leads</span><span>Atual</span><span>Projetada</span>
+          </div>
+          {historico.map(s => (
+            <div key={s.mes} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 90px 90px', gap: 8, fontSize: 12, padding: '4px 0' }}>
+              <span style={{ fontWeight: 500 }}>{labelMes(s.mes)}</span>
+              <span style={{ color: '#9a9c9f' }}>{s.leadsCriados}{!s.amostraSuficiente && <span style={{ color: '#c9855a' }}> (amostra pequena)</span>}</span>
+              <span style={{ fontFamily: 'DM Mono, monospace' }}>{fmtPct(s.conversaoAtual)}</span>
+              <span style={{ fontFamily: 'DM Mono, monospace', color: '#3B6D11', fontWeight: 600 }}>{s.conversaoProjetada !== null ? `~${fmtPct(s.conversaoProjetada)}` : '—'}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ fontSize: 10, color: '#c9c9c4', fontStyle: 'italic', marginTop: 12 }}>{dados.aviso}</div>
+    </div>
+  )
+}
 function fmtBRL(v: any) { const n=parseFloat(String(v||0)); if(!n)return'—'; return n.toLocaleString('pt-BR',{style:'currency',currency:'BRL',maximumFractionDigits:0}) }
 function toDateStr(d: Date) { return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` }
 
@@ -97,6 +157,8 @@ export default function Conversoes({ filtros }: { filtros: any }) {
   return (
     <div style={{ padding: '20px' }}>
       {selected && <DealModal deal={selected} onClose={() => setSelected(null)} />}
+
+      <PainelProjecaoConversao filtros={filtros} />
 
       {/* Filtros */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
