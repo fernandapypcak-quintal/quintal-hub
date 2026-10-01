@@ -13,10 +13,18 @@ function formatMes(mesRef) {
 export default function TendenciaBonus({ resultadosPorMes }) {
   if (!resultadosPorMes || resultadosPorMes.length < 2) return null
 
-  const dados = resultadosPorMes.map((r) => ({
-    mes: formatMes(r.mesRef),
-    percentual: Math.round(r.percentualAtingido * 1000) / 10,
-  }))
+  const dados = resultadosPorMes.map((r) => {
+    const semDado = r.indicadores.every((i) => i.faixa === 'pendente')
+    return {
+      mes: formatMes(r.mesRef),
+      // null (não 0) nos meses sem nenhum dado lançado — o Recharts deixa
+      // um buraco na linha em vez de descer a zero, o que seria enganoso
+      // (zero parece "não bateu nada", não "ainda não lançado").
+      percentual: semDado ? null : Math.round(r.percentualAtingido * 1000) / 10,
+    }
+  })
+
+  if (dados.every((d) => d.percentual == null)) return null
 
   return (
     <div className="bg-white border border-surface-border rounded-2xl shadow-card p-5">
