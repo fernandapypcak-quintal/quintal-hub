@@ -6,8 +6,12 @@
 
 'use client'
 
-import { CheckCircle2, AlertTriangle, XCircle, Info, LineChart } from 'lucide-react'
+import { useState } from 'react'
+import { CheckCircle2, AlertTriangle, XCircle, Info, LineChart, ChevronDown, ChevronUp } from 'lucide-react'
 import { FAIXA_LABEL } from '@/lib/bonus/scoring'
+import MiniTabelaMeses from './MiniTabelaMeses'
+
+const MESES_ANO_LISTA = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
 
 function fmtPct(v, digits = 1) {
   if (v == null) return '—'
@@ -73,8 +77,9 @@ const FAIXA_INFO = {
   pendente:    { cor: 'text-zinc-500',    bg: 'bg-zinc-100',   Icon: Info, iconCor: '#A1A1AA' },
 }
 
-function LinhaIndicador({ item }) {
+function LinhaIndicador({ item, resultadosPorMes }) {
   const { config, resultado, mesesLancados, valorAbsoluto, valorDenominador, valorParcial, temProjecao, detalheMeses } = item
+  const [aberto, setAberto] = useState(false)
   const info = FAIXA_INFO[resultado.faixa]
   const isLol = config.key === 'lol_margem'
   const temGap = resultado.gapProximaFaixa != null
@@ -140,11 +145,26 @@ function LinhaIndicador({ item }) {
 
       <p className="text-xs text-zinc-400 mt-2">dados de {mesesLancados}/12 meses do ano</p>
       <DetalheMesesLinha detalheMeses={detalheMeses} />
+
+      {resultadosPorMes && (
+        <>
+          <button
+            onClick={() => setAberto((v) => !v)}
+            className="mt-2 flex items-center gap-1 text-xs text-zinc-500 hover:text-brand-black transition-colors"
+          >
+            {aberto ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            Ver mês a mês
+          </button>
+          {aberto && (
+            <MiniTabelaMeses resultadosPorMes={resultadosPorMes} configKey={config.key} meses={MESES_ANO_LISTA} />
+          )}
+        </>
+      )}
     </div>
   )
 }
 
-export default function AcumuladoAnoView({ resultadoAcumuladoAno }) {
+export default function AcumuladoAnoView({ resultadoAcumuladoAno, resultadosPorMes }) {
   const { ano, indicadores, pontosTotais, pesoTotalColetivo, percentualAtingido, mesesLancados } = resultadoAcumuladoAno
   const pct = percentualAtingido * 100
   const cor = pct >= 70 ? '#059669' : pct >= 40 ? '#D97706' : '#E11D48'
@@ -170,7 +190,7 @@ export default function AcumuladoAnoView({ resultadoAcumuladoAno }) {
 
       <div className="flex flex-col gap-3">
         {indicadores.map((item) => (
-          <LinhaIndicador key={item.config.key} item={item} />
+          <LinhaIndicador key={item.config.key} item={item} resultadosPorMes={resultadosPorMes} />
         ))}
       </div>
     </div>
