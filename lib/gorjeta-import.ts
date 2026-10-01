@@ -32,6 +32,16 @@ function fmtDateBR(v: unknown): string {
   return ''
 }
 
+// Acha a coluna do nome do FUNCIONÁRIO, não a de "Nome da Empresa" — alguns
+// relatórios da TOTVS têm as duas, e "Nome da Empresa" costuma vir primeiro
+// (coluna A), então uma busca ingênua por "contém NOME" pega a errada.
+function acharColunaNome(H: string[]): number {
+  for (let j = 0; j < H.length; j++) if (H[j].includes('FUNCIONARIO') && H[j].includes('NOME')) return j
+  for (let j = 0; j < H.length; j++) if (H[j].includes('NOME') && !H[j].includes('EMPRESA')) return j
+  for (let j = 0; j < H.length; j++) if (H[j].includes('NOME')) return j
+  return -1
+}
+
 function readSheetRows(buf: ArrayBuffer): any[][] {
   const wb = XLSX.read(new Uint8Array(buf), { type: 'array', cellDates: true })
   const ws = wb.Sheets[wb.SheetNames[0]]
@@ -57,7 +67,7 @@ export async function lerAtivosGeral(file: File): Promise<AtivosGeralParsed> {
   if (hi < 0) throw new Error('Não achei as colunas Nome e Função nesta planilha.')
 
   const find = (...ks: string[]) => { for (let j = 0; j < H.length; j++) if (ks.some(k => H[j].includes(k))) return j; return -1 }
-  const cN = find('NOME'), cF = find('FUNC', 'CARGO'), cC = find('CPF'), cE = find('EMPRESA', 'UNIDADE', 'LOJA', 'FILIAL', 'ESTAB')
+  const cN = acharColunaNome(H), cF = find('FUNC', 'CARGO'), cC = find('CPF'), cE = find('EMPRESA', 'UNIDADE', 'LOJA', 'FILIAL', 'ESTAB')
   let cM = -1
   for (let j = 0; j < H.length; j++) if (H[j] === 'MAT' || H[j].includes('MATRIC') || H[j].includes('CHAPA') || H[j].includes('REGISTRO')) { cM = j; break }
 
@@ -106,7 +116,9 @@ export function normPontoCode(raw: unknown): string {
   return ''
 }
 
-// ── Presença (pivot Nome × Data) ──
+// ── Presença — aceita os dois formatos que a TOTVS exporta: ──
+//   (a) "pivot": uma linha por pessoa, uma coluna por dia (Nome × Data);
+//   (b) "comprido": uma linha por pessoa+dia (Nome, Dia, Entrada 1).
 // zigDatesBR: datas no mesmo formato dd/mm/aaaa que o ZIG já usa (é assim
 // que o Apps Script devolve "data", e o compute() casa por essa string).
 export async function parsePresencaXlsx(
@@ -124,34 +136,56 @@ export async function parsePresencaXlsx(
 
   const raw = rows[hi]
   const find = (...ks: string[]) => { for (let j = 0; j < H.length; j++) if (ks.some(k => H[j].includes(k))) return j; return -1 }
-  const cN = find('NOME'), cF = find('FUNC', 'CARGO')
+  const cN = acharColunaNome(H), cF = find('FUNC', 'CARGO')
 
-  const dateCols: { j: number; date: string }[] = []
-  for (let j = 0; j < raw.length; j++) { const d = fmtDateBR(raw[j]); if (d) dateCols.push({ j, date: d }) }
-  if (!dateCols.length) throw new Error('Não encontrei colunas de data no cabeçalho.')
-
-  const usable = dateCols.filter(d => zigDatesBR.has(d.date))
   const nameMap: Record<string, Ativo> = {}
   ativos.forEach(a => nameMap[norm(a.nome)] = a)
-
   const pres: Presenca = {}
   const ativosNovos: Ativo[] = []
-
-  for (let i = hi + 1; i < rows.length; i++) {
-    const r = rows[i]; if (!r) continue
-    const nome = String(r[cN] || '').trim(); if (!nome) continue
+  function pegarOuCriarAtivo(nome: string, i: number): Ativo {
     let a = nameMap[norm(nome)]
     if (!a) {
-      const funcao = cF >= 0 ? matchFuncao(r[cF]) : 'GARCOM II'
+      const funcao = cF >= 0 ? matchFuncao(raw[cF]) : 'GARCOM II'
       a = { mat: String(Date.now() + i).slice(-6), nome: nome.toUpperCase(), funcao, cpf: '' }
       nameMap[norm(nome)] = a
       ativosNovos.push(a)
     }
-    dateCols.forEach(({ j, date }) => {
-      if (!zigDatesBR.has(date)) return
-      pres[a!.mat + '|' + date] = normPontoCode(r[j])
-    })
+    return a
   }
 
-  return { pres, ativosNovos, diasCasados: usable.length, diasNoArquivo: dateCols.length }
+  // Tenta primeiro o formato "pivot" (várias colunas de data no cabeçalho).
+  const dateCols: { j: number; date: string }[] = []
+  for (let j = 0; j < raw.length; j++) { const d = fmtDateBR(raw[j]); if (d) dateCols.push({ j, date: d }) }
+
+  if (dateCols.length > 1) {
+    for (let i = hi + 1; i < rows.length; i++) {
+      const r = rows[i]; if (!r) continue
+      const nome = String(r[cN] || '').trim(); if (!nome) continue
+      const a = pegarOuCriarAtivo(nome, i)
+      dateCols.forEach(({ j, date }) => {
+        if (!zigDatesBR.has(date)) return
+        pres[a.mat + '|' + date] = normPontoCode(r[j])
+      })
+    }
+    const usable = dateCols.filter(d => zigDatesBR.has(d.date))
+    return { pres, ativosNovos, diasCasados: usable.length, diasNoArquivo: dateCols.length }
+  }
+
+  // Senão, tenta o formato "comprido": uma coluna Dia + uma coluna com o
+  // código (ex: "Entrada 1"), uma linha por pessoa+dia.
+  const cDia = find('DIA'), cCodigo = find('ENTRADA', 'STATUS', 'OCORRENCIA', 'CODIGO')
+  if (cDia < 0 || cCodigo < 0) throw new Error('Não encontrei colunas de data no cabeçalho.')
+
+  const diasVistos = new Set<string>()
+  for (let i = hi + 1; i < rows.length; i++) {
+    const r = rows[i]; if (!r) continue
+    const nome = String(r[cN] || '').trim(); if (!nome) continue
+    const date = fmtDateBR(r[cDia]); if (!date) continue
+    diasVistos.add(date)
+    if (!zigDatesBR.has(date)) continue
+    const a = pegarOuCriarAtivo(nome, i)
+    pres[a.mat + '|' + date] = normPontoCode(r[cCodigo])
+  }
+  const diasCasados = [...diasVistos].filter(d => zigDatesBR.has(d)).length
+  return { pres, ativosNovos, diasCasados, diasNoArquivo: diasVistos.size }
 }
