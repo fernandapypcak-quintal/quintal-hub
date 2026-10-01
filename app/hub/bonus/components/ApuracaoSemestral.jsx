@@ -9,7 +9,7 @@
 
 'use client'
 
-import { CheckCircle2, AlertTriangle, XCircle, Info, ArrowDown } from 'lucide-react'
+import { CheckCircle2, AlertTriangle, XCircle, Info, ArrowDown, LineChart } from 'lucide-react'
 import { useState } from 'react'
 
 const MESES_LABEL = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
@@ -41,6 +41,8 @@ function HeroPeriodo({ titulo, subtitulo, resultado, lancados, total, indicadore
   const pct = resultado.percentualAtingido * 100
   const fechado = lancados >= total
   const cor = pct >= 70 ? '#059669' : pct >= 40 ? '#D97706' : '#E11D48'
+  const chaveProjecao = chave === 's1' ? 's1TemProjecao' : 's2TemProjecao'
+  const algumaProjecao = indicadores.some((i) => i[chaveProjecao])
 
   return (
     <div className="flex-1 min-w-[280px] rounded-2xl border border-surface-border bg-white p-6 shadow-card">
@@ -60,6 +62,12 @@ function HeroPeriodo({ titulo, subtitulo, resultado, lancados, total, indicadore
       <p className="text-sm text-zinc-500 mb-4">do bônus coletivo garantido até aqui</p>
 
       <p className="text-sm text-zinc-600">{resumoPeriodo(indicadores, chave)}</p>
+
+      {algumaProjecao && (
+        <p className="flex items-center gap-1.5 text-xs text-blue-600 bg-blue-50 rounded-lg px-2.5 py-1.5 mt-3">
+          <LineChart size={12} /> Este número inclui pelo menos um mês projetado, não fechado.
+        </p>
+      )}
     </div>
   )
 }
@@ -70,11 +78,18 @@ function fmtReais(v) {
   return `${sinal}R$ ${Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 }
 
-function BlocoPeriodo({ titulo, resultado, mesesLancados, totalMeses, valorAbsoluto, valorParcial, isLol }) {
+function BlocoPeriodo({ titulo, resultado, mesesLancados, totalMeses, valorAbsoluto, valorParcial, isLol, temProjecao }) {
   const info = FAIXA_INFO[resultado.faixa]
   return (
-    <div className={`rounded-xl p-4 ${info.bg}`}>
-      <p className="text-xs font-medium text-zinc-500 mb-2">{titulo}</p>
+    <div className={`rounded-xl p-4 ${info.bg} ${temProjecao ? 'border-2 border-dashed border-blue-300' : ''}`}>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-medium text-zinc-500">{titulo}</p>
+        {temProjecao && (
+          <span className="flex items-center gap-1 text-[10px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+            <LineChart size={10} /> inclui projeção
+          </span>
+        )}
+      </div>
 
       <div className="flex items-end gap-4 mb-1">
         <div>
@@ -106,6 +121,7 @@ function CardIndicador({ item }) {
   const {
     config, s1, s2, recuperandoS1, mesesLancadosS1, mesesLancadosS2, totalMesesS2,
     metodologiaS1, metodologiaS2, s1ValorAbsoluto, s2ValorAbsoluto, s1ValorParcial, s2ValorParcial,
+    s1TemProjecao, s2TemProjecao,
   } = item
   const [detalheAberto, setDetalheAberto] = useState(false)
   const isLol = config.key === 'lol_margem'
@@ -134,6 +150,7 @@ function CardIndicador({ item }) {
           totalMeses={6}
           valorAbsoluto={s1ValorAbsoluto}
           valorParcial={s1ValorParcial}
+          temProjecao={s1TemProjecao}
           isLol={isLol}
         />
         <BlocoPeriodo
@@ -143,6 +160,7 @@ function CardIndicador({ item }) {
           totalMeses={totalMesesS2}
           valorAbsoluto={s2ValorAbsoluto}
           valorParcial={s2ValorParcial}
+          temProjecao={s2TemProjecao}
           isLol={isLol}
         />
       </div>
