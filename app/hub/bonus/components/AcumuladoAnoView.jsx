@@ -20,6 +20,18 @@ function fmtReais(v) {
   return `${sinal}R$ ${Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 }
 
+// Converte o gap em p.p. pra número bruto, usando o denominador do
+// período (ROB, total de respondentes...). Estimativa — assume que o
+// denominador do período não muda, só vale como ordem de grandeza.
+function fmtGapBruto(configKey, gapProximaFaixa, denominador) {
+  if (gapProximaFaixa == null || denominador == null) return null
+  const bruto = gapProximaFaixa * denominador
+  if (configKey === 'nps') {
+    return `~${Math.round(Math.abs(bruto)).toLocaleString('pt-BR')} respondentes`
+  }
+  return `~${fmtReais(bruto)}`
+}
+
 const FAIXA_INFO = {
   meta:        { cor: 'text-emerald-700', bg: 'bg-emerald-50', Icon: CheckCircle2, iconCor: '#059669' },
   meta_80:     { cor: 'text-amber-700',   bg: 'bg-amber-50',   Icon: AlertTriangle, iconCor: '#D97706' },
@@ -29,9 +41,11 @@ const FAIXA_INFO = {
 }
 
 function LinhaIndicador({ item }) {
-  const { config, resultado, mesesLancados, valorAbsoluto, valorParcial, temProjecao } = item
+  const { config, resultado, mesesLancados, valorAbsoluto, valorDenominador, valorParcial, temProjecao } = item
   const info = FAIXA_INFO[resultado.faixa]
   const isLol = config.key === 'lol_margem'
+  const temGap = resultado.gapProximaFaixa != null
+  const gapBruto = temGap ? fmtGapBruto(config.key, resultado.gapProximaFaixa, valorDenominador) : null
 
   return (
     <div className={`rounded-2xl border bg-white p-5 shadow-card ${temProjecao ? 'border-2 border-dashed border-blue-300' : 'border-surface-border'}`}>
@@ -52,7 +66,7 @@ function LinhaIndicador({ item }) {
         <span className="text-sm text-zinc-400 shrink-0 ml-3">peso {(config.peso * 100).toFixed(0)}%</span>
       </div>
 
-      <div className="flex flex-wrap items-end gap-6">
+      <div className="flex flex-wrap items-end gap-6 mb-2">
         <div>
           <p className="text-xs text-zinc-400 mb-1">Real (Jan-Dez acumulado)</p>
           <p className="text-4xl font-bold text-brand-black">{fmtPct(resultado.real)}</p>
@@ -63,9 +77,19 @@ function LinhaIndicador({ item }) {
           )}
         </div>
 
-        <div className="pb-1">
-          <p className="text-xs text-zinc-400 mb-1">Meta</p>
-          <p className="text-xl font-semibold text-zinc-600">{fmtPct(resultado.meta)}</p>
+        <div className="flex gap-4 pb-1">
+          <div>
+            <p className="text-[10px] text-zinc-400 uppercase tracking-wide">Meta</p>
+            <p className="text-lg font-semibold text-zinc-600">{fmtPct(resultado.meta)}</p>
+          </div>
+          <div>
+            <p className="text-[10px] text-zinc-400 uppercase tracking-wide">Faixa 80%</p>
+            <p className="text-lg font-semibold text-zinc-600">{fmtPct(resultado.meta80)}</p>
+          </div>
+          <div>
+            <p className="text-[10px] text-zinc-400 uppercase tracking-wide">Faixa 60%</p>
+            <p className="text-lg font-semibold text-zinc-600">{fmtPct(resultado.meta60)}</p>
+          </div>
         </div>
 
         <div className={`ml-auto flex items-center gap-2 px-3 py-2 rounded-full ${info.bg}`}>
@@ -74,7 +98,14 @@ function LinhaIndicador({ item }) {
         </div>
       </div>
 
-      <p className="text-xs text-zinc-400 mt-3">dados de {mesesLancados}/12 meses do ano</p>
+      {temGap && (
+        <p className="text-sm text-zinc-500 mb-1">
+          Faltam <span className="font-semibold text-zinc-700">{fmtPct(Math.abs(resultado.gapProximaFaixa))}</span> pra próxima faixa
+          {gapBruto && <> · <span className="font-semibold text-zinc-700">{gapBruto}</span> <span className="text-zinc-400">(estimativa)</span></>}
+        </p>
+      )}
+
+      <p className="text-xs text-zinc-400 mt-2">dados de {mesesLancados}/12 meses do ano</p>
     </div>
   )
 }
