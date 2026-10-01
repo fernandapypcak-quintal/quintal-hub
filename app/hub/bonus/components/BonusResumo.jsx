@@ -5,7 +5,7 @@
 
 'use client'
 
-import { ChevronDown, ChevronUp, TrendingUp } from 'lucide-react'
+import { ChevronDown, ChevronUp, TrendingUp, LineChart } from 'lucide-react'
 import { useState } from 'react'
 import { FAIXA_LABEL } from '@/lib/bonus/scoring'
 
@@ -29,16 +29,21 @@ function fmtReais(v) {
 }
 
 function Selo({ resultado }) {
-  const { config, real, meta, faixa, pontos, numerador } = resultado
+  const { config, real, meta, faixa, pontos, numerador, isProjecao } = resultado
   const style = FAIXA_STYLE[faixa]
   const isLol = config.key === 'lol_margem'
 
   return (
     <div
-      className={`flex items-center gap-2 px-3 py-2 rounded-full ${style.bg}`}
-      title={`Precisamos: ${config.objetivo} · Fonte: ${config.fonte}`}
+      className={`flex items-center gap-2 px-3 py-2 rounded-full ${style.bg} ${isProjecao ? 'border-2 border-dashed border-blue-300' : ''}`}
+      title={`Precisamos: ${config.objetivo} · Fonte: ${config.fonte}${isProjecao ? ' · PROJEÇÃO — ainda não é fechamento real' : ''}`}
     >
       <div className="flex items-baseline gap-1.5 min-w-0">
+        {isProjecao && (
+          <span className="flex items-center gap-0.5 text-[9px] font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+            <LineChart size={9} /> PROJEÇÃO
+          </span>
+        )}
         <span className={`text-xs font-semibold whitespace-nowrap ${style.text}`}>
           {config.label}
         </span>
