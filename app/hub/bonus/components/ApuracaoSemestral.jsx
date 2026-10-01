@@ -14,6 +14,10 @@ import { useState } from 'react'
 
 const MESES_LABEL = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
+function mesLabel(mm) {
+  return MESES_LABEL[parseInt(mm, 10) - 1]
+}
+
 function fmtPct(v, digits = 1) {
   if (v == null) return '—'
   return `${(v * 100).toFixed(digits)}%`
@@ -97,9 +101,37 @@ function fmtReais(v) {
   return `${sinal}R$ ${Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 }
 
+function DetalheMesesLinha({ detalheMeses }) {
+  if (!detalheMeses) return null
+  const { reais, projetados, faltando } = detalheMeses
+  if (reais.length === 0 && projetados.length === 0 && faltando.length === 0) return null
+
+  return (
+    <p className="text-[11px] text-zinc-500 mt-1.5 leading-relaxed">
+      {reais.length > 0 && (
+        <>Reais: <span className="font-medium text-zinc-700">{reais.map(mesLabel).join(', ')}</span></>
+      )}
+      {projetados.length > 0 && (
+        <>
+          {reais.length > 0 && ' · '}
+          <span className="inline-flex items-center gap-0.5 text-blue-600">
+            <LineChart size={10} /> Projeção: <span className="font-medium">{projetados.map(mesLabel).join(', ')}</span>
+          </span>
+        </>
+      )}
+      {faltando.length > 0 && (
+        <>
+          {(reais.length > 0 || projetados.length > 0) && ' · '}
+          <span className="text-zinc-400">Faltando: {faltando.map(mesLabel).join(', ')}</span>
+        </>
+      )}
+    </p>
+  )
+}
+
 function BlocoPeriodo({
   titulo, resultado, mesesLancados, totalMeses, valorAbsoluto, valorDenominador,
-  valorParcial, isLol, temProjecao, configKey,
+  valorParcial, isLol, temProjecao, configKey, detalheMeses,
 }) {
   const info = FAIXA_INFO[resultado.faixa]
   const temGap = resultado.gapProximaFaixa != null
@@ -153,6 +185,7 @@ function BlocoPeriodo({
       )}
 
       <p className="text-xs text-zinc-400 mt-1">dados de {mesesLancados}/{totalMeses} meses</p>
+      <DetalheMesesLinha detalheMeses={detalheMeses} />
     </div>
   )
 }
@@ -161,7 +194,7 @@ function CardIndicador({ item }) {
   const {
     config, s1, s2, recuperandoS1, mesesLancadosS1, mesesLancadosS2, totalMesesS2,
     metodologiaS1, metodologiaS2, s1ValorAbsoluto, s2ValorAbsoluto, s1ValorDenominador, s2ValorDenominador,
-    s1ValorParcial, s2ValorParcial, s1TemProjecao, s2TemProjecao,
+    s1ValorParcial, s2ValorParcial, s1TemProjecao, s2TemProjecao, s1DetalheMeses, s2DetalheMeses,
   } = item
   const [detalheAberto, setDetalheAberto] = useState(false)
   const isLol = config.key === 'lol_margem'
@@ -194,6 +227,7 @@ function CardIndicador({ item }) {
           temProjecao={s1TemProjecao}
           isLol={isLol}
           configKey={config.key}
+          detalheMeses={s1DetalheMeses}
         />
         <BlocoPeriodo
           titulo="2º Semestre (Jul-Dez)"
@@ -206,6 +240,7 @@ function CardIndicador({ item }) {
           temProjecao={s2TemProjecao}
           isLol={isLol}
           configKey={config.key}
+          detalheMeses={s2DetalheMeses}
         />
       </div>
 
