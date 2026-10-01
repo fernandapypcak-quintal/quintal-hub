@@ -32,6 +32,39 @@ function fmtGapBruto(configKey, gapProximaFaixa, denominador) {
   return `~${fmtReais(bruto)}`
 }
 
+const MESES_LABEL = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+function mesLabel(mm) {
+  return MESES_LABEL[parseInt(mm, 10) - 1]
+}
+
+function DetalheMesesLinha({ detalheMeses }) {
+  if (!detalheMeses) return null
+  const { reais, projetados, faltando } = detalheMeses
+  if (reais.length === 0 && projetados.length === 0 && faltando.length === 0) return null
+
+  return (
+    <p className="text-[11px] text-zinc-500 mt-1.5 leading-relaxed">
+      {reais.length > 0 && (
+        <>Reais: <span className="font-medium text-zinc-700">{reais.map(mesLabel).join(', ')}</span></>
+      )}
+      {projetados.length > 0 && (
+        <>
+          {reais.length > 0 && ' · '}
+          <span className="inline-flex items-center gap-0.5 text-blue-600">
+            <LineChart size={10} /> Projeção: <span className="font-medium">{projetados.map(mesLabel).join(', ')}</span>
+          </span>
+        </>
+      )}
+      {faltando.length > 0 && (
+        <>
+          {(reais.length > 0 || projetados.length > 0) && ' · '}
+          <span className="text-zinc-400">Faltando: {faltando.map(mesLabel).join(', ')}</span>
+        </>
+      )}
+    </p>
+  )
+}
+
 const FAIXA_INFO = {
   meta:        { cor: 'text-emerald-700', bg: 'bg-emerald-50', Icon: CheckCircle2, iconCor: '#059669' },
   meta_80:     { cor: 'text-amber-700',   bg: 'bg-amber-50',   Icon: AlertTriangle, iconCor: '#D97706' },
@@ -41,7 +74,7 @@ const FAIXA_INFO = {
 }
 
 function LinhaIndicador({ item }) {
-  const { config, resultado, mesesLancados, valorAbsoluto, valorDenominador, valorParcial, temProjecao } = item
+  const { config, resultado, mesesLancados, valorAbsoluto, valorDenominador, valorParcial, temProjecao, detalheMeses } = item
   const info = FAIXA_INFO[resultado.faixa]
   const isLol = config.key === 'lol_margem'
   const temGap = resultado.gapProximaFaixa != null
@@ -106,6 +139,7 @@ function LinhaIndicador({ item }) {
       )}
 
       <p className="text-xs text-zinc-400 mt-2">dados de {mesesLancados}/12 meses do ano</p>
+      <DetalheMesesLinha detalheMeses={detalheMeses} />
     </div>
   )
 }
