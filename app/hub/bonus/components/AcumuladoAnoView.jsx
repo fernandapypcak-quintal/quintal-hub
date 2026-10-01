@@ -6,7 +6,7 @@
 
 'use client'
 
-import { CheckCircle2, AlertTriangle, XCircle, Info } from 'lucide-react'
+import { CheckCircle2, AlertTriangle, XCircle, Info, LineChart } from 'lucide-react'
 import { FAIXA_LABEL } from '@/lib/bonus/scoring'
 
 function fmtPct(v, digits = 1) {
@@ -29,15 +29,22 @@ const FAIXA_INFO = {
 }
 
 function LinhaIndicador({ item }) {
-  const { config, resultado, mesesLancados, valorAbsoluto, valorParcial } = item
+  const { config, resultado, mesesLancados, valorAbsoluto, valorParcial, temProjecao } = item
   const info = FAIXA_INFO[resultado.faixa]
   const isLol = config.key === 'lol_margem'
 
   return (
-    <div className="rounded-2xl border border-surface-border bg-white p-5 shadow-card">
+    <div className={`rounded-2xl border bg-white p-5 shadow-card ${temProjecao ? 'border-2 border-dashed border-blue-300' : 'border-surface-border'}`}>
       <div className="flex items-start justify-between mb-3">
         <div>
-          <h3 className="text-lg font-semibold text-brand-black">{config.label}</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-lg font-semibold text-brand-black">{config.label}</h3>
+            {temProjecao && (
+              <span className="flex items-center gap-1 text-[10px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                <LineChart size={10} /> inclui projeção
+              </span>
+            )}
+          </div>
           <p className="text-xs text-zinc-400 mt-0.5">
             Precisamos: <span className="text-zinc-500">{config.objetivo}</span> · Fonte: {config.fonte}
           </p>
