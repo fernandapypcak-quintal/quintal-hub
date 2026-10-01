@@ -3,17 +3,10 @@
 
 import { useState } from 'react'
 import { useBonusData } from '../../hooks/useBonusData'
-import BonusResumo from '../BonusResumo'
 import ApuracaoSemestral from '../ApuracaoSemestral'
 import AcumuladoAnoView from '../AcumuladoAnoView'
+import TabelaMensal from '../TabelaMensal'
 import TendenciaBonus from '../TendenciaBonus'
-
-const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
-
-function labelMes(anoMes) {
-  const [ano, mes] = anoMes.split('-')
-  return `${MESES[parseInt(mes, 10) - 1]} de ${ano}`
-}
 
 const ABAS = [
   { id: 'semestre', label: 'Semestre (oficial)' },
@@ -22,7 +15,7 @@ const ABAS = [
 ]
 
 export default function Home() {
-  const { anoMes, setAnoMes, resultadoMes, resultadosPorMes, resultadoAnual, resultadoAcumuladoAno, loading, error } = useBonusData()
+  const { anoMes, setAnoMes, resultadosPorMes, resultadoAnual, resultadoAcumuladoAno, loading, error } = useBonusData()
   const [aba, setAba] = useState('semestre')
 
   return (
@@ -32,14 +25,13 @@ export default function Home() {
           <h1 className="text-xl font-semibold text-brand-black">Meta de Bônus</h1>
           <p className="text-xs text-zinc-400 font-mono">Coletiva — 70% do bônus total</p>
         </div>
-        {aba === 'mes' && (
-          <input
-            type="month"
-            value={anoMes}
-            onChange={(e) => setAnoMes(e.target.value)}
-            className="rounded-md border border-surface-border px-3 py-1.5 text-sm font-mono"
-          />
-        )}
+        <input
+          type="number"
+          value={anoMes.slice(0, 4)}
+          onChange={(e) => setAnoMes(`${e.target.value}-${anoMes.slice(5, 7)}`)}
+          className="rounded-md border border-surface-border px-3 py-1.5 text-sm font-mono w-24"
+          title="Ano de apuração"
+        />
       </div>
 
       <div className="flex gap-1 bg-surface-muted/60 rounded-lg p-1 w-fit mb-5">
@@ -67,16 +59,7 @@ export default function Home() {
 
           {aba === 'mes' && (
             <div className="flex flex-col gap-4">
-              {resultadoMes.indicadores.every((i) => i.faixa === 'pendente') ? (
-                <div className="bg-white border border-surface-border rounded-2xl p-8 text-center shadow-card">
-                  <p className="text-sm text-zinc-500">
-                    Ainda não há apuração lançada para {labelMes(anoMes)}.
-                  </p>
-                </div>
-              ) : (
-                <BonusResumo resultado={resultadoMes} subtitulo={labelMes(anoMes)} />
-              )}
-
+              <TabelaMensal resultadosPorMes={resultadosPorMes} />
               <TendenciaBonus resultadosPorMes={resultadosPorMes} />
             </div>
           )}
