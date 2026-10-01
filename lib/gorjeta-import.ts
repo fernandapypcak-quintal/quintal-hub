@@ -39,9 +39,13 @@ function readSheetRows(buf: ArrayBuffer): any[][] {
 }
 
 // ── Ativos (ATIVOS_GERAL: Filial, Matricula, Nome completo, Desc.Funcao, CPF) ──
-export async function parseAtivosXlsx(file: File, filialAlvo: string): Promise<{
-  ativos: Ativo[]; totalNoArquivo: number; funcoesNaoReconhecidas: string[]
-}> {
+// Separado em duas etapas pra poder trocar de unidade sem reimportar o
+// arquivo: lerAtivosGeral() lê e guarda a planilha inteira (todas as
+// unidades juntas) uma única vez; filtrarAtivosPorFilial() refaz só o
+// filtro, instantâneo, sempre que a unidade selecionada mudar.
+export type AtivosGeralParsed = { rows: any[][]; cN: number; cF: number; cC: number; cE: number; cM: number }
+
+export async function lerAtivosGeral(file: File): Promise<AtivosGeralParsed> {
   const buf = await file.arrayBuffer()
   const rows = readSheetRows(buf)
 
@@ -57,12 +61,19 @@ export async function parseAtivosXlsx(file: File, filialAlvo: string): Promise<{
   let cM = -1
   for (let j = 0; j < H.length; j++) if (H[j] === 'MAT' || H[j].includes('MATRIC') || H[j].includes('CHAPA') || H[j].includes('REGISTRO')) { cM = j; break }
 
+  return { rows: rows.slice(hi + 1), cN, cF, cC, cE, cM }
+}
+
+export function filtrarAtivosPorFilial(parsed: AtivosGeralParsed, filialAlvo: string): {
+  ativos: Ativo[]; totalNoArquivo: number; funcoesNaoReconhecidas: string[]
+} {
+  const { rows, cN, cF, cC, cE, cM } = parsed
   const filialNorm = norm(filialAlvo).replace(/^0+/, '')
   const ativos: Ativo[] = []
   const naoReco = new Set<string>()
   let totalNoArquivo = 0
 
-  for (let i = hi + 1; i < rows.length; i++) {
+  for (let i = 0; i < rows.length; i++) {
     const r = rows[i]; if (!r) continue
     const nome = String(r[cN] || '').trim(); if (!nome) continue
     totalNoArquivo++
