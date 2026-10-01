@@ -8,7 +8,7 @@ import {
   compute, aplicarDescontoAdiantamento, construirHistoricoEntry, cpfDigits,
   type Ativo, type Presenca, type HistoricoEntry, type ComputeResult,
 } from '@/lib/gorjeta-engine'
-import { parseAtivosXlsx, parsePresencaXlsx } from '@/lib/gorjeta-import'
+import { lerAtivosGeral, filtrarAtivosPorFilial, parsePresencaXlsx, type AtivosGeralParsed } from '@/lib/gorjeta-import'
 import { useGorjeta } from './hooks/useGorjeta'
 
 const MONO = { fontFamily: "'DM Mono', monospace" }
@@ -49,10 +49,20 @@ export default function GorjetaClientApp({
   const estado = unitId ? porUnidade[unitId] : undefined
 
   const [ativos, setAtivos] = useState<Ativo[]>([])
-  const [pres, setPres] = useState<Presenca>({})
-  const [presImported, setPresImported] = useState(false)
+  // Guarda o ATIVOS_GERAL lido (todas as unidades juntas) — ao trocar de
+  // unidade, só refiltra, sem precisar reimportar o arquivo.
+  const [ativosGeralRaw, setAtivosGeralRaw] = useState<AtivosGeralParsed | null>(null)
+  // Presença é um arquivo POR unidade (cada Ponto já sai filtrado de 1
+  // unidade só) — guarda um por unidade, pra lembrar ao trocar e ao exportar
+  // várias de uma vez.
+  const [presPorUnidade, setPresPorUnidade] = useState<Record<string, { pres: Presenca; presImported: boolean; nomeArquivo: string }>>({})
   const [mensagem, setMensagem] = useState<string | null>(null)
   const [erroImport, setErroImport] = useState<string | null>(null)
+  const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set())
+  const [exportando, setExportando] = useState(false)
+
+  const pres = unitId ? (presPorUnidade[unitId]?.pres ?? {}) : {}
+  const presImported = unitId ? (presPorUnidade[unitId]?.presImported ?? false) : false
 
   // Histórico só em memória por enquanto (persistência em Supabase é a
   // próxima fatia) — dura a sessão da página, some ao recarregar.
@@ -65,9 +75,22 @@ export default function GorjetaClientApp({
   useEffect(() => {
     if (!unitId) return
     carregar(unitId, inicio, fim).catch(() => {})
-    setAtivos([]); setPres({}); setPresImported(false); setMensagem(null)
+    setMensagem(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unitId, inicio, fim])
+
+  // Re-filtra os Ativos pela Filial da unidade atual sempre que trocar de
+  // unidade — sem precisar reimportar o arquivo, já que ele tem todas juntas.
+  useEffect(() => {
+    if (!ativosGeralRaw || !unitId) { if (!ativosGeralRaw) setAtivos([]); return }
+    const filial = FILIAL_PAGAMENTO[unitId]
+    const { ativos: filtrados, totalNoArquivo, funcoesNaoReconhecidas } = filtrarAtivosPorFilial(ativosGeralRaw, filial)
+    setAtivos(filtrados)
+    let msg = `✓ ${filtrados.length} colaborador(es) desta unidade (de ${totalNoArquivo} no arquivo todo).`
+    if (funcoesNaoReconhecidas.length) msg += ` ⚠️ Funções não reconhecidas (0 pontos): ${funcoesNaoReconhecidas.join(' · ')}.`
+    setMensagem(msg)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unitId, ativosGeralRaw])
 
   const zig = estado?.zig ?? []
   const rank = estado?.rank ?? []
@@ -81,29 +104,24 @@ export default function GorjetaClientApp({
   }, [ativos, zig, rank, pres, presImported, tipoFolha, historicoPorUnidade, unitId])
 
   async function onImportAtivos(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]; if (!file || !unitId) return
+    const file = e.target.files?.[0]; if (!file) return
     setErroImport(null)
     try {
-      const filial = FILIAL_PAGAMENTO[unitId]
-      const { ativos: novos, totalNoArquivo, funcoesNaoReconhecidas } = await parseAtivosXlsx(file, filial)
-      setAtivos(novos)
-      let msg = `✓ ${novos.length} colaborador(es) desta unidade (de ${totalNoArquivo} no arquivo todo).`
-      if (funcoesNaoReconhecidas.length) msg += ` ⚠️ Funções não reconhecidas (0 pontos): ${funcoesNaoReconhecidas.join(' · ')}.`
-      setMensagem(msg)
+      const parsed = await lerAtivosGeral(file)
+      setAtivosGeralRaw(parsed) // o useEffect [unitId, ativosGeralRaw] já refiltra e seta a mensagem
     } catch (err: any) { setErroImport(err.message) }
     e.target.value = ''
   }
 
   async function onImportPres(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]; if (!file) return
+    const file = e.target.files?.[0]; if (!file || !unitId) return
     setErroImport(null)
     try {
       const zigDatesBR = new Set(zig.map(z => z.data))
       const { pres: novaPres, ativosNovos, diasCasados, diasNoArquivo } = await parsePresencaXlsx(file, ativos, zigDatesBR)
-      setPres(novaPres)
-      setPresImported(true)
+      setPresPorUnidade(prev => ({ ...prev, [unitId]: { pres: novaPres, presImported: true, nomeArquivo: file.name } }))
       if (ativosNovos.length) setAtivos(prev => [...prev, ...ativosNovos])
-      let msg = `✓ Presença importada. Dias casados com a Gorjeta: ${diasCasados} de ${diasNoArquivo}.`
+      let msg = `✓ Presença importada (${file.name}). Dias casados com a Gorjeta: ${diasCasados} de ${diasNoArquivo}.`
       if (ativosNovos.length) msg += ` ${ativosNovos.length} colaborador(es) novo(s) criado(s) a partir do nome.`
       if (diasCasados < diasNoArquivo) msg += ' ⚠️ Algumas datas do arquivo não existem na Gorjeta carregada.'
       setMensagem(msg)
@@ -123,9 +141,10 @@ export default function GorjetaClientApp({
     setMensagem(`✓ Quinzena fechada (em memória — ainda não persistido no banco). Distribuído: ${brl(entry.distribuido)}.`)
   }
 
-  function exportarPagamento() {
-    if (!C || !unitId) return
-    const filial = FILIAL_PAGAMENTO[unitId]
+  // Gera e baixa o .xlsx de pagamento de UMA unidade já calculada.
+  // Devolve false se não tinha nada a pagar (pra quem chama poder avisar/pular).
+  function gerarXlsxPagamento(unitIdAlvo: UnitId, C: ComputeResult): boolean {
+    const filial = FILIAL_PAGAMENTO[unitIdAlvo]
     const verba = C.tipoFolha === 'mensal' ? 139 : 169
     const nomeAba = C.tipoFolha === 'mensal' ? 'IMP_GORJ_M' : 'IMP_ADI'
     const colGorj = C.tipoFolha === 'mensal' ? 'GORJETA MENSAL' : 'GORJETA ADI'
@@ -134,7 +153,7 @@ export default function GorjetaClientApp({
       const val = C.tipoFolha === 'mensal' && r.pagarLiquido != null ? r.pagarLiquido : r.pagar
       if (val > 0.005) aoa.push([filial, r.mat, verba, Number(val.toFixed(2))])
     })
-    if (aoa.length === 1) { alert('Nenhum valor a pagar para exportar.'); return }
+    if (aoa.length === 1) return false
     const ws = XLSX.utils.aoa_to_sheet(aoa)
     ws['!cols'] = [{ wch: 6.71 }, { wch: 8.43 }, { wch: 3.71 }, { wch: 12.71 }]
     const wb = XLSX.utils.book_new()
@@ -142,6 +161,53 @@ export default function GorjetaClientApp({
     const hoje = new Date()
     const stamp = `${String(hoje.getDate()).padStart(2, '0')}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${hoje.getFullYear()}`
     XLSX.writeFile(wb, `${nomeAba}_Filial_${filial}_${stamp}.xlsx`)
+    return true
+  }
+
+  function exportarPagamento() {
+    if (!C || !unitId) return
+    if (!gerarXlsxPagamento(unitId, C)) alert('Nenhum valor a pagar para exportar.')
+  }
+
+  // Exporta várias unidades de uma vez — busca na Zig quem ainda não tiver
+  // sido carregado, usa o Ativos (refiltrado pela Filial de cada uma) e a
+  // Presença já guardada daquela unidade (se tiver).
+  async function exportarVarias(ids: string[]) {
+    if (!ativosGeralRaw) { alert('Importe o arquivo de Ativos primeiro.'); return }
+    setExportando(true)
+    let geradas = 0, puladas: string[] = []
+    try {
+      for (const id of ids) {
+        const u = id as UnitId
+        let dadosZig = porUnidade[u]
+        if (!dadosZig || (!dadosZig.zig.length && !dadosZig.loading)) {
+          try { await carregar(u, inicio, fim) } catch { /* segue mesmo se falhar, vai pular abaixo */ }
+        }
+        // lê o estado mais recente após o carregar (porUnidade é atualizado por carregar)
+        const zigU = porUnidade[u]?.zig ?? []
+        const rankU = porUnidade[u]?.rank ?? []
+        const filial = FILIAL_PAGAMENTO[u]
+        const { ativos: ativosU } = filtrarAtivosPorFilial(ativosGeralRaw, filial)
+        if (!ativosU.length || !zigU.length) { puladas.push(u); continue }
+        const presU = presPorUnidade[u]?.pres ?? {}
+        const presImportedU = presPorUnidade[u]?.presImported ?? false
+        const historicoU = historicoPorUnidade[u] ?? []
+        const ultimoAdiantamentoU = historicoU.find(h => h.tipo === 'adiantamento') ?? null
+        const CU = aplicarDescontoAdiantamento(compute(ativosU, zigU, rankU, presU, presImportedU), tipoFolha, ultimoAdiantamentoU)
+        if (gerarXlsxPagamento(u, CU)) geradas++
+        else puladas.push(u)
+        await new Promise(res => setTimeout(res, 300)) // pequena folga entre downloads
+      }
+    } finally {
+      setExportando(false)
+    }
+    let msg = `✓ ${geradas} planilha(s) exportada(s).`
+    if (puladas.length) msg += ` ⚠️ Puladas (sem Ativos ou sem Gorjeta carregada): ${puladas.map(id => UNIDADES_GORJETA.find(u => u.id === id)?.label ?? id).join(' · ')}.`
+    setMensagem(msg)
+  }
+
+  function toggleSelecionada(id: string) {
+    setSelecionadas(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
   }
 
   const unidadeAtual = UNIDADES_GORJETA.find(u => u.id === unitId)
@@ -207,6 +273,36 @@ export default function GorjetaClientApp({
 
       {mensagem && <div style={{ fontSize: 12.5, color: '#166534', background: '#F0FDF4', padding: '8px 12px', borderRadius: 8, marginBottom: 12 }}>{mensagem}</div>}
       {erroImport && <div style={{ fontSize: 12.5, color: '#B91C1C', background: '#FEF2F2', padding: '8px 12px', borderRadius: 8, marginBottom: 12 }}>⚠️ {erroImport}</div>}
+
+      {/* Export de várias unidades de uma vez */}
+      <div style={{ border: '1px solid #EBEBEB', borderRadius: 10, padding: 14, marginBottom: 18 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Exportar várias unidades de uma vez</div>
+        <div style={{ fontSize: 11.5, color: '#888', marginBottom: 10 }}>
+          Usa o mesmo Ativos (filtrado pela Filial de cada uma) e a Presença que já foi importada pra cada unidade — busca da Zig sozinho quem ainda não tiver sido carregado.
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', marginBottom: 10 }}>
+          <label style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 5 }}>
+            <input type="checkbox"
+              checked={selecionadas.size === unidadesPermitidas.length}
+              onChange={e => setSelecionadas(e.target.checked ? new Set(unidadesPermitidas.map(u => u.id)) : new Set())} />
+            <b>Selecionar todas</b>
+          </label>
+          {unidadesPermitidas.map(u => (
+            <label key={u.id} style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <input type="checkbox" checked={selecionadas.has(u.id)} onChange={() => toggleSelecionada(u.id)} />
+              {u.label}
+              {presPorUnidade[u.id]?.presImported && <span title="Presença já importada">📋</span>}
+            </label>
+          ))}
+        </div>
+        <button disabled={exportando || !selecionadas.size} onClick={() => exportarVarias([...selecionadas])}
+          style={{
+            padding: '8px 16px', background: exportando ? '#ccc' : '#0D0D0D', color: '#fff', border: 'none',
+            borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: exportando ? 'default' : 'pointer',
+          }}>
+          {exportando ? 'Exportando...' : `⬇️ Exportar ${selecionadas.size || ''} unidade(s) selecionada(s)`}
+        </button>
+      </div>
 
       {C && (
         <>
