@@ -19,6 +19,25 @@ function fmtPct(v, digits = 1) {
   return `${(v * 100).toFixed(digits)}%`
 }
 
+function fmtReaisCompacto(v) {
+  if (v == null) return null
+  const sinal = v < 0 ? '-' : ''
+  return `${sinal}R$ ${Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+}
+
+// Converte o gap em p.p. (gapProximaFaixa) pra número bruto, usando o
+// denominador do período (ROB, total de respondentes...). É uma estimativa
+// — assume que o denominador do período não muda, então só vale como
+// referência de ordem de grandeza, não como meta exata.
+function fmtGapBruto(configKey, gapProximaFaixa, denominador) {
+  if (gapProximaFaixa == null || denominador == null) return null
+  const bruto = gapProximaFaixa * denominador
+  if (configKey === 'nps') {
+    return `~${Math.round(Math.abs(bruto)).toLocaleString('pt-BR')} respondentes`
+  }
+  return `~${fmtReaisCompacto(bruto)}`
+}
+
 // -------- linguagem simples por faixa --------
 const FAIXA_INFO = {
   meta:        { texto: 'Bateu a meta cheia',      cor: 'text-emerald-700', bg: 'bg-emerald-50', Icon: CheckCircle2, iconCor: '#059669' },
@@ -78,8 +97,14 @@ function fmtReais(v) {
   return `${sinal}R$ ${Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 }
 
-function BlocoPeriodo({ titulo, resultado, mesesLancados, totalMeses, valorAbsoluto, valorParcial, isLol, temProjecao }) {
+function BlocoPeriodo({
+  titulo, resultado, mesesLancados, totalMeses, valorAbsoluto, valorDenominador,
+  valorParcial, isLol, temProjecao, configKey,
+}) {
   const info = FAIXA_INFO[resultado.faixa]
+  const temGap = resultado.gapProximaFaixa != null
+  const gapBruto = temGap ? fmtGapBruto(configKey, resultado.gapProximaFaixa, valorDenominador) : null
+
   return (
     <div className={`rounded-xl p-4 ${info.bg} ${temProjecao ? 'border-2 border-dashed border-blue-300' : ''}`}>
       <div className="flex items-center justify-between mb-2">
@@ -91,27 +116,42 @@ function BlocoPeriodo({ titulo, resultado, mesesLancados, totalMeses, valorAbsol
         )}
       </div>
 
-      <div className="flex items-end gap-4 mb-1">
-        <div>
-          <p className="text-[10px] text-zinc-400 uppercase tracking-wide">Real</p>
-          <p className="text-3xl font-bold text-brand-black">{fmtPct(resultado.real)}</p>
-        </div>
-        <div className="pb-0.5">
-          <p className="text-[10px] text-zinc-400 uppercase tracking-wide">Meta</p>
-          <p className="text-lg font-semibold text-zinc-500">{fmtPct(resultado.meta)}</p>
-        </div>
-      </div>
+      <p className="text-[10px] text-zinc-400 uppercase tracking-wide">Real</p>
+      <p className="text-3xl font-bold text-brand-black mb-2">{fmtPct(resultado.real)}</p>
 
       {isLol && valorAbsoluto != null && (
-        <p className="text-xs text-zinc-500 mb-1">
+        <p className="text-xs text-zinc-500 mb-2">
           {fmtReais(valorAbsoluto)}{valorParcial && <span className="text-zinc-400"> (parcial — faltam meses)</span>}
         </p>
       )}
 
-      <div className="flex items-center gap-1.5 mt-1">
+      <div className="flex gap-3 mb-2">
+        <div>
+          <p className="text-[9px] text-zinc-400 uppercase tracking-wide">Meta</p>
+          <p className="text-sm font-semibold text-zinc-600">{fmtPct(resultado.meta)}</p>
+        </div>
+        <div>
+          <p className="text-[9px] text-zinc-400 uppercase tracking-wide">Faixa 80%</p>
+          <p className="text-sm font-semibold text-zinc-600">{fmtPct(resultado.meta80)}</p>
+        </div>
+        <div>
+          <p className="text-[9px] text-zinc-400 uppercase tracking-wide">Faixa 60%</p>
+          <p className="text-sm font-semibold text-zinc-600">{fmtPct(resultado.meta60)}</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-1.5 mb-1">
         <info.Icon size={15} color={info.iconCor} />
         <span className={`text-sm font-medium ${info.cor}`}>{info.texto}</span>
       </div>
+
+      {temGap && (
+        <p className="text-xs text-zinc-500 mb-1">
+          Faltam <span className="font-semibold text-zinc-700">{fmtPct(Math.abs(resultado.gapProximaFaixa))}</span> pra próxima faixa
+          {gapBruto && <> · <span className="font-semibold text-zinc-700">{gapBruto}</span> <span className="text-zinc-400">(estimativa)</span></>}
+        </p>
+      )}
+
       <p className="text-xs text-zinc-400 mt-1">dados de {mesesLancados}/{totalMeses} meses</p>
     </div>
   )
@@ -120,8 +160,8 @@ function BlocoPeriodo({ titulo, resultado, mesesLancados, totalMeses, valorAbsol
 function CardIndicador({ item }) {
   const {
     config, s1, s2, recuperandoS1, mesesLancadosS1, mesesLancadosS2, totalMesesS2,
-    metodologiaS1, metodologiaS2, s1ValorAbsoluto, s2ValorAbsoluto, s1ValorParcial, s2ValorParcial,
-    s1TemProjecao, s2TemProjecao,
+    metodologiaS1, metodologiaS2, s1ValorAbsoluto, s2ValorAbsoluto, s1ValorDenominador, s2ValorDenominador,
+    s1ValorParcial, s2ValorParcial, s1TemProjecao, s2TemProjecao,
   } = item
   const [detalheAberto, setDetalheAberto] = useState(false)
   const isLol = config.key === 'lol_margem'
@@ -149,9 +189,11 @@ function CardIndicador({ item }) {
           mesesLancados={mesesLancadosS1}
           totalMeses={6}
           valorAbsoluto={s1ValorAbsoluto}
+          valorDenominador={s1ValorDenominador}
           valorParcial={s1ValorParcial}
           temProjecao={s1TemProjecao}
           isLol={isLol}
+          configKey={config.key}
         />
         <BlocoPeriodo
           titulo="2º Semestre (Jul-Dez)"
@@ -159,9 +201,11 @@ function CardIndicador({ item }) {
           mesesLancados={mesesLancadosS2}
           totalMeses={totalMesesS2}
           valorAbsoluto={s2ValorAbsoluto}
+          valorDenominador={s2ValorDenominador}
           valorParcial={s2ValorParcial}
           temProjecao={s2TemProjecao}
           isLol={isLol}
+          configKey={config.key}
         />
       </div>
 
