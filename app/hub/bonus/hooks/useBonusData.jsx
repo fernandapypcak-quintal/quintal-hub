@@ -76,15 +76,30 @@ export function BonusDataProvider({ children, isAdmin = false }) {
 
   const resultadoMes = calcularResultadoMes(anoMes, linhasDoMes)
 
-  // -------- série mensal do ano, pro gráfico de tendência --------
+  // -------- série dos 12 meses do ano, pra tabela "Mês a mês" e o gráfico --------
+  // Sempre gera as 12 chaves (mesmo sem nenhuma linha lançada naquele mês),
+  // assim a tabela mostra o ano inteiro de uma vez, com "pendente" nos
+  // meses que ainda faltam — sem precisar trocar nenhum seletor.
   const resultadosPorMes = (() => {
     const porMes = {}
+    for (let m = 1; m <= 12; m++) porMes[`${ano}-${String(m).padStart(2, '0')}`] = []
+
     linhasDoAno.forEach((l) => {
       const mes = (l.mes_ref || '').slice(0, 7)
-      if (!mes) return
-      if (!porMes[mes]) porMes[mes] = []
-      porMes[mes].push({ indicador: l.indicador, meta: l.meta, meta80: l.meta_80, meta60: l.meta_60, real: l.real })
+      if (!mes || !porMes[mes]) return
+      porMes[mes].push({
+        indicador: l.indicador,
+        meta: l.meta,
+        meta80: l.meta_80,
+        meta60: l.meta_60,
+        real: l.real,
+        numerador: l.numerador,
+        denominador: l.denominador,
+        observacao: l.observacao,
+        isProjecao: ehProjecao(l.observacao),
+      })
     })
+
     return Object.keys(porMes)
       .sort()
       .map((mes) => calcularResultadoMes(mes, porMes[mes]))
