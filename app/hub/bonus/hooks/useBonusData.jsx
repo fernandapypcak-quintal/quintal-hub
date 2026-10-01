@@ -12,6 +12,18 @@ import { calcularResultadoMes, calcularResultadoAnual, calcularAcumuladoAno, IND
 
 const BonusDataContext = createContext(null)
 
+// Detecta se a Observação do mês marca o valor como projeção (não
+// fechamento real). Convenção combinada: escrever "projeção" (ou
+// variações — "projetado", sem acento, etc.) em qualquer parte do texto.
+function ehProjecao(observacao) {
+  if (!observacao) return false
+  const normalizado = observacao
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // remove acentos
+    .toLowerCase()
+  return normalizado.includes('projec') || normalizado.includes('projet')
+}
+
 function mesAtualStr() {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -58,6 +70,7 @@ export function BonusDataProvider({ children, isAdmin = false }) {
       real: l.real,
       numerador: l.numerador,
       observacao: l.observacao,
+      isProjecao: ehProjecao(l.observacao),
     }))
 
   const resultadoMes = calcularResultadoMes(anoMes, linhasDoMes)
@@ -94,6 +107,7 @@ export function BonusDataProvider({ children, isAdmin = false }) {
       real: l.real,
       numerador: l.numerador,
       denominador: l.denominador,
+      isProjecao: ehProjecao(l.observacao),
     }
     // usa o limiar mais recente lançado no ano pra esse indicador
     if (l.meta != null) {
