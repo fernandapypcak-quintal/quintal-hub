@@ -53,9 +53,13 @@ export default function Home() {
 
       {!loading && !error && (
         <>
-          {aba === 'semestre' && <ApuracaoSemestral resultadoAnual={resultadoAnual} />}
+          {aba === 'semestre' && (
+            <ApuracaoSemestral resultadoAnual={resultadoAnual} resultadosPorMes={resultadosPorMes} />
+          )}
 
-          {aba === 'ano' && <AcumuladoAnoView resultadoAcumuladoAno={resultadoAcumuladoAno} />}
+          {aba === 'ano' && (
+            <AcumuladoAnoView resultadoAcumuladoAno={resultadoAcumuladoAno} resultadosPorMes={resultadosPorMes} />
+          )}
 
           {aba === 'mes' && (
             <div className="flex flex-col gap-4">
