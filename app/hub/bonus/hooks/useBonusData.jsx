@@ -69,6 +69,7 @@ export function BonusDataProvider({ children, isAdmin = false }) {
       meta60: l.meta_60,
       real: l.real,
       numerador: l.numerador,
+      denominador: l.denominador,
       observacao: l.observacao,
       isProjecao: ehProjecao(l.observacao),
     }))
