@@ -28,6 +28,18 @@ function fmtReais(v) {
   return `${sinal}R$ ${Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 }
 
+// Converte o gap em p.p. pra número bruto, usando o denominador do mês
+// (ROB, total de respondentes...). Estimativa — assume denominador do
+// mês como referência, só vale como ordem de grandeza.
+function fmtGapBruto(configKey, gapProximaFaixa, denominador) {
+  if (gapProximaFaixa == null || denominador == null) return null
+  const bruto = gapProximaFaixa * denominador
+  if (configKey === 'nps') {
+    return `~${Math.round(Math.abs(bruto)).toLocaleString('pt-BR')} resp.`
+  }
+  return `~${fmtReais(bruto)}`
+}
+
 function Selo({ resultado }) {
   const { config, real, meta, faixa, pontos, numerador, isProjecao } = resultado
   const style = FAIXA_STYLE[faixa]
@@ -64,7 +76,9 @@ function Selo({ resultado }) {
 }
 
 function LinhaDetalhe({ resultado }) {
-  const { config, meta, meta80, meta60, real, gapProximaFaixa, faixa } = resultado
+  const { config, meta, meta80, meta60, real, gapProximaFaixa, faixa, denominador } = resultado
+  const semGap = faixa === 'meta' || faixa === 'pendente'
+  const gapBruto = !semGap ? fmtGapBruto(config.key, gapProximaFaixa, denominador) : null
   return (
     <tr className="border-t border-surface-border">
       <td className="px-3 py-1.5 text-sm text-brand-black whitespace-nowrap">
@@ -76,7 +90,10 @@ function LinhaDetalhe({ resultado }) {
       <td className="px-2 py-1.5 text-right text-xs font-mono text-zinc-500">{fmtPct(meta60)}</td>
       <td className="px-2 py-1.5 text-right text-xs font-mono text-brand-black font-semibold">{fmtPct(real)}</td>
       <td className="px-2 py-1.5 text-right text-xs font-mono text-zinc-400">
-        {faixa === 'meta' || faixa === 'pendente' ? '—' : `${gapProximaFaixa >= 0 ? '+' : ''}${fmtPct(Math.abs(gapProximaFaixa ?? 0))}`}
+        {semGap ? '—' : `${gapProximaFaixa >= 0 ? '+' : ''}${fmtPct(Math.abs(gapProximaFaixa ?? 0))}`}
+      </td>
+      <td className="px-2 py-1.5 text-right text-xs font-mono text-zinc-400">
+        {gapBruto ?? '—'}
       </td>
     </tr>
   )
@@ -135,6 +152,7 @@ export default function BonusResumo({ resultado, titulo = 'Meta Coletiva', subti
                 <th className="px-2 py-1 text-right text-[10px] text-zinc-400 uppercase tracking-wider font-normal">Meta 60%</th>
                 <th className="px-2 py-1 text-right text-[10px] text-zinc-400 uppercase tracking-wider font-normal">Real</th>
                 <th className="px-2 py-1 text-right text-[10px] text-zinc-400 uppercase tracking-wider font-normal">Gap próx. faixa</th>
+                <th className="px-2 py-1 text-right text-[10px] text-zinc-400 uppercase tracking-wider font-normal">Gap bruto (est.)</th>
               </tr>
             </thead>
             <tbody>
