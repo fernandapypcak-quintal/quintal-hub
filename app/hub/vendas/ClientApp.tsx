@@ -39,6 +39,14 @@ type Resumo = {
   catalogo?: CatItem[]
   produtos: Produto[]
 }
+type CustosResp = {
+  custos: Record<string, { custo: number; nome: string; fichas: number }>
+  totalFichas: number
+  duplicados: { sku: string; fichas: { nome: string; custo: number }[] }[]
+  atualizadaEm?: string | null
+}
+// undefined = não se aplica (adição, gorjeta) ou custos ainda carregando | null = sem ficha
+type CustoDe = (p: Produto) => number | null | undefined
 type CatItem = { id: string; sku: string; produto: string; categoria: string; tipo: string; liquido: number }
 type DetalheProdutoResp = {
   id: string; produto: string; total: { qtd: number; liquido: number }
@@ -72,6 +80,9 @@ const diaSemana = (iso: string) => DIAS_SEMANA[new Date(iso + 'T12:00:00').getDa
 
 const normalizar = (s: string) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
 const chaveProduto = (p: { id: string; tipo: string }) => p.id + '|' + p.tipo
+const semZeros = (s: string) => s.replace(/^0+(?=\d)/, '')
+const ehGorjeta = (p: { categoria: string; produto: string }) =>
+  normalizar(p.categoria) === 'tip' || normalizar(p.produto).includes('gorjeta')
 
 function addDias(iso: string, n: number) {
   const d = new Date(iso + 'T12:00:00')
@@ -361,10 +372,10 @@ function DetalheProduto({ produto, consulta, filtrado, onAlternarFiltro }: {
 }
 
 // ─── Tabela de produtos ──────────────────────────────────────────────────────
-type Ordem = { campo: 'produto' | 'loja' | 'categoria' | 'qtd' | 'valorUnitario' | 'desconto' | 'liquido' | 'transacoes'; dir: 1 | -1 }
+type Ordem = { campo: 'produto' | 'loja' | 'categoria' | 'qtd' | 'valorUnitario' | 'desconto' | 'liquido' | 'transacoes' | 'custo' | 'cmv' | 'cmvPct' | 'margem'; dir: 1 | -1 }
 
-function TabelaProdutos({ produtos, total, mostrarTx, consulta, selecionados, onAlternarFiltro, porLoja = false }: {
-  produtos: Produto[]; total: number; mostrarTx: boolean; consulta: URLSearchParams; porLoja?: boolean
+function TabelaProdutos({ produtos, total, mostrarTx, consulta, selecionados, onAlternarFiltro, porLoja = false, custoDe }: {
+  produtos: Produto[]; total: number; mostrarTx: boolean; consulta: URLSearchParams; porLoja?: boolean; custoDe: CustoDe
   selecionados: string[]; onAlternarFiltro: (p: Produto) => void
 }) {
   const [ordem, setOrdem] = useState<Ordem>({ campo: 'liquido', dir: -1 })
@@ -375,6 +386,15 @@ function TabelaProdutos({ produtos, total, mostrarTx, consulta, selecionados, on
   const ordenados = useMemo(() => {
     const val = (p: Produto) => {
       if (ordem.campo === 'valorUnitario') return p.qtd ? p.bruto / p.qtd : 0
+      if (ordem.campo === 'custo' || ordem.campo === 'cmv' || ordem.campo === 'cmvPct' || ordem.campo === 'margem') {
+        const c = custoDe(p)
+        if (typeof c !== 'number') return -Infinity
+        const cmv = c * p.qtd
+        if (ordem.campo === 'custo') return c
+        if (ordem.campo === 'cmv') return cmv
+        if (ordem.campo === 'margem') return p.liquido - cmv
+        return p.liquido > 0 ? cmv / p.liquido : -Infinity
+      }
       return (p as any)[ordem.campo]
     }
     return [...produtos].sort((a, b) => {
@@ -382,7 +402,7 @@ function TabelaProdutos({ produtos, total, mostrarTx, consulta, selecionados, on
       if (typeof va === 'string') return va.localeCompare(vb) * ordem.dir
       return ((va || 0) - (vb || 0)) * ordem.dir
     })
-  }, [produtos, ordem])
+  }, [produtos, ordem, custoDe])
 
   const cab = (campo: Ordem['campo'], texto: string, direita = false) => (
     <th style={{ ...th, textAlign: direita ? 'right' : 'left', cursor: 'pointer', color: ordem.campo === campo ? C.texto : C.suave }}
@@ -395,7 +415,7 @@ function TabelaProdutos({ produtos, total, mostrarTx, consulta, selecionados, on
     return <div style={{ padding: '24px 16px', fontSize: 13, color: C.suave }}>Nenhum produto vendido com esses filtros.</div>
   }
 
-  const nCols = (mostrarTx ? 8 : 7) + (porLoja ? 2 : 0)
+  const nCols = (mostrarTx ? 8 : 7) + (porLoja ? 2 : 0) + 4
 
   return (
     <>
@@ -412,6 +432,10 @@ function TabelaProdutos({ produtos, total, mostrarTx, consulta, selecionados, on
               {cab('desconto', 'Descontos', true)}
               {cab('liquido', 'Valor total', true)}
               <th style={{ ...th, textAlign: 'right' }}>% total</th>
+              {cab('custo', 'Custo unit.', true)}
+              {cab('cmv', 'CMV', true)}
+              {cab('cmvPct', 'CMV %', true)}
+              {cab('margem', 'Margem', true)}
               {mostrarTx && cab('transacoes', 'Transações', true)}
             </tr>
           </thead>
@@ -443,6 +467,7 @@ function TabelaProdutos({ produtos, total, mostrarTx, consulta, selecionados, on
                     <td style={{ ...tdNum, color: p.desconto ? C.vermelho : C.muito }}>{p.desconto ? brl(p.desconto) : '—'}</td>
                     <td style={{ ...tdNum, fontWeight: 500 }}>{brl(p.liquido)}</td>
                     <td style={{ ...tdNum, color: C.suave }}>{total ? pct(p.liquido / total) : '—'}</td>
+                    <CelulasCusto p={p} custoDe={custoDe} />
                     {mostrarTx && <td style={tdNum}>{num(p.transacoes)}</td>}
                   </tr>
                   {expandido && (
@@ -464,6 +489,31 @@ function TabelaProdutos({ produtos, total, mostrarTx, consulta, selecionados, on
           <button type="button" onClick={() => setLimite(l => l + 100)} style={pill(false)}>Mostrar mais 100</button>
         )}
       </div>
+    </>
+  )
+}
+
+function CelulasCusto({ p, custoDe }: { p: Produto; custoDe: CustoDe }) {
+  const c = custoDe(p)
+  if (c === undefined) return <><td style={{ ...tdNum, color: C.muito }}>—</td><td style={{ ...tdNum, color: C.muito }}>—</td><td style={{ ...tdNum, color: C.muito }}>—</td><td style={{ ...tdNum, color: C.muito }}>—</td></>
+  if (c === null) {
+    return (
+      <>
+        <td style={{ ...td, textAlign: 'right' }}>
+          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: '#FFF4E0', color: '#8A5A00', whiteSpace: 'nowrap' }}>sem ficha</span>
+        </td>
+        <td style={{ ...tdNum, color: C.muito }}>—</td><td style={{ ...tdNum, color: C.muito }}>—</td><td style={{ ...tdNum, color: C.muito }}>—</td>
+      </>
+    )
+  }
+  const cmv = c * p.qtd
+  const margem = p.liquido - cmv
+  return (
+    <>
+      <td style={tdNum}>{brl(c)}</td>
+      <td style={tdNum}>{brl(cmv)}</td>
+      <td style={{ ...tdNum, fontWeight: 500 }}>{p.liquido > 0 ? pct(cmv / p.liquido) : <span style={{ color: C.suave, fontWeight: 400 }}>cortesia</span>}</td>
+      <td style={{ ...tdNum, color: margem < 0 ? C.vermelho : undefined }}>{brl(margem)}</td>
     </>
   )
 }
@@ -599,6 +649,9 @@ export default function VendasClientApp() {
   const [linhasLoja, setLinhasLoja] = useState<Produto[] | null>(null)
   const [erroLoja, setErroLoja] = useState('')
   const [exportando, setExportando] = useState(false)
+  const [custosResp, setCustosResp] = useState<CustosResp | null>(null)
+  const [erroCustos, setErroCustos] = useState('')
+  const [soSemFicha, setSoSemFicha] = useState(false)
 
   // Meta: período disponível + lojas liberadas pro usuário
   useEffect(() => {
@@ -653,6 +706,32 @@ export default function VendasClientApp() {
 
   useEffect(() => { carregar() }, [carregar])
 
+  // Custos das fichas técnicas (módulo de CMV) — carrega uma vez
+  useEffect(() => {
+    getJSON<CustosResp>(new URLSearchParams({ acao: 'custos' }))
+      .then(setCustosResp)
+      .catch(e => setErroCustos(e.message))
+  }, [])
+
+  const mapaCustos = useMemo(() => {
+    const m = new Map<string, number>()
+    if (!custosResp) return m
+    for (const [sku, c] of Object.entries(custosResp.custos)) {
+      m.set(sku, c.custo)
+      const z = semZeros(sku)
+      if (!m.has(z)) m.set(z, c.custo)
+    }
+    return m
+  }, [custosResp])
+
+  const custoDe = useCallback<CustoDe>((p) => {
+    if (!custosResp) return undefined
+    if (p.tipo === 'Adição' || ehGorjeta(p)) return undefined
+    if (!p.sku) return null
+    const c = mapaCustos.get(p.sku) ?? mapaCustos.get(semZeros(p.sku))
+    return c === undefined ? null : c
+  }, [custosResp, mapaCustos])
+
   const paramsProdutoLoja = useCallback(() => {
     const p = new URLSearchParams(filtros)
     p.set('acao', 'produtoLoja'); p.set('inicio', inicio); p.set('fim', fim)
@@ -696,6 +775,19 @@ export default function VendasClientApp() {
     return p
   }, [inicio, fim, lojas, canal])
 
+  const cmvResumo = useMemo(() => {
+    if (!dados || !custosResp) return null
+    let cmv = 0, fatComFicha = 0, fatSemFicha = 0, cortesias = 0, semFicha = 0
+    for (const p of dados.produtos) {
+      const c = custoDe(p)
+      if (c === undefined) continue
+      if (c === null) { semFicha++; fatSemFicha += p.liquido; continue }
+      if (p.liquido > 0) { cmv += c * p.qtd; fatComFicha += p.liquido } else cortesias += c * p.qtd
+    }
+    const fatTotal = fatComFicha + fatSemFicha
+    return { cmv, fatComFicha, cortesias, semFicha, pct: fatComFicha ? cmv / fatComFicha : null, cobertura: fatTotal ? fatComFicha / fatTotal : null }
+  }, [dados, custosResp, custoDe])
+
   const k = dados?.kpis
   const porItem = !!k?.transacoesPorItem
   const diasSemTx = dados?.periodo.diasSemTransacao.length || 0
@@ -711,6 +803,16 @@ export default function VendasClientApp() {
         'Valor unitário': p.qtd ? Math.round((p.bruto / p.qtd) * 100) / 100 : 0,
         'Valor bruto': p.bruto, Descontos: p.desconto, 'Valor total': p.liquido,
         Transações: p.transacoes, 'Qtd estornada': p.estornoQtd, 'Valor estornado': p.estornoValor,
+        ...(() => {
+          const c = custoDe(p)
+          if (typeof c !== 'number') return { 'Custo unit.': c === null ? 'sem ficha' : '', CMV: '', 'CMV %': '', Margem: '' }
+          const cmv = c * p.qtd
+          return {
+            'Custo unit.': Math.round(c * 100) / 100, CMV: Math.round(cmv * 100) / 100,
+            'CMV %': p.liquido > 0 ? Math.round((cmv / p.liquido) * 10000) / 100 : '',
+            Margem: Math.round((p.liquido - cmv) * 100) / 100,
+          }
+        })(),
       })))
     } catch (e: any) {
       alert('Não foi possível exportar: ' + (e?.message || e))
@@ -845,7 +947,19 @@ export default function VendasClientApp() {
                 sub={porItem ? 'não se aplica com filtro de produto' : diasSemTx ? 'só dias com dado de transação' : undefined} />
               <Kpi label="Descontos" valor={brl0(k.desconto)} sub={k.bruto ? `${pct(k.desconto / k.bruto)} do bruto` : undefined} cor={k.desconto ? C.vermelho : undefined} />
               <Kpi label="Estornos" valor={brl0(k.estornoValor)} sub={`${num(k.estornoQtd)} itens, fora do faturamento`} cor={k.estornoValor ? C.vermelho : undefined} />
+              <Kpi label="CMV" valor={cmvResumo?.pct == null ? '—' : pct(cmvResumo.pct)}
+                sub={erroCustos ? 'fichas indisponíveis' : !cmvResumo ? 'carregando fichas...' : `${brl0(cmvResumo.cmv)} de custo${cmvResumo.cortesias ? ` + ${brl0(cmvResumo.cortesias)} em cortesias` : ''}`} />
+              <Kpi label="Cobertura de ficha" valor={cmvResumo?.cobertura == null ? '—' : pct(cmvResumo.cobertura)}
+                sub={cmvResumo ? `${num(cmvResumo.semFicha)} produtos sem ficha${custosResp?.atualizadaEm ? ` · ficha de ${dataCurta(custosResp.atualizadaEm.slice(0, 10))}` : ''}` : undefined}
+                cor={cmvResumo && cmvResumo.cobertura != null && cmvResumo.cobertura < 0.9 ? '#8A5A00' : undefined} />
             </div>
+            {erroCustos && <Aviso>{erroCustos}</Aviso>}
+            {custosResp && custosResp.duplicados.length > 0 && (
+              <Aviso tipo="info">
+                {custosResp.duplicados.length} SKU(s) usados em mais de uma ficha: o custo usado é a média.{' '}
+                {custosResp.duplicados.map(d => `SKU ${d.sku}: ${d.fichas.map(f => `${f.nome} (${brl(f.custo)})`).join(' / ')}`).join(' · ')}
+              </Aviso>
+            )}
 
             {/* Por dia */}
             <Painel titulo="Faturamento por dia" direita={<span style={{ fontSize: 12, color: C.muito }}>Clique num dia pra ver as vendas linha a linha</span>}>
@@ -951,6 +1065,11 @@ export default function VendasClientApp() {
                     </button>
                   ))}
                 </div>
+                {cmvResumo && cmvResumo.semFicha > 0 && (
+                  <button type="button" onClick={() => setSoSemFicha(v => !v)} style={pill(soSemFicha)}>
+                    Só sem ficha ({num(cmvResumo.semFicha)})
+                  </button>
+                )}
                 <button type="button" onClick={exportarProdutos} style={pill(false)} disabled={!dados.produtos.length || exportando}>
                   {exportando ? 'Gerando...' : 'Exportar Excel (por casa)'}
                 </button>
@@ -959,7 +1078,8 @@ export default function VendasClientApp() {
               {visao === 'loja' && erroLoja ? <div style={{ padding: 16 }}><Aviso>{erroLoja}</Aviso></div>
                 : visao === 'loja' && !linhasLoja ? <Spinner texto="Abrindo por casa..." />
                 : (
-                  <TabelaProdutos produtos={visao === 'loja' && linhasLoja ? linhasLoja : dados.produtos} porLoja={visao === 'loja'}
+                  <TabelaProdutos porLoja={visao === 'loja'} custoDe={custoDe}
+                    produtos={(visao === 'loja' && linhasLoja ? linhasLoja : dados.produtos).filter(p => !soSemFicha || custoDe(p) === null)}
                     total={k.faturamento} mostrarTx={!diasSemTx || porItem}
                     consulta={consultaProduto} selecionados={produtosSel.map(x => x.chave)} onAlternarFiltro={alternarProduto} />
                 )}
