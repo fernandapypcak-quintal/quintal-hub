@@ -349,7 +349,7 @@ export default function GorjetaClientApp({
         </div>
         <div className="flex-1 min-w-[260px] border border-dashed border-surface-border rounded-xl p-3.5 bg-surface-card">
           <div className="text-[13px] font-semibold mb-1.5">Presença (Ponto TOTVS)</div>
-          <div className="text-[11.5px] text-zinc-400 mb-2">Pivot Nome × Data — casa por nome com os Ativos.</div>
+          <div className="text-[11.5px] text-zinc-400 mb-2">Aceita pivot (Nome × Data) ou o formato comprido (Nome, Dia, Entrada 1) — casa por nome com os Ativos.</div>
           <input ref={presFileRef} type="file" accept=".xlsx,.xls,.csv" onChange={onImportPres} className="text-[12.5px]" />
         </div>
       </div>
