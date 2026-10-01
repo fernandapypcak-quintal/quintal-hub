@@ -21,7 +21,7 @@ const LOJAS_GAS = [
   'Vila Mariana', 'Vila Madalena', 'Perdizes', 'Santana', 'Santo André',
 ]
 
-const ACOES = new Set(['meta', 'resumo', 'detalhe', 'produto', 'produtoLoja'])
+const ACOES = new Set(['meta', 'resumo', 'detalhe', 'produto', 'produtoLoja', 'custos'])
 
 export const maxDuration = 60
 
@@ -83,3 +83,4 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, erro: msg }, { status: 504 })
   }
 }
+
