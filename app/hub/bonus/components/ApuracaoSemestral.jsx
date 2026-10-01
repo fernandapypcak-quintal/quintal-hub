@@ -9,8 +9,9 @@
 
 'use client'
 
-import { CheckCircle2, AlertTriangle, XCircle, Info, ArrowDown, LineChart } from 'lucide-react'
+import { CheckCircle2, AlertTriangle, XCircle, Info, ArrowDown, LineChart, ChevronDown, ChevronUp } from 'lucide-react'
 import { useState } from 'react'
+import MiniTabelaMeses from './MiniTabelaMeses'
 
 const MESES_LABEL = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
@@ -131,8 +132,9 @@ function DetalheMesesLinha({ detalheMeses }) {
 
 function BlocoPeriodo({
   titulo, resultado, mesesLancados, totalMeses, valorAbsoluto, valorDenominador,
-  valorParcial, isLol, temProjecao, configKey, detalheMeses,
+  valorParcial, isLol, temProjecao, configKey, detalheMeses, resultadosPorMes, mesesDoPeriodo,
 }) {
+  const [aberto, setAberto] = useState(false)
   const info = FAIXA_INFO[resultado.faixa]
   const temGap = resultado.gapProximaFaixa != null
   const gapBruto = temGap ? fmtGapBruto(configKey, resultado.gapProximaFaixa, valorDenominador) : null
@@ -186,11 +188,29 @@ function BlocoPeriodo({
 
       <p className="text-xs text-zinc-400 mt-1">dados de {mesesLancados}/{totalMeses} meses</p>
       <DetalheMesesLinha detalheMeses={detalheMeses} />
+
+      {resultadosPorMes && mesesDoPeriodo && (
+        <>
+          <button
+            onClick={() => setAberto((v) => !v)}
+            className="mt-2 flex items-center gap-1 text-xs text-zinc-500 hover:text-brand-black transition-colors"
+          >
+            {aberto ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            Ver mês a mês
+          </button>
+          {aberto && (
+            <MiniTabelaMeses resultadosPorMes={resultadosPorMes} configKey={configKey} meses={mesesDoPeriodo} />
+          )}
+        </>
+      )}
     </div>
   )
 }
 
-function CardIndicador({ item }) {
+const MESES_S1_LISTA = ['01', '02', '03', '04', '05', '06']
+const MESES_S2_LISTA = ['07', '08', '09', '10', '11', '12']
+
+function CardIndicador({ item, resultadosPorMes }) {
   const {
     config, s1, s2, recuperandoS1, mesesLancadosS1, mesesLancadosS2, totalMesesS2,
     metodologiaS1, metodologiaS2, s1ValorAbsoluto, s2ValorAbsoluto, s1ValorDenominador, s2ValorDenominador,
@@ -228,6 +248,8 @@ function CardIndicador({ item }) {
           isLol={isLol}
           configKey={config.key}
           detalheMeses={s1DetalheMeses}
+          resultadosPorMes={resultadosPorMes}
+          mesesDoPeriodo={MESES_S1_LISTA}
         />
         <BlocoPeriodo
           titulo="2º Semestre (Jul-Dez)"
@@ -241,6 +263,8 @@ function CardIndicador({ item }) {
           isLol={isLol}
           configKey={config.key}
           detalheMeses={s2DetalheMeses}
+          resultadosPorMes={resultadosPorMes}
+          mesesDoPeriodo={MESES_S2_LISTA}
         />
       </div>
 
@@ -276,7 +300,7 @@ function CardIndicador({ item }) {
   )
 }
 
-export default function ApuracaoSemestral({ resultadoAnual }) {
+export default function ApuracaoSemestral({ resultadoAnual, resultadosPorMes }) {
   const { ano, indicadores, s1, s2 } = resultadoAnual
 
   const lancadosS1 = Math.min(...indicadores.map((i) => i.mesesLancadosS1))
@@ -318,7 +342,7 @@ export default function ApuracaoSemestral({ resultadoAnual }) {
 
       <div className="flex flex-col gap-3">
         {indicadores.map((item) => (
-          <CardIndicador key={item.config.key} item={item} />
+          <CardIndicador key={item.config.key} item={item} resultadosPorMes={resultadosPorMes} />
         ))}
       </div>
     </div>
