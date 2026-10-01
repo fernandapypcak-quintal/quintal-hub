@@ -214,6 +214,8 @@ export interface ResultadoIndicadorSemestral {
   s2ValorParcial: boolean // idem pra S2
   s1TemProjecao: boolean // true = pelo menos 1 mês de S1 é projeção, não fechamento real
   s2TemProjecao: boolean // idem pra S2
+  s1DetalheMeses: DetalheMeses // quais meses de S1 entraram, e quais são reais/projetados/faltando
+  s2DetalheMeses: DetalheMeses // idem pra S2
 }
 
 export interface ResultadoSemestre {
@@ -245,6 +247,29 @@ function mediaSimples(valores: Array<number | null | undefined>): number | null 
  * numerador E denominador lançados — senão cai pra média simples do
  * Real disponível (fallback), e avisa qual dos dois foi usado.
  */
+export interface DetalheMeses {
+  reais: string[] // meses 'MM' com dado lançado e NÃO marcado como projeção
+  projetados: string[] // meses 'MM' com dado lançado e marcado como projeção
+  faltando: string[] // meses 'MM' do período que ainda não têm Real lançado
+}
+
+function detalharMeses(meses: string[], porMes: Record<string, DadosMesIndicador>): DetalheMeses {
+  const reais: string[] = []
+  const projetados: string[] = []
+  const faltando: string[] = []
+  meses.forEach((m) => {
+    const dado = porMes[m]
+    if (dado == null || dado.real == null) {
+      faltando.push(m)
+    } else if (dado.isProjecao) {
+      projetados.push(m)
+    } else {
+      reais.push(m)
+    }
+  })
+  return { reais, projetados, faltando }
+}
+
 function agregarPeriodo(meses: string[], porMes: Record<string, DadosMesIndicador>): {
   valor: number | null
   metodologia: MetodologiaAgregacao
@@ -252,12 +277,14 @@ function agregarPeriodo(meses: string[], porMes: Record<string, DadosMesIndicado
   somaDenominador: number | null // soma bruta do denominador (ex: ROB, total respondentes) — mesma regra de parcialidade
   numeradorParcial: boolean // true = a soma não cobre todos os meses do período (faltou algum lançamento)
   temProjecao: boolean // true = pelo menos 1 mês usado nesta conta está marcado como projeção (não é fechamento real)
+  detalheMeses: DetalheMeses
 } {
   const entradas = meses.map((m) => porMes[m]).filter((e): e is DadosMesIndicador => e != null)
   const todasComVolume = entradas.length > 0 && entradas.every(
     (e) => e.numerador != null && e.denominador != null && e.denominador !== 0
   )
   const temProjecao = entradas.some((e) => e.isProjecao === true)
+  const detalheMeses = detalharMeses(meses, porMes)
 
   // Soma do numerador/denominador disponível, mesmo que incompleta — sempre
   // que existir pelo menos 1 mês lançado. Isso garante que o valor em R$
@@ -283,6 +310,7 @@ function agregarPeriodo(meses: string[], porMes: Record<string, DadosMesIndicado
       somaDenominador: somaDen,
       numeradorParcial: false,
       temProjecao,
+      detalheMeses,
     }
   }
 
@@ -293,6 +321,7 @@ function agregarPeriodo(meses: string[], porMes: Record<string, DadosMesIndicado
     somaDenominador: somaDenominadorDisponivel,
     numeradorParcial,
     temProjecao,
+    detalheMeses,
   }
 }
 
@@ -309,7 +338,7 @@ export function calcularResultadoAnual(
     const porMes = dadosPorMesPorIndicador[config.key] ?? {}
     const lim = limiaresPorIndicador[config.key]
 
-    const { valor: realS1, metodologia: metodologiaS1, somaNumerador: numS1, somaDenominador: denS1, numeradorParcial: parcialS1, temProjecao: projS1 } = agregarPeriodo(MESES_S1, porMes)
+    const { valor: realS1, metodologia: metodologiaS1, somaNumerador: numS1, somaDenominador: denS1, numeradorParcial: parcialS1, temProjecao: projS1, detalheMeses: detalheS1 } = agregarPeriodo(MESES_S1, porMes)
     const resultadoS1 = calcularResultadoIndicador(config, {
       indicador: config.key,
       real: realS1,
@@ -326,7 +355,7 @@ export function calcularResultadoAnual(
     const s2Janela: JanelaS2 = 'jul_dez'
     const mesesS2 = MESES_S2
 
-    const { valor: realS2, metodologia: metodologiaS2, somaNumerador: numS2, somaDenominador: denS2, numeradorParcial: parcialS2, temProjecao: projS2 } = agregarPeriodo(mesesS2, porMes)
+    const { valor: realS2, metodologia: metodologiaS2, somaNumerador: numS2, somaDenominador: denS2, numeradorParcial: parcialS2, temProjecao: projS2, detalheMeses: detalheS2 } = agregarPeriodo(mesesS2, porMes)
     const resultadoS2 = calcularResultadoIndicador(config, {
       indicador: config.key,
       real: realS2,
@@ -356,6 +385,8 @@ export function calcularResultadoAnual(
       s2ValorParcial: parcialS2,
       s1TemProjecao: projS1,
       s2TemProjecao: projS2,
+      s1DetalheMeses: detalheS1,
+      s2DetalheMeses: detalheS2,
     }
   })
 
@@ -394,6 +425,7 @@ export interface ResultadoIndicadorAcumuladoAno {
   valorDenominador: number | null
   valorParcial: boolean
   temProjecao: boolean
+  detalheMeses: DetalheMeses
 }
 
 export interface ResultadoAcumuladoAno {
@@ -414,7 +446,7 @@ export function calcularAcumuladoAno(
     const porMes = dadosPorMesPorIndicador[config.key] ?? {}
     const lim = limiaresPorIndicador[config.key]
 
-    const { valor: real, metodologia, somaNumerador, somaDenominador, numeradorParcial, temProjecao } = agregarPeriodo(MESES_ANO, porMes)
+    const { valor: real, metodologia, somaNumerador, somaDenominador, numeradorParcial, temProjecao, detalheMeses } = agregarPeriodo(MESES_ANO, porMes)
     const resultado = calcularResultadoIndicador(config, {
       indicador: config.key,
       real,
@@ -428,7 +460,7 @@ export function calcularAcumuladoAno(
     return {
       config, resultado, metodologia, mesesLancados,
       valorAbsoluto: somaNumerador, valorDenominador: somaDenominador,
-      valorParcial: numeradorParcial, temProjecao,
+      valorParcial: numeradorParcial, temProjecao, detalheMeses,
     }
   })
 
