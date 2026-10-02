@@ -42,6 +42,8 @@ async function gas<T extends GasResp>(params: Record<string, string>): Promise<T
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/
 
+const DESATUALIZADO = 'O Apps Script publicado está desatualizado: no editor do Reservas.gs, vá em Implantar > Gerenciar implantações > editar > Nova versão > Implantar.'
+
 // Linha compacta: [id, unidade*, pessoas, dataCriacao, hora, dataReserva, canal*, origem*, operador*,
 //                  time*, contaMeta(0/1), ocasiao*, cardapio*, crianca*, status*, b2b(0/1)]   (* = índice no dicionário)
 function compactar(t: GasTabela, permitida: (u: string) => boolean) {
@@ -88,6 +90,8 @@ export async function GET(req: NextRequest) {
   try {
     if (acao === 'config') {
       const c = await gas<GasConfig>({ acao: 'config' })
+      // versão antiga do script não conhece acao=config e devolve a lista de reservas
+      if (!c.hoje || !Array.isArray(c.unidades)) throw new Error(DESATUALIZADO)
       const unidades = (c.unidades || []).filter(permitida)
       if (restrito && !unidades.length) {
         return NextResponse.json({ ok: false, erro: 'Nenhuma unidade liberada para o seu usuário' }, { status: 403 })
@@ -105,6 +109,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ ok: false, erro: 'Período inválido' }, { status: 400 })
       }
       const t = await gas<GasTabela>({ acao, inicio, fim })
+      if ('meses' in t || !Array.isArray(t.cols)) throw new Error(DESATUALIZADO)
       return NextResponse.json({ ok: true, atualizado: t.atualizado || '', ...compactar(t, permitida) })
     }
 
