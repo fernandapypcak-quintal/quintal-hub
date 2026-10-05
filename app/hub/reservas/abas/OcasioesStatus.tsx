@@ -2,16 +2,22 @@
 
 import { useMemo, useState } from 'react'
 import {
-  type Filtros, type Periodo, GRUPOS, STATUS, agruparPor, aplicarFiltros, exportarExcel,
-  n0, n1, pct, resumir, statusLabel, taxa, useLinhas, variacao,
+  type Config, type Filtros, type Periodo, GRUPOS, STATUS, agruparPor, aplicarFiltros, exportarExcel,
+  n0, n1, pct, resumir, statusLabel, taxa, temHistoricoDesde, useLinhas, variacao,
 } from '../utils'
 import { Aviso, BarraH, C, Drawer, Secao, Spinner, Var, botao, card, td, tdNum, th, thNum } from '../ui'
 import TabelaReservas from './TabelaReservas'
 
 const SEM = 'Não Informado'
 
-export default function OcasioesStatus({ filtros, periodo }: { filtros: Filtros; periodo: Periodo }) {
+export default function OcasioesStatus({ config, filtros, periodo }: { config: Config; filtros: Filtros; periodo: Periodo }) {
   const dados = useLinhas('criacao', periodo.antInicio, periodo.fim)
+  const temAno = temHistoricoDesde(config, periodo.anoInicio)
+  const ano = useLinhas('criacao', temAno ? periodo.anoInicio : '', temAno ? periodo.anoFim : '')
+  const anoPorOc = useMemo(() => {
+    if (!ano.linhas) return null
+    return agruparPor(aplicarFiltros(ano.linhas, filtros), r => r.oc)
+  }, [ano.linhas, filtros])
   const [aberto, setAberto] = useState<{ tipo: 'oc' | 's'; valor: string } | null>(null)
 
   const calc = useMemo(() => {
@@ -44,12 +50,12 @@ export default function OcasioesStatus({ filtros, periodo }: { filtros: Filtros;
 
   return (
     <>
-      <Secao titulo="Ocasiões" sub={`Reservas criadas · ${periodo.label} vs ${periodo.labelAnt} · ${pct(taxa(calc.comOcasiao, total))} das reservas têm ocasião (só a central preenche) · clique para ver as reservas`}
+      <Secao titulo="Ocasiões" sub={`Reservas criadas · ${periodo.label} vs ${periodo.labelAnt} e vs ${periodo.labelAno} · ${pct(taxa(calc.comOcasiao, total))} das reservas têm ocasião (só a central preenche) · clique para ver as reservas`}
         direita={<button style={botao} onClick={() => exportarExcel(`reservas_ocasioes_${periodo.inicio}_a_${periodo.fim}`, calc.atual)}>Exportar Excel</button>}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead><tr>
-              <th style={th}>Ocasião</th><th style={thNum}>Reservas</th><th style={thNum}>% c/ ocasião</th><th style={thNum}>vs ant.</th>
+              <th style={th}>Ocasião</th><th style={thNum}>Reservas</th><th style={thNum}>% c/ ocasião</th><th style={thNum}>vs ant.</th><th style={thNum}>vs ano ant.</th>
               <th style={thNum}>Pessoas</th><th style={thNum}>Mesa média</th><th style={thNum}>B2B</th><th style={thNum}>Sentadas</th><th style={thNum}>No-show</th>
             </tr></thead>
             <tbody>
@@ -61,6 +67,7 @@ export default function OcasioesStatus({ filtros, periodo }: { filtros: Filtros;
                     <td style={{ ...tdNum, fontWeight: 600 }}>{n0(o.reservas)}</td>
                     <td style={tdNum}>{sem ? '—' : pct(taxa(o.reservas, calc.comOcasiao))}</td>
                     <td style={tdNum}><Var v={variacao(o.reservas, o.ant)} /></td>
+                    <td style={tdNum}>{anoPorOc ? <Var v={variacao(o.reservas, (anoPorOc.get(o.oc) || []).length)} /> : <span style={{ color: C.muito }}>—</span>}</td>
                     <td style={tdNum}>{n0(o.pessoas)}</td>
                     <td style={tdNum}>{n1(o.tam)}</td>
                     <td style={{ ...tdNum, color: o.b2b ? C.b2b : C.muito }}>{n0(o.b2b)}</td>
