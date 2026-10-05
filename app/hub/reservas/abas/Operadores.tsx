@@ -2,14 +2,20 @@
 
 import { useMemo, useState } from 'react'
 import {
-  type Filtros, type Linha, type Periodo, GRUPOS, agruparPor, aplicarFiltros, exportarExcel, grupoLabel,
-  n0, n1, pct, resumir, taxa, useLinhas, variacao,
+  type Config, type Filtros, type Linha, type Periodo, GRUPOS, agruparPor, aplicarFiltros, exportarExcel, grupoLabel,
+  n0, n1, pct, resumir, taxa, temHistoricoDesde, useLinhas, variacao,
 } from '../utils'
 import { Aviso, C, Drawer, Secao, Spinner, Var, botao, card, td, tdNum, th, thNum } from '../ui'
 import TabelaReservas from './TabelaReservas'
 
-export default function Operadores({ filtros, periodo }: { filtros: Filtros; periodo: Periodo }) {
+export default function Operadores({ config, filtros, periodo }: { config: Config; filtros: Filtros; periodo: Periodo }) {
   const dados = useLinhas('criacao', periodo.antInicio, periodo.fim)
+  const temAno = temHistoricoDesde(config, periodo.anoInicio)
+  const ano = useLinhas('criacao', temAno ? periodo.anoInicio : '', temAno ? periodo.anoFim : '')
+  const anoPorOp = useMemo(() => {
+    if (!ano.linhas) return null
+    return agruparPor(aplicarFiltros(ano.linhas, filtros), r => r.o)
+  }, [ano.linhas, filtros])
   const [aberto, setAberto] = useState<string | null>(null)
 
   const calc = useMemo(() => {
@@ -44,13 +50,13 @@ export default function Operadores({ filtros, periodo }: { filtros: Filtros; per
         ))}
       </div>
 
-      <Secao titulo="Reservas por operador" sub={`Reservas criadas · ${periodo.label} vs ${periodo.labelAnt} · use o filtro de origem no topo (Time de reservas, Online, Corporativo / outros) · clique para ver as reservas`}
+      <Secao titulo="Reservas por operador" sub={`Reservas criadas · ${periodo.label} vs ${periodo.labelAnt} e vs ${periodo.labelAno} · use o filtro de origem no topo (Time de reservas, Online, Corporativo / outros) · clique para ver as reservas`}
         direita={<button style={botao} onClick={() => exportarExcel(`reservas_operadores_${periodo.inicio}_a_${periodo.fim}`, calc.atual)}>Exportar Excel</button>}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead><tr>
               <th style={th}>Operador</th><th style={th}>Origem</th><th style={thNum}>Reservas</th><th style={thNum}>% do total</th>
-              <th style={thNum}>vs ant.</th><th style={thNum}>Pessoas</th><th style={thNum}>Mesa média</th><th style={thNum}>B2B</th>
+              <th style={thNum}>vs ant.</th><th style={thNum}>vs ano ant.</th><th style={thNum}>Pessoas</th><th style={thNum}>Mesa média</th><th style={thNum}>B2B</th>
               <th style={thNum}>Sentadas</th><th style={thNum}>Confirm.</th><th style={thNum}>Pendentes</th><th style={thNum}>Cancel.</th><th style={thNum}>No-show</th>
             </tr></thead>
             <tbody>
@@ -61,6 +67,7 @@ export default function Operadores({ filtros, periodo }: { filtros: Filtros; per
                   <td style={{ ...tdNum, fontWeight: 600 }}>{n0(l.reservas)}</td>
                   <td style={tdNum}>{pct(taxa(l.reservas, calc.total))}</td>
                   <td style={tdNum}><Var v={variacao(l.reservas, l.ant)} /></td>
+                  <td style={tdNum}>{anoPorOp ? <Var v={variacao(l.reservas, (anoPorOp.get(l.o) || []).length)} /> : <span style={{ color: C.muito }}>—</span>}</td>
                   <td style={tdNum}>{n0(l.pessoas)}</td>
                   <td style={tdNum}>{n1(l.tam)}</td>
                   <td style={{ ...tdNum, color: l.b2b ? C.b2b : C.muito }}>{n0(l.b2b)}</td>
@@ -71,7 +78,7 @@ export default function Operadores({ filtros, periodo }: { filtros: Filtros; per
                   <td style={tdNum}>{pct(taxa(l.noshow, l.reservas))}</td>
                 </tr>
               ))}
-              {!calc.linhas.length && <tr><td style={{ ...td, color: C.suave }} colSpan={13}>Nenhuma reserva no período com esses filtros.</td></tr>}
+              {!calc.linhas.length && <tr><td style={{ ...td, color: C.suave }} colSpan={14}>Nenhuma reserva no período com esses filtros.</td></tr>}
             </tbody>
           </table>
         </div>
