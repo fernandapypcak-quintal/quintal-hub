@@ -4,7 +4,10 @@
 import { useEffect, useState } from 'react'
 
 // ─── Tipos ────────────────────────────────────────────────────────────
-export type Grupo = 'time' | 'online' | 'corp'
+// Origem da reserva por atributos da própria reserva (não depende de operador → comparável entre anos)
+export type Grupo = 'central' | 'online' | 'b2b'
+// Quem fez (depende da lista de operadores de hoje → só para meta e aba Operadores)
+export type TipoOp = 'time' | 'outros' | 'online'
 export type Linha = {
   id: string; u: string; p: number; dc: string; h: string; dr: string
   c: string; og: string; o: string; t: string; m: boolean
@@ -18,10 +21,16 @@ export type Config = {
 export type Filtros = { grupos: Grupo[]; unidades: string[] }
 
 export const GRUPOS: { id: Grupo; label: string; cor: string }[] = [
-  { id: 'time', label: 'Time de reservas', cor: '#0F766E' },
+  { id: 'central', label: 'Central B2C', cor: '#0F766E' },
   { id: 'online', label: 'Online', cor: '#97A624' },
-  { id: 'corp', label: 'Corporativo / outros', cor: '#0ea5e9' },
+  { id: 'b2b', label: 'B2B / corporativo', cor: '#0ea5e9' },
 ]
+export const TIPOS_OP: { id: TipoOp; label: string }[] = [
+  { id: 'time', label: 'Time de reservas' },
+  { id: 'outros', label: 'Outros operadores' },
+  { id: 'online', label: 'Online' },
+]
+export const tipoOp = (r: Linha): TipoOp => (r.m ? 'time' : r.t === 'Online' ? 'online' : 'outros')
 export const grupoLabel = (g: Grupo) => GRUPOS.find(x => x.id === g)?.label || g
 
 export const STATUS: { id: string; label: string; cor: string }[] = [
@@ -160,6 +169,22 @@ export function chavesGrao(ini: string, fim: string, g: Grao) {
   return out
 }
 
+// ─── Projeção do mês (média de cada dia da semana nas últimas 4 semanas) ─────
+// `linhas` precisa cobrir pelo menos os 28 dias antes de hoje + o mês atual.
+export function projetarMes(linhas: Linha[], hoje: string) {
+  const mes = hoje.slice(0, 7)
+  const fimMes = ultimoDia(mes)
+  const porData: Record<string, number> = {}
+  linhas.forEach(r => { porData[r.dc] = (porData[r.dc] || 0) + 1 })
+  const realizado = linhas.filter(r => r.dc.startsWith(mes)).length
+  const soma = [0, 0, 0, 0, 0, 0, 0], qtd = [0, 0, 0, 0, 0, 0, 0]
+  for (let i = 1; i <= 28; i++) { const d = addDias(hoje, -i); soma[diaSemana(d)] += porData[d] || 0; qtd[diaSemana(d)]++ }
+  const media = soma.map((x, i) => (qtd[i] ? x / qtd[i] : 0))
+  let projecao = realizado + Math.max(0, media[diaSemana(hoje)] - (porData[hoje] || 0))
+  for (let d = addDias(hoje, 1); d <= fimMes; d = addDias(d, 1)) projecao += media[diaSemana(d)]
+  return { realizado, projecao: Math.round(projecao), ritmo: media.reduce((a, b) => a + b, 0) / 7, diasRestantes: diffDias(hoje, fimMes) + 1 }
+}
+
 // ─── Agregações ─────────────────────────────────────────────────────────
 export function aplicarFiltros(l: Linha[], f: Filtros) {
   return l.filter(r => f.grupos.includes(r.g) && (!f.unidades.length || f.unidades.includes(r.u)))
@@ -230,14 +255,22 @@ export function histPorCasa(h: Historico, base: 'criacao' | 'reserva', f: Filtro
   return out
 }
 
-// Média dos meses FECHADOS (antes do mês atual). Na base "reserva" o 1º mês fica de fora,
-// porque reservas daquele mês feitas antes do início da carga não estão na base.
+// Início do histórico: janeiro do ano passado (meses antes disso têm só reservas soltas na base).
+export function inicioHistorico(h: Historico, mesAtual: string) {
+  const jan = `${Number(mesAtual.slice(0, 4)) - 1}-01`
+  return h.primeiroMes && h.primeiroMes > jan ? h.primeiroMes : jan
+}
+
+// Média dos meses FECHADOS (antes do mês atual), a partir de janeiro do ano passado.
+// Na base "reserva", se o histórico começa nesse mesmo mês, ele fica de fora
+// (reservas daquele mês feitas antes do início da carga não estão na base).
 export type MediaHist = { reservas: number; pessoas: number; sentada: number | null; noshow: number | null; meses: number; desde: string }
 export function mediaHistorica(mapa: Map<string, HistMes>, h: Historico, base: 'criacao' | 'reserva', mesAtual: string): MediaHist | null {
   if (!h.primeiroMes) return null
   // casa sem reservas num mês conta como zero; começa no 1º mês em que a casa (ou o filtro) teve reserva
-  const comDado = Array.from(mapa.keys()).filter(m => mapa.get(m)!.reservas > 0).sort()
-  const inicioBase = base === 'criacao' ? h.primeiroMes : addMeses(h.primeiroMes, 1)
+  const ini = inicioHistorico(h, mesAtual)
+  const comDado = Array.from(mapa.keys()).filter(m => m >= ini && mapa.get(m)!.reservas > 0).sort()
+  const inicioBase = base === 'reserva' && ini <= h.primeiroMes ? addMeses(ini, 1) : ini
   const desde = comDado[0] && comDado[0] > inicioBase ? comDado[0] : inicioBase
   const meses: string[] = []
   for (let m = desde; m < mesAtual; m = addMeses(m, 1)) meses.push(m)
@@ -274,8 +307,8 @@ export async function exportarExcel(nome: string, linhas: Linha[]) {
   const dados = linhas.map(r => ({
     'ID reserva': r.id, Unidade: r.u, 'Data da reserva': r.dr ? dataLonga(r.dr) : '',
     'Data de criação': dataLonga(r.dc), 'Hora de criação': r.h, Pessoas: r.p,
-    Grupo: grupoLabel(r.g), 'B2B': r.b ? 'Sim' : 'Não', Canal: r.c, Origem: r.og, Operador: r.o,
-    'Time do operador': r.t, 'Conta na meta': r.m ? 'Sim' : 'Não', Ocasião: r.oc, Cardápio: r.cd,
+    Origem: grupoLabel(r.g), 'B2B': r.b ? 'Sim' : 'Não', Canal: r.c, 'Origem (Get In)': r.og, Operador: r.o,
+    'Quem fez': TIPOS_OP.find(x => x.id === tipoOp(r))?.label || '', 'Time do operador': r.t, 'Conta na meta': r.m ? 'Sim' : 'Não', Ocasião: r.oc, Cardápio: r.cd,
     'Possui criança': r.cr, Status: statusLabel(r.s),
   }))
   const ws = XLSX.utils.json_to_sheet(dados)
@@ -296,7 +329,7 @@ function descompactar(c: Compacta): Linha[] {
       id: String(r[0]), u: d[r[1] as number], p: Number(r[2]) || 0, dc: String(r[3]), h: String(r[4]), dr: String(r[5]),
       c: d[r[6] as number], og: d[r[7] as number], o: d[r[8] as number], t, m,
       oc: d[r[11] as number], cd: d[r[12] as number], cr: d[r[13] as number], s: d[r[14] as number], b: r[15] === 1,
-      g: m ? 'time' : t === 'Online' ? 'online' : 'corp',
+      g: r[15] === 1 ? 'b2b' : d[r[6] as number] === 'Painel Operacional' ? 'central' : 'online',
     }
   })
 }
