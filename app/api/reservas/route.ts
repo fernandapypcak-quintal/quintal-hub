@@ -8,6 +8,7 @@
 //   ?acao=config                               metas, meses disponíveis, unidades, hoje
 //   ?acao=criacao&inicio=AAAA-MM-DD&fim=…      reservas CRIADAS no período
 //   ?acao=reserva&inicio=AAAA-MM-DD&fim=…      reservas com DATA DA RESERVA no período
+//   ?acao=historico                            agregado mensal (média histórica e ano anterior)
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getUserAccess, hasDashboardAccess } from '@/lib/permissions'
@@ -23,6 +24,10 @@ export const maxDuration = 60
 
 type GasResp = { ok?: boolean; erro?: string; status?: number } & Record<string, unknown>
 type GasTabela = GasResp & { atualizado?: string; cols: string[]; rows: string[][] }
+type GasHistorico = GasResp & {
+  gerado?: string; primeiroMes?: string
+  criacao?: Record<string, number[]>; reserva?: Record<string, number[]>
+}
 type GasConfig = GasResp & {
   atualizado?: string; hoje?: string; meses?: string[]; mesesDr?: string[]; unidades?: string[]
   metas?: { mes: string; faixas: number[]; desafio: number | null }[]
@@ -99,6 +104,18 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({
         ok: true, restrito, atualizado: c.atualizado || '', hoje: c.hoje || '',
         metas: c.metas || [], meses: c.meses || [], mesesDr: c.mesesDr || [], unidades,
+      })
+    }
+
+    if (acao === 'historico') {
+      const h = await gas<GasHistorico>({ acao: 'historico' })
+      if (!h.criacao || !h.reserva) throw new Error(DESATUALIZADO)
+      // chave = mes|unidade|grupo — remove unidades não liberadas
+      const filtra = (o: Record<string, number[]>) =>
+        Object.fromEntries(Object.entries(o).filter(([k]) => permitida(k.split('|')[1] || '')))
+      return NextResponse.json({
+        ok: true, gerado: h.gerado || '', primeiroMes: h.primeiroMes || '',
+        criacao: filtra(h.criacao), reserva: filtra(h.reserva),
       })
     }
 
