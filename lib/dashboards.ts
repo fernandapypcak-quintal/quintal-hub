@@ -20,6 +20,7 @@ export const DASHBOARDS: Dashboard[] = [
   { id: 'kids', name: 'Kids', description: 'Crianças, Combo Quintal Feliz, shows e infláveis', url: '', internalPath: '/hub/kids', color: '#DB2777', icon: '🎈' },
   { id: 'metas', name: 'Metas Regionais', description: 'Acompanhamento de metas por unidade — gerentes regionais', url: '', internalPath: '/hub/metas', color: '#7C3AED', icon: '🎯' },
   { id: 'bonus', name: 'Meta de Bônus', description: 'Acompanhamento da meta coletiva de bônus (CMV, Custo c/ Pessoal, LOL, NPS)', url: '', internalPath: '/hub/bonus', color: '#97A624', icon: '🏆' },
+  { id: 'vendas', name: 'Vendas por Produto', description: 'Vendas diárias ZIG por produto, SKU, loja e canal', url: '', internalPath: '/hub/vendas', color: '#15803D', icon: '🍢' },
   { id: 'gorjeta', name: 'Gorjeta', description: 'Distribuição de gorjeta por unidade — Adiantamento e Mensal', url: '', internalPath: '/hub/gorjeta', color: '#97A624', icon: '💰' },
   { id: 'reservas', name: 'Reservas', description: 'Meta do time de reservas, reservas por dia, operadoras e agenda das casas', url: '', internalPath: '/hub/reservas', color: '#0F766E', icon: '📅' },
 ]
