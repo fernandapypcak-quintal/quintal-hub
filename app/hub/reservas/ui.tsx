@@ -70,8 +70,11 @@ export function Secao({ titulo, sub, children, direita }: { titulo: string; sub?
   )
 }
 
-export function Kpi({ label, valor, detalhe, anterior, v, inverso, cor }: {
-  label: string; valor: string; detalhe?: string; anterior?: string; v?: number | null; inverso?: boolean; cor?: string
+export function Kpi({ label, valor, detalhe, anterior, v, anoAnterior, vAno, inverso, cor }: {
+  label: string; valor: string; detalhe?: string
+  anterior?: string; v?: number | null          // vs período anterior
+  anoAnterior?: string; vAno?: number | null    // vs ano anterior
+  inverso?: boolean; cor?: string
 }) {
   return (
     <div style={{ ...card, padding: '14px 16px', borderTop: cor ? `3px solid ${cor}` : card.border }}>
@@ -80,8 +83,14 @@ export function Kpi({ label, valor, detalhe, anterior, v, inverso, cor }: {
       {detalhe && <div style={{ fontSize: 12, color: C.suave, marginTop: 2 }}>{detalhe}</div>}
       {anterior !== undefined && (
         <div style={{ fontSize: 12, color: C.suave, marginTop: 4, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <span>ant. <span style={MONO}>{anterior}</span></span>
+          <span>anterior <span style={MONO}>{anterior}</span></span>
           <Var v={v ?? null} inverso={inverso} />
+        </div>
+      )}
+      {anoAnterior !== undefined && (
+        <div style={{ fontSize: 12, color: C.suave, marginTop: 2, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <span>ano anterior <span style={MONO}>{anoAnterior}</span></span>
+          <Var v={vAno ?? null} inverso={inverso} />
         </div>
       )}
     </div>
