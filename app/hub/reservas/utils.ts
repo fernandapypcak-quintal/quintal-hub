@@ -92,35 +92,55 @@ export const PRESETS: { id: Preset; label: string }[] = [
   { id: 'mes', label: 'Mês atual' }, { id: 'mes_ant', label: 'Mês anterior' },
   { id: 'custom', label: 'Personalizado' },
 ]
-export type Periodo = { inicio: string; fim: string; antInicio: string; antFim: string; label: string; labelAnt: string }
+export type Periodo = {
+  inicio: string; fim: string; label: string
+  antInicio: string; antFim: string; labelAnt: string
+  anoInicio: string; anoFim: string; labelAno: string
+}
+
+// Mesmo dia do ano anterior (29/02 vira 28/02)
+export function addAnos(iso: string, n: number) {
+  const y = Number(iso.slice(0, 4)) + n
+  const m = iso.slice(5, 7)
+  const d = Math.min(Number(iso.slice(8, 10)), diasNoMes(`${y}-${m}`))
+  return `${y}-${m}-${String(d).padStart(2, '0')}`
+}
 
 export function calcularPeriodo(p: Preset, hoje: string, cIni: string, cFim: string): Periodo {
-  const mk = (inicio: string, fim: string, antInicio: string, antFim: string, labelAnt: string): Periodo => ({
-    inicio, fim, antInicio, antFim, labelAnt,
+  // ano anterior: períodos curtos alinham o dia da semana (364 dias); meses usam as mesmas datas do calendário
+  const semanaAno = (i: string, f: string, labelAno: string) => ({ anoInicio: addDias(i, -364), anoFim: addDias(f, -364), labelAno })
+  const calAno = (i: string, f: string, labelAno: string) => ({ anoInicio: addAnos(i, -1), anoFim: addAnos(f, -1), labelAno })
+  const mk = (inicio: string, fim: string, antInicio: string, antFim: string, labelAnt: string,
+    ano: { anoInicio: string; anoFim: string; labelAno: string }): Periodo => ({
+    inicio, fim, antInicio, antFim, labelAnt, ...ano,
     label: inicio === fim ? dataLonga(inicio) : `${dataCurta(inicio)} a ${dataLonga(fim)}`,
   })
   const mes = hoje.slice(0, 7)
   const mesAnt = addMeses(mes, -1)
   switch (p) {
-    case 'hoje': return mk(hoje, hoje, addDias(hoje, -7), addDias(hoje, -7), 'mesmo dia da semana passada')
-    case 'ontem': return mk(addDias(hoje, -1), addDias(hoje, -1), addDias(hoje, -8), addDias(hoje, -8), 'mesmo dia da semana passada')
-    case 'semana': { const s = segunda(hoje); return mk(s, hoje, addDias(s, -7), addDias(hoje, -7), 'mesmo período da semana passada') }
-    case 'semana_ant': { const s = addDias(segunda(hoje), -7); return mk(s, addDias(s, 6), addDias(s, -7), addDias(s, -1), 'semana anterior') }
-    case '7d': return mk(addDias(hoje, -6), hoje, addDias(hoje, -13), addDias(hoje, -7), '7 dias anteriores')
-    case '30d': return mk(addDias(hoje, -29), hoje, addDias(hoje, -59), addDias(hoje, -30), '30 dias anteriores')
+    case 'hoje': return mk(hoje, hoje, addDias(hoje, -7), addDias(hoje, -7), 'mesmo dia da semana passada',
+      semanaAno(hoje, hoje, 'mesmo dia da semana do ano passado'))
+    case 'ontem': { const o = addDias(hoje, -1); return mk(o, o, addDias(o, -7), addDias(o, -7), 'mesmo dia da semana passada', semanaAno(o, o, 'mesmo dia da semana do ano passado')) }
+    case 'semana': { const s = segunda(hoje); return mk(s, hoje, addDias(s, -7), addDias(hoje, -7), 'mesmo período da semana passada', semanaAno(s, hoje, 'mesma semana do ano passado')) }
+    case 'semana_ant': { const s = addDias(segunda(hoje), -7); return mk(s, addDias(s, 6), addDias(s, -7), addDias(s, -1), 'semana anterior', semanaAno(s, addDias(s, 6), 'mesma semana do ano passado')) }
+    case '7d': return mk(addDias(hoje, -6), hoje, addDias(hoje, -13), addDias(hoje, -7), '7 dias anteriores', semanaAno(addDias(hoje, -6), hoje, 'mesmos 7 dias do ano passado'))
+    case '30d': return mk(addDias(hoje, -29), hoje, addDias(hoje, -59), addDias(hoje, -30), '30 dias anteriores', semanaAno(addDias(hoje, -29), hoje, 'mesmos 30 dias do ano passado'))
     case 'mes': {
       const dia = Math.min(Number(hoje.slice(8, 10)), diasNoMes(mesAnt))
-      return mk(primeiroDia(mes), hoje, primeiroDia(mesAnt), `${mesAnt}-${String(dia).padStart(2, '0')}`, `mesmo período de ${nomeMes(mesAnt)}`)
+      return mk(primeiroDia(mes), hoje, primeiroDia(mesAnt), `${mesAnt}-${String(dia).padStart(2, '0')}`, `mesmo período de ${nomeMes(mesAnt)}`,
+        calAno(primeiroDia(mes), hoje, `mesmo período de ${nomeMes(addMeses(mes, -12))}`))
     }
     case 'mes_ant': {
       const m2 = addMeses(mesAnt, -1)
-      return mk(primeiroDia(mesAnt), ultimoDia(mesAnt), primeiroDia(m2), ultimoDia(m2), nomeMes(m2))
+      return mk(primeiroDia(mesAnt), ultimoDia(mesAnt), primeiroDia(m2), ultimoDia(m2), nomeMes(m2),
+        calAno(primeiroDia(mesAnt), ultimoDia(mesAnt), nomeMes(addMeses(mesAnt, -12))))
     }
     case 'custom': {
-      const ini = cIni && cFim && cIni <= cFim ? cIni : primeiroDia(mes)
-      const fim = cIni && cFim && cIni <= cFim ? cFim : hoje
+      const ok = cIni && cFim && cIni <= cFim
+      const ini = ok ? cIni : primeiroDia(mes)
+      const fim = ok ? cFim : hoje
       const n = diffDias(ini, fim) + 1
-      return mk(ini, fim, addDias(ini, -n), addDias(ini, -1), `${n} dias anteriores`)
+      return mk(ini, fim, addDias(ini, -n), addDias(ini, -1), `${n} dias anteriores`, calAno(ini, fim, 'mesmo período do ano passado'))
     }
   }
 }
@@ -169,6 +189,82 @@ export function agruparPor<K extends string>(l: Linha[], chave: (r: Linha) => K)
   const m = new Map<K, Linha[]>()
   for (const r of l) { const k = chave(r); const a = m.get(k); if (a) a.push(r); else m.set(k, [r]) }
   return m
+}
+
+// ─── Histórico mensal (agregado do Apps Script) ──────────────────────────
+// criacao[mes|unidade|grupo] = [reservas, pessoas, b2b]
+// reserva[mes|unidade|grupo] = [reservas, pessoas, b2b, canceladas, base, sentadas, noshow]
+export type Historico = { gerado: string; primeiroMes: string; criacao: Record<string, number[]>; reserva: Record<string, number[]> }
+export type HistMes = { reservas: number; pessoas: number; b2b: number; canceladas: number; base: number; sentadas: number; noshow: number }
+const vazio = (): HistMes => ({ reservas: 0, pessoas: 0, b2b: 0, canceladas: 0, base: 0, sentadas: 0, noshow: 0 })
+
+export function histMensal(h: Historico, base: 'criacao' | 'reserva', f: Filtros, casa?: string) {
+  const out = new Map<string, HistMes>()
+  for (const [k, v] of Object.entries(h[base])) {
+    const [mes, u, g] = k.split('|')
+    if (!f.grupos.includes(g as Grupo)) continue
+    if (f.unidades.length && !f.unidades.includes(u)) continue
+    if (casa && u !== casa) continue
+    const a = out.get(mes) || vazio()
+    a.reservas += v[0] || 0; a.pessoas += v[1] || 0; a.b2b += v[2] || 0
+    a.canceladas += v[3] || 0; a.base += v[4] || 0; a.sentadas += v[5] || 0; a.noshow += v[6] || 0
+    out.set(mes, a)
+  }
+  return out
+}
+
+// Por casa: Map<unidade, Map<mes, HistMes>>
+export function histPorCasa(h: Historico, base: 'criacao' | 'reserva', f: Filtros) {
+  const out = new Map<string, Map<string, HistMes>>()
+  for (const [k, v] of Object.entries(h[base])) {
+    const [mes, u, g] = k.split('|')
+    if (!f.grupos.includes(g as Grupo)) continue
+    if (f.unidades.length && !f.unidades.includes(u)) continue
+    const porMes = out.get(u) || new Map<string, HistMes>()
+    const a = porMes.get(mes) || vazio()
+    a.reservas += v[0] || 0; a.pessoas += v[1] || 0; a.b2b += v[2] || 0
+    a.canceladas += v[3] || 0; a.base += v[4] || 0; a.sentadas += v[5] || 0; a.noshow += v[6] || 0
+    porMes.set(mes, a)
+    out.set(u, porMes)
+  }
+  return out
+}
+
+// Média dos meses FECHADOS (antes do mês atual). Na base "reserva" o 1º mês fica de fora,
+// porque reservas daquele mês feitas antes do início da carga não estão na base.
+export type MediaHist = { reservas: number; pessoas: number; sentada: number | null; noshow: number | null; meses: number; desde: string }
+export function mediaHistorica(mapa: Map<string, HistMes>, h: Historico, base: 'criacao' | 'reserva', mesAtual: string): MediaHist | null {
+  if (!h.primeiroMes) return null
+  // casa sem reservas num mês conta como zero; começa no 1º mês em que a casa (ou o filtro) teve reserva
+  const comDado = Array.from(mapa.keys()).filter(m => mapa.get(m)!.reservas > 0).sort()
+  const inicioBase = base === 'criacao' ? h.primeiroMes : addMeses(h.primeiroMes, 1)
+  const desde = comDado[0] && comDado[0] > inicioBase ? comDado[0] : inicioBase
+  const meses: string[] = []
+  for (let m = desde; m < mesAtual; m = addMeses(m, 1)) meses.push(m)
+  if (!meses.length) return null
+  let r = 0, p = 0, b = 0, s = 0, n = 0
+  for (const m of meses) { const x = mapa.get(m); if (!x) continue; r += x.reservas; p += x.pessoas; b += x.base; s += x.sentadas; n += x.noshow }
+  return { reservas: r / meses.length, pessoas: p / meses.length, sentada: b ? s / b : null, noshow: b ? n / b : null, meses: meses.length, desde }
+}
+
+// Existe base para comparar com o ano anterior?
+export const temHistoricoDesde = (config: Config, inicio: string) => !!config.meses[0] && inicio >= primeiroDia(config.meses[0])
+
+let cacheHist: Promise<Historico> | null = null
+export function useHistorico(versao = 0) {
+  const [estado, setEstado] = useState<{ v: number; hist: Historico | null; erro: string }>({ v: -1, hist: null, erro: '' })
+  useEffect(() => {
+    let vivo = true
+    if (!cacheHist) {
+      cacheHist = getJSON<Historico>('acao=historico')
+      cacheHist.catch(() => { cacheHist = null })
+    }
+    cacheHist
+      .then(hist => { if (vivo) setEstado({ v: versao, hist, erro: '' }) })
+      .catch(e => { if (vivo) setEstado({ v: versao, hist: null, erro: (e as Error).message }) })
+    return () => { vivo = false }
+  }, [versao])
+  return { hist: estado.hist, erro: estado.erro }
 }
 
 // ─── Export Excel ─────────────────────────────────────────────────────────
@@ -226,7 +322,7 @@ export function carregar(acao: 'criacao' | 'reserva', inicio: string, fim: strin
   return p
 }
 
-export function limparCache() { cache.clear() }
+export function limparCache() { cache.clear(); cacheHist = null }
 
 // Hook: carrega as linhas de um período (sem setState síncrono dentro do efeito)
 export function useLinhas(acao: 'criacao' | 'reserva', inicio: string, fim: string, versao = 0) {
@@ -240,8 +336,9 @@ export function useLinhas(acao: 'criacao' | 'reserva', inicio: string, fim: stri
       .catch(e => { if (vivo) setEstado({ chave, linhas: null, erro: (e as Error).message }) })
     return () => { vivo = false }
   }, [acao, inicio, fim, chave])
+  const desligado = !inicio || !fim
   const pronto = estado.chave === chave
-  return { linhas: pronto ? estado.linhas : null, erro: pronto ? estado.erro : '', carregando: !pronto }
+  return { linhas: pronto ? estado.linhas : null, erro: pronto ? estado.erro : '', carregando: !pronto && !desligado }
 }
 
 export function useConfig(versao = 0) {
