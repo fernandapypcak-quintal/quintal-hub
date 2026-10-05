@@ -30,12 +30,14 @@ const ABAS: { id: Aba; icon: string; label: string; curto: string; base: 'criaca
 ]
 
 // Origem: combinações prontas dos 3 grupos
+// Origem pela própria reserva (canal + B2B), não pelo operador — vale para hoje e para o histórico
 const ORIGENS: { id: string; label: string; grupos: Grupo[] }[] = [
-  { id: 'todas', label: 'Todas as origens', grupos: ['time', 'online', 'corp'] },
-  { id: 'time', label: 'Time de reservas', grupos: ['time'] },
-  { id: 'central', label: 'Central (time + corporativo)', grupos: ['time', 'corp'] },
+  { id: 'todas', label: 'Todas as origens', grupos: ['central', 'online', 'b2b'] },
+  { id: 'b2c', label: 'B2C (central + online)', grupos: ['central', 'online'] },
+  { id: 'central', label: 'Central B2C', grupos: ['central'] },
   { id: 'online', label: 'Online', grupos: ['online'] },
-  { id: 'corp', label: 'Corporativo / outros', grupos: ['corp'] },
+  { id: 'b2b', label: 'B2B / corporativo', grupos: ['b2b'] },
+  { id: 'central_tudo', label: 'Central (B2C + B2B)', grupos: ['central', 'b2b'] },
 ]
 
 const selectStyle: React.CSSProperties = {
@@ -125,8 +127,9 @@ export default function ReservasClientApp() {
       {aba === 'calendario' && <Calendario config={config} filtros={filtros} hoje={hoje} />}
       {aba === 'casas' && <PorCasa config={config} filtros={filtros} hoje={hoje} />}
       <div style={{ fontSize: 11.5, color: '#888', lineHeight: 1.6 }}>
-        <b>Time de reservas</b> = operadores da aba OPERADORES (contam na meta) · <b>Online</b> = app, link e Google, sem operador ·{' '}
-        <b>Corporativo / outros</b> = demais operadores (eventos e não cadastrados) · <b>B2B</b> = origem Pipe ou ocasião corporativa.
+        <b>Central B2C</b> = feita pela central (Painel Operacional), sem B2B · <b>Online</b> = app, link e Google ·{' '}
+        <b>B2B / corporativo</b> = origem Pipe ou ocasião corporativa, qualquer operador · <b>Time de reservas</b> = operadores da aba OPERADORES, só para a meta e a aba Operadores
+        (o histórico usa as origens acima porque não depende de quem estava na equipe).
       </div>
     </div>
   )
