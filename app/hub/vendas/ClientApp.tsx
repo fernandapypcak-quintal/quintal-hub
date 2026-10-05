@@ -145,7 +145,7 @@ function Kpi({ label, valor, sub, cor }: { label: string; valor: string; sub?: s
   return (
     <div style={{ ...card, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
       <span style={{ fontSize: 12, color: C.suave }}>{label}</span>
-      <span style={{ ...MONO, fontSize: 22, fontWeight: 500, color: cor || C.texto, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{valor}</span>
+      <span style={{ ...MONO, fontSize: 'clamp(16px, 1.45vw, 22px)', fontWeight: 500, color: cor || C.texto, whiteSpace: 'nowrap', letterSpacing: '-0.02em' }}>{valor}</span>
       {sub && <span style={{ fontSize: 11.5, color: C.muito }}>{sub}</span>}
     </div>
   )
@@ -938,7 +938,8 @@ export default function VendasClientApp() {
             )}
 
             {/* KPIs */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+            <style>{`.vkpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}@media(max-width:980px){.vkpis{grid-template-columns:repeat(2,minmax(0,1fr))}}`}</style>
+            <div className="vkpis">
               <Kpi label="Faturamento" valor={brl0(k.faturamento)} sub={`média de ${brl0(k.mediaDiaria)} por dia`} />
               <Kpi label="Itens vendidos" valor={num(k.itens)} sub={`${num(k.produtosDistintos)} produtos diferentes`} />
               <Kpi label={porItem ? 'Transações com o item' : 'Transações'} valor={num(k.transacoes)}
@@ -964,7 +965,7 @@ export default function VendasClientApp() {
             {/* Por dia */}
             <Painel titulo="Faturamento por dia" direita={<span style={{ fontSize: 12, color: C.muito }}>Clique num dia pra ver as vendas linha a linha</span>}>
               <div style={{ height: 240, padding: '0 8px 12px' }}>
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
                   <BarChart data={dados.porDia} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                     <CartesianGrid vertical={false} stroke="#F0F0F0" />
                     <XAxis dataKey="dia" tickFormatter={dataCurta} tick={{ fontSize: 11, fill: '#999' }} tickLine={false} axisLine={false} minTickGap={12} />
