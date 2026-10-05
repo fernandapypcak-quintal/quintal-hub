@@ -120,8 +120,8 @@ export default function ReservasClientApp() {
     <div key={versao} style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 1440, margin: '0 auto' }}>
       {erro && <Aviso>{erro}</Aviso>}
       {aba === 'resumo' && <Resumo config={config} filtros={filtros} periodo={periodo} grao={grao} setGrao={setGrao} hoje={hoje} />}
-      {aba === 'operadores' && <Operadores filtros={filtros} periodo={periodo} />}
-      {aba === 'ocasioes' && <OcasioesStatus filtros={filtros} periodo={periodo} />}
+      {aba === 'operadores' && <Operadores config={config} filtros={filtros} periodo={periodo} />}
+      {aba === 'ocasioes' && <OcasioesStatus config={config} filtros={filtros} periodo={periodo} />}
       {aba === 'calendario' && <Calendario config={config} filtros={filtros} hoje={hoje} />}
       {aba === 'casas' && <PorCasa config={config} filtros={filtros} hoje={hoje} />}
       <div style={{ fontSize: 11.5, color: '#888', lineHeight: 1.6 }}>
@@ -187,7 +187,7 @@ export default function ReservasClientApp() {
 
         {abaAtual.base === 'criacao' && config && (
           <div style={{ background: '#fff', borderBottom: '0.5px solid #E8E8E2', padding: '7px 20px', fontSize: 12, color: '#5a5c5f', flexShrink: 0 }}>
-            Criadas de <b>{periodo.label}</b> · comparado com {periodo.labelAnt}
+            Criadas de <b>{periodo.label}</b> · comparado com {periodo.labelAnt} e com {periodo.labelAno}
           </div>
         )}
 
