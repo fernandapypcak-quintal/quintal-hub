@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useOnePage, usePorLojaDetalhe } from '../../useComercial'
+import { useOnePage } from '../../useComercial'
 
 function fmtBRLCompacto(v: number) {
   if (!v && v !== 0) return '—'
@@ -732,93 +732,6 @@ type TicketBucket = { qtd: number; receita: number; pax: number; ticketMedio: nu
 type LinhaGranular = { periodo: string; label: string; leads: number; fechados: number; taxa: number; receita: number; deals: DealGranular[]; fechamento: TicketBucket; competencia: TicketBucket }
 type DadosGranular = { mensal: LinhaGranular[]; semanal: LinhaGranular[]; diario: LinhaGranular[] }
 
-// Ranking por unidade (loja), ano atual x anterior, no mesmo estilo do
-// relatório de faturamento (barra proporcional ao valor do ano anterior,
-// nome e barra em vermelho + linha destacada quando caiu na comparação).
-// Fica no Resumo com toggle Fechamento/Competência — complementa os
-// GraficoAnual de cima (que mostram a rede toda) abrindo por loja.
-function PainelRankingLojas({ filtros, mesFiltro }: { filtros: any; mesFiltro: string }) {
-  const [modo, setModo] = useState<'fechamento' | 'competencia'>('fechamento')
-  const { dados, loading, erro } = usePorLojaDetalhe(filtros, mesFiltro)
-
-  if (loading) return <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20, textAlign: 'center', color: '#9a9c9f', fontSize: 13 }}>Carregando ranking por unidade...</div>
-  if (erro || !dados || !Array.isArray(dados.lojas) || dados.lojas.length === 0) return null
-
-  const [anoAtualStr, mesNumStr] = mesFiltro.split('-')
-  const anoAnteriorStr = String(Number(anoAtualStr) - 1)
-  const nomesMesesCurtos = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
-  const labelMesCurto = nomesMesesCurtos[parseInt(mesNumStr,10)-1]
-
-  const campoAtual    = modo === 'fechamento' ? 'realAtual'        : 'receitaCompetencia'
-  const campoAnterior = modo === 'fechamento' ? 'realAnoAnterior'  : 'receitaCompetenciaAnoAnt'
-  const campoYoy      = modo === 'fechamento' ? 'yoy'              : 'yoyCompetencia'
-
-  const linhas = dados.lojas
-    .map((l: any) => ({ nome: l.loja, atual: l[campoAtual] || 0, anterior: l[campoAnterior] || 0, yoy: l[campoYoy] }))
-    .sort((a, b) => b.atual - a.atual)
-  const maxAnterior = Math.max(...linhas.map(l => l.anterior), 1)
-
-  function BotaoModo({ v, label }: { v: typeof modo; label: string }) {
-    return (
-      <button onClick={() => setModo(v)}
-        style={{ padding: '5px 12px', borderRadius: 20, border: '0.5px solid', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-          background: modo===v ? '#0D0F14' : '#fff', color: modo===v ? '#97A624' : '#5a5c5f', borderColor: modo===v ? '#0D0F14' : '#E8E8E2' }}>
-        {label}
-      </button>
-    )
-  }
-
-  return (
-    <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
-        <div style={{ fontSize: 13, fontWeight: 700 }}>
-          {modo === 'fechamento' ? 'Fechamento' : 'Competência'} por Unidade · {labelMesCurto} {anoAtualStr.slice(-2)} x {anoAnteriorStr.slice(-2)}
-        </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <BotaoModo v="fechamento" label="Fechamento" />
-          <BotaoModo v="competencia" label="Competência" />
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '20px 1fr 90px 90px 90px', gap: 10, fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', marginBottom: 8, paddingRight: 4 }}>
-        <span /><span />
-        <span style={{ textAlign: 'right' }}>{labelMesCurto}/{anoAnteriorStr.slice(-2)}</span>
-        <span style={{ textAlign: 'right' }}>{labelMesCurto}/{anoAtualStr.slice(-2)}</span>
-        <span style={{ textAlign: 'right' }}>Var.</span>
-      </div>
-
-      {linhas.map((l, i) => {
-        const declinando = l.yoy !== null && l.yoy !== undefined && l.yoy < 0
-        const larguraBar = Math.max((l.anterior / maxAnterior) * 100, l.anterior > 0 ? 2 : 0)
-        return (
-          <div key={l.nome} style={{
-            display: 'grid', gridTemplateColumns: '20px 1fr 90px 90px 90px', gap: 10, alignItems: 'center',
-            padding: '8px 6px', borderRadius: 8, marginBottom: 2,
-            background: declinando ? '#fdeef0' : 'transparent',
-          }}>
-            <span style={{ fontSize: 11, color: '#9a9c9f', fontFamily: 'DM Mono, monospace' }}>{String(i+1).padStart(2,'0')}</span>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: declinando ? '#a32d2d' : '#0D0F14', marginBottom: 4 }}>{l.nome}</div>
-              <div style={{ height: 10, background: '#F0F0EC', borderRadius: 5, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${larguraBar}%`, background: declinando ? '#a32d2d' : '#3B6D11', borderRadius: 5 }} />
-              </div>
-            </div>
-            <span style={{ fontSize: 12, color: '#9a9c9f', fontFamily: 'DM Mono, monospace', textAlign: 'right' }}>{fmtBRLCompacto(l.anterior)}</span>
-            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'DM Mono, monospace', textAlign: 'right' }}>{fmtBRLCompacto(l.atual)}</span>
-            <span style={{ textAlign: 'right' }}>
-              {l.yoy === null || l.yoy === undefined ? <span style={{ fontSize: 11, color: '#c9ccd1' }}>—</span> : (
-                <span style={{ fontSize: 11, fontWeight: 700, color: l.yoy >= 0 ? '#3B6D11' : '#a32d2d' }}>
-                  {l.yoy >= 0 ? '▲' : '▼'} {Math.abs(l.yoy).toFixed(1)}%
-                </span>
-              )}
-            </span>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
 function PainelDesempenho({ filtros, mesFiltro }: { filtros: any; mesFiltro: string }) {
   const [dados, setDados] = useState<DadosGranular | null>(null)
   const [granularidade, setGranularidade] = useState<'mensal' | 'semanal' | 'diario'>('diario')
@@ -1211,9 +1124,6 @@ export default function OnePage({ filtros }: { filtros: any }) {
         mesAtualNum={parseInt(atual.mes.split('-')[1])}
         filtros={filtros}
       />
-
-      {/* ── Ranking por unidade: ano atual x anterior ───────── */}
-      <PainelRankingLojas filtros={filtros} mesFiltro={mesFiltro} />
 
       {/* ── Leads, conversão e ticket médio (com pacotes), granularidade ── */}
       <PainelDesempenho filtros={filtros} mesFiltro={mesFiltro} />
