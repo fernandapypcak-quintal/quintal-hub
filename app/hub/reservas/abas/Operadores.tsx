@@ -2,10 +2,10 @@
 
 import { useMemo, useState } from 'react'
 import {
-  type Config, type Filtros, type Linha, type Periodo, GRUPOS, agruparPor, aplicarFiltros, exportarExcel, grupoLabel,
-  n0, n1, pct, resumir, taxa, temHistoricoDesde, useLinhas, variacao,
+  type Config, type Filtros, type Linha, type Periodo, type TipoOp, TIPOS_OP, agruparPor, aplicarFiltros, exportarExcel,
+  n0, n1, pct, resumir, taxa, temHistoricoDesde, tipoOp, useLinhas, variacao,
 } from '../utils'
-import { Aviso, C, Drawer, Secao, Spinner, Var, botao, card, td, tdNum, th, thNum } from '../ui'
+import { Aviso, C, Drawer, Secao, Spinner, Var, botao, card, pill, td, tdNum, th, thNum } from '../ui'
 import TabelaReservas from './TabelaReservas'
 
 export default function Operadores({ config, filtros, periodo }: { config: Config; filtros: Filtros; periodo: Periodo }) {
@@ -16,22 +16,27 @@ export default function Operadores({ config, filtros, periodo }: { config: Confi
     if (!ano.linhas) return null
     return agruparPor(aplicarFiltros(ano.linhas, filtros), r => r.o)
   }, [ano.linhas, filtros])
+  const tipoLabel = (t: TipoOp) => TIPOS_OP.find(x => x.id === t)?.label || t
   const [aberto, setAberto] = useState<string | null>(null)
+  const [tipos, setTipos] = useState<TipoOp[]>(['time', 'outros', 'online'])
+  const alternar = (t: TipoOp) => setTipos(s => (s.includes(t) ? (s.length > 1 ? s.filter(x => x !== t) : s) : [...s, t]))
 
   const calc = useMemo(() => {
     if (!dados.linhas) return null
-    const filtradas = aplicarFiltros(dados.linhas, filtros)
+    const todasOrigens = aplicarFiltros(dados.linhas, filtros).filter(r => r.dc >= periodo.inicio && r.dc <= periodo.fim)
+    const filtradas = aplicarFiltros(dados.linhas, filtros).filter(r => tipos.includes(tipoOp(r)))
     const atual = filtradas.filter(r => r.dc >= periodo.inicio && r.dc <= periodo.fim)
     const ant = filtradas.filter(r => r.dc >= periodo.antInicio && r.dc <= periodo.antFim)
     const antPorOp = agruparPor(ant, r => r.o)
     const linhas = Array.from(agruparPor(atual, r => r.o)).map(([o, l]) => {
       const r = resumir(l)
-      const grupos = Array.from(new Set(l.map(x => x.g)))
-      return { o, grupo: grupos.length === 1 ? grupoLabel(grupos[0]) : 'Vários', ...r, ant: (antPorOp.get(o) || []).length, lista: l }
+      const ts = Array.from(new Set(l.map(tipoOp)))
+      return { o, grupo: ts.length === 1 ? tipoLabel(ts[0]) : 'Vários', ...r, ant: (antPorOp.get(o) || []).length, lista: l }
     }).sort((a, b) => b.reservas - a.reservas)
-    const porGrupo = GRUPOS.filter(g => filtros.grupos.includes(g.id)).map(g => ({ ...g, ...resumir(atual.filter(r => r.g === g.id)) }))
-    return { atual, linhas, total: atual.length, porGrupo }
-  }, [dados.linhas, filtros, periodo])
+    const cores: Record<TipoOp, string> = { time: '#5a5c5f', outros: '#0ea5e9', online: '#97A624' }
+    const porGrupo = TIPOS_OP.map(t => ({ ...t, cor: cores[t.id], ...resumir(todasOrigens.filter(r => tipoOp(r) === t.id)) }))
+    return { atual, linhas, total: atual.length, totalGeral: todasOrigens.length, porGrupo }
+  }, [dados.linhas, filtros, periodo, tipos])
 
   if (dados.erro) return <Aviso>{dados.erro}</Aviso>
   if (!calc) return <div style={card}><Spinner /></div>
@@ -45,17 +50,22 @@ export default function Operadores({ config, filtros, periodo }: { config: Confi
           <div key={g.id} style={{ ...card, padding: '12px 16px', borderTop: `3px solid ${g.cor}` }}>
             <div style={{ fontSize: 12, color: C.suave }}>{g.label}</div>
             <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 24 }}>{n0(g.reservas)}</div>
-            <div style={{ fontSize: 12, color: C.suave }}>{pct(taxa(g.reservas, calc.total))} das reservas · {n0(g.pessoas)} pessoas</div>
+            <div style={{ fontSize: 12, color: C.suave }}>{pct(taxa(g.reservas, calc.totalGeral))} das reservas · {n0(g.pessoas)} pessoas</div>
           </div>
         ))}
       </div>
 
-      <Secao titulo="Reservas por operador" sub={`Reservas criadas · ${periodo.label} vs ${periodo.labelAnt} e vs ${periodo.labelAno} · use o filtro de origem no topo (Time de reservas, Online, Corporativo / outros) · clique para ver as reservas`}
-        direita={<button style={botao} onClick={() => exportarExcel(`reservas_operadores_${periodo.inicio}_a_${periodo.fim}`, calc.atual)}>Exportar Excel</button>}>
+      <Secao titulo="Reservas por operador" sub={`Reservas criadas · ${periodo.label} vs ${periodo.labelAnt} e vs ${periodo.labelAno} · clique no operador para ver as reservas`}
+        direita={
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {TIPOS_OP.map(t => <button key={t.id} style={pill(tipos.includes(t.id))} onClick={() => alternar(t.id)}>{tipos.includes(t.id) ? '● ' : '○ '}{t.label}</button>)}
+            <button style={botao} onClick={() => exportarExcel(`reservas_operadores_${periodo.inicio}_a_${periodo.fim}`, calc.atual)}>Exportar Excel</button>
+          </div>
+        }>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead><tr>
-              <th style={th}>Operador</th><th style={th}>Origem</th><th style={thNum}>Reservas</th><th style={thNum}>% do total</th>
+              <th style={th}>Operador</th><th style={th}>Quem é</th><th style={thNum}>Reservas</th><th style={thNum}>% do total</th>
               <th style={thNum}>vs ant.</th><th style={thNum}>vs ano ant.</th><th style={thNum}>Pessoas</th><th style={thNum}>Mesa média</th><th style={thNum}>B2B</th>
               <th style={thNum}>Sentadas</th><th style={thNum}>Confirm.</th><th style={thNum}>Pendentes</th><th style={thNum}>Cancel.</th><th style={thNum}>No-show</th>
             </tr></thead>
