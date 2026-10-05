@@ -1,16 +1,17 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, Legend, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import {
-  type Config, type Filtros, type Grao, type Grupo, type Linha, type Periodo,
-  GRUPOS, addDias, addMeses, agruparPor, aplicarFiltros, ativa, chaveGrao, chavesGrao, diaSemana,
-  diffDias, exportarExcel, n0, n1, nomeMes, pct, primeiroDia, resumir, rotuloGrao, ultimoDia, useLinhas, variacao,
+  type Config, type Filtros, type Grao, type Grupo, type Historico, type Linha, type Periodo,
+  GRUPOS, addDias, addMeses, agruparPor, aplicarFiltros, ativa, chaveGrao, chavesGrao, diaSemana, diasNoMes,
+  diffDias, exportarExcel, histMensal, mediaHistorica, mesCurto, n0, n1, nomeMes, pct, primeiroDia, resumir,
+  rotuloGrao, temHistoricoDesde, ultimoDia, useHistorico, useLinhas, variacao,
 } from '../utils'
 import { Aviso, BarraH, C, Kpi, MONO, Secao, Spinner, Var, botao, card, pill, td, tdNum, th, thNum } from '../ui'
 
 // ─── Meta do time (sempre o mês corrente, todas as casas liberadas) ─────────
-function BlocoMeta({ base, config, hoje }: { base: Linha[]; config: Config; hoje: string }) {
+function BlocoMeta({ base, config, hoje, hist }: { base: Linha[]; config: Config; hoje: string; hist: Historico | null }) {
   const mes = hoje.slice(0, 7)
   const meta = config.metas.find(m => m.mes === mes) || null
 
@@ -30,6 +31,23 @@ function BlocoMeta({ base, config, hoje }: { base: Linha[]; config: Config; hoje
     return { realizado, projecao: Math.round(projecao), diasRestantes: diffDias(hoje, fimMes) + 1, ritmo: media.reduce((a, b) => a + b, 0) / 7 }
   }, [base, hoje])
 
+  // Referências do histórico (time de reservas, todas as casas liberadas)
+  const ref = useMemo(() => {
+    if (!hist) return null
+    const mapa = histMensal(hist, 'criacao', { grupos: ['time'], unidades: [] })
+    const mesAno = addMeses(mes, -12)
+    return { anoAnterior: mapa.get(mesAno)?.reservas ?? null, mesAno, media: mediaHistorica(mapa, hist, 'criacao', mes) }
+  }, [hist, mes])
+
+  const referencias = (
+    <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap', fontSize: 12, color: C.suave, marginTop: 14, paddingTop: 12, borderTop: `1px solid ${C.borda}` }}>
+      <span>{ref ? nomeMes(ref.mesAno) : 'Mesmo mês do ano passado'}: <b style={{ ...MONO, color: C.texto }}>{ref?.anoAnterior != null ? n0(ref.anoAnterior) : '—'}</b>
+        {ref?.anoAnterior ? <> · projeção <Var v={variacao(calc.projecao, ref.anoAnterior)} /></> : null}</span>
+      <span>Média histórica do time: <b style={{ ...MONO, color: C.texto }}>{ref?.media ? n0(ref.media.reservas) : '—'}</b>/mês
+        {ref?.media ? <> · projeção <Var v={variacao(calc.projecao, ref.media.reservas)} /> · {ref.media.meses} meses fechados desde {mesCurto(ref.media.desde)}/{ref.media.desde.slice(2, 4)}</> : null}</span>
+    </div>
+  )
+
   const titulo = `Meta do time de reservas — ${nomeMes(mes)}`
   if (!meta) {
     return (
@@ -37,6 +55,7 @@ function BlocoMeta({ base, config, hoje }: { base: Linha[]; config: Config; hoje
         <div style={{ ...MONO, fontSize: 34 }}>{n0(calc.realizado)}</div>
         <div style={{ fontSize: 12, color: C.suave, marginBottom: 12 }}>reservas criadas pelo time no mês</div>
         <Aviso tipo="info">Sem meta cadastrada para {nomeMes(mes)}. Preencha a aba METAS da planilha de reservas.</Aviso>
+        {referencias}
       </Secao>
     )
   }
@@ -50,7 +69,7 @@ function BlocoMeta({ base, config, hoje }: { base: Linha[]; config: Config; hoje
   const proximo = marcos.find(m => m.v > calc.realizado)
   const necessario = proximo ? (proximo.v - calc.realizado) / calc.diasRestantes : null
   const projAting = [...marcos].reverse().find(m => m.v <= calc.projecao)
-  const ref = faixas[0] || meta.desafio || 0
+  const ref1 = faixas[0] || meta.desafio || 0
 
   return (
     <Secao titulo={titulo} sub={`Reservas criadas pelos operadores do time${config.restrito ? ' · só as casas liberadas para você' : ''} · não muda com os filtros`}>
@@ -58,7 +77,7 @@ function BlocoMeta({ base, config, hoje }: { base: Linha[]; config: Config; hoje
         <div>
           <div style={{ fontSize: 12, color: C.suave }}>Realizado</div>
           <div style={{ ...MONO, fontSize: 40, letterSpacing: -1 }}>{n0(calc.realizado)}</div>
-          <div style={{ fontSize: 12, color: C.suave }}>{pct(ref ? calc.realizado / ref : null)} da {faixas.length ? 'faixa 1' : 'meta'}</div>
+          <div style={{ fontSize: 12, color: C.suave }}>{pct(ref1 ? calc.realizado / ref1 : null)} da {faixas.length ? 'faixa 1' : 'meta'}</div>
         </div>
         <div>
           <div style={{ fontSize: 12, color: C.suave }}>Projeção de fechamento</div>
@@ -97,11 +116,14 @@ function BlocoMeta({ base, config, hoje }: { base: Linha[]; config: Config; hoje
           </div>
         ))}
       </div>
+      {referencias}
     </Secao>
   )
 }
 
 // ─── Hoje ───────────────────────────────────────────────────────────────
+const DIA = (iso: string) => ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'][diaSemana(iso)]
+
 function BlocoHoje({ base, paraHoje, filtros, hoje }: { base: Linha[]; paraHoje: Linha[] | null; filtros: Filtros; hoje: string }) {
   const agora = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date())
   const semanaPassada = addDias(hoje, -7)
@@ -163,7 +185,77 @@ function BlocoHoje({ base, paraHoje, filtros, hoje }: { base: Linha[]; paraHoje:
     </div>
   )
 }
-const DIA = (iso: string) => ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'][diaSemana(iso)]
+
+// ─── Histórico mensal (data de criação) ────────────────────────────────────
+function BlocoHistorico({ hist, base, filtros, hoje }: { hist: Historico; base: Linha[]; filtros: Filtros; hoje: string }) {
+  const mesAtual = hoje.slice(0, 7)
+  const calc = useMemo(() => {
+    const porGrupo = GRUPOS.map(g => ({ g: g.id, mapa: histMensal(hist, 'criacao', { ...filtros, grupos: [g.id] }) }))
+    const total = histMensal(hist, 'criacao', filtros)
+    const media = mediaHistorica(total, hist, 'criacao', mesAtual)
+    // mês atual vem das linhas ao vivo (o histórico é gerado 1x por dia)
+    const atual = aplicarFiltros(base, filtros).filter(r => r.dc.startsWith(mesAtual))
+    const meses: string[] = []
+    for (let m = hist.primeiroMes || mesAtual; m <= mesAtual; m = addMeses(m, 1)) meses.push(m)
+    const serie = meses.map(m => {
+      const linha: Record<string, string | number> = { mes: m, rotulo: `${mesCurto(m)}/${m.slice(2, 4)}` }
+      for (const { g, mapa } of porGrupo) {
+        linha[g] = m === mesAtual ? atual.filter(r => r.g === g).length : (mapa.get(m)?.reservas || 0)
+      }
+      return linha
+    })
+    const fechados = meses.filter(m => m < mesAtual).map(m => ({ m, v: total.get(m)?.reservas || 0 }))
+    const melhor = fechados.reduce<{ m: string; v: number } | null>((a, b) => (!a || b.v > a.v ? b : a), null)
+    const dia = Number(hoje.slice(8, 10))
+    const linear = Math.round((atual.length / dia) * diasNoMes(mesAtual))
+    const anoPassado = total.get(addMeses(mesAtual, -12))?.reservas ?? null
+    return { serie, media, melhor, atual: atual.length, linear, anoPassado }
+  }, [hist, base, filtros, mesAtual, hoje])
+
+  return (
+    <Secao titulo="Histórico mensal de reservas" sub={`Reservas criadas por mês · origem e casa do filtro · linha tracejada = média histórica · ${nomeMes(mesAtual)} parcial`}>
+      <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap', marginBottom: 14 }}>
+        <div>
+          <div style={{ fontSize: 12, color: C.suave }}>Média histórica</div>
+          <div style={{ ...MONO, fontSize: 26 }}>{calc.media ? n0(calc.media.reservas) : '—'}<span style={{ fontSize: 13, color: C.suave }}>/mês</span></div>
+          <div style={{ fontSize: 12, color: C.suave }}>{calc.media ? `${calc.media.meses} meses fechados · ${n0(calc.media.pessoas)} pessoas/mês` : 'sem meses fechados'}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 12, color: C.suave }}>{nomeMes(mesAtual)} até hoje</div>
+          <div style={{ ...MONO, fontSize: 26 }}>{n0(calc.atual)}</div>
+          <div style={{ fontSize: 12, color: C.suave }}>no ritmo atual fecha em ~{n0(calc.linear)} {calc.media && <>· vs média <Var v={variacao(calc.linear, calc.media.reservas)} /></>}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 12, color: C.suave }}>{nomeMes(addMeses(mesAtual, -12))}</div>
+          <div style={{ ...MONO, fontSize: 26 }}>{calc.anoPassado != null ? n0(calc.anoPassado) : '—'}</div>
+          <div style={{ fontSize: 12, color: C.suave }}>{calc.anoPassado ? <>ritmo atual vs ano passado <Var v={variacao(calc.linear, calc.anoPassado)} /></> : 'sem histórico'}</div>
+        </div>
+        {calc.melhor && (
+          <div>
+            <div style={{ fontSize: 12, color: C.suave }}>Melhor mês</div>
+            <div style={{ ...MONO, fontSize: 26 }}>{n0(calc.melhor.v)}</div>
+            <div style={{ fontSize: 12, color: C.suave }}>{nomeMes(calc.melhor.m)}</div>
+          </div>
+        )}
+      </div>
+      <div style={{ height: 260 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={calc.serie} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
+            <CartesianGrid stroke="#F1F1F1" vertical={false} />
+            <XAxis dataKey="rotulo" tick={{ fontSize: 10.5, fill: '#999' }} tickLine={false} axisLine={{ stroke: '#E8E8E8' }} />
+            <YAxis tick={{ fontSize: 11, fill: '#999' }} tickLine={false} axisLine={false} allowDecimals={false} />
+            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${C.borda}` }} formatter={(v, n) => [n0(Number(v)), GRUPOS.find(g => g.id === n)?.label || String(n)]} />
+            <Legend formatter={v => GRUPOS.find(g => g.id === v)?.label || v} wrapperStyle={{ fontSize: 12 }} />
+            {GRUPOS.filter(g => filtros.grupos.includes(g.id)).map((g, i, arr) => (
+              <Bar key={g.id} dataKey={g.id} stackId="h" fill={g.cor} maxBarSize={34} radius={i === arr.length - 1 ? [3, 3, 0, 0] : undefined} />
+            ))}
+            {calc.media && <ReferenceLine y={calc.media.reservas} stroke="#1a1a1a" strokeDasharray="5 4" label={{ value: `média ${n0(calc.media.reservas)}`, position: 'insideTopLeft', fontSize: 11, fill: '#555' }} />}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </Secao>
+  )
+}
 
 // ─── Aba ────────────────────────────────────────────────────────────────
 export default function Resumo({ config, filtros, periodo, grao, setGrao, hoje }: {
@@ -172,7 +264,10 @@ export default function Resumo({ config, filtros, periodo, grao, setGrao, hoje }
   const mes = hoje.slice(0, 7)
   const base = useLinhas('criacao', primeiroDia(addMeses(mes, -1)), hoje)
   const dados = useLinhas('criacao', periodo.antInicio, periodo.fim)
+  const temAno = temHistoricoDesde(config, periodo.anoInicio)
+  const ano = useLinhas('criacao', temAno ? periodo.anoInicio : '', temAno ? periodo.anoFim : '')
   const paraHoje = useLinhas('reserva', hoje, hoje)
+  const { hist, erro: erroHist } = useHistorico()
 
   const calc = useMemo(() => {
     if (!dados.linhas) return null
@@ -188,45 +283,57 @@ export default function Resumo({ config, filtros, periodo, grao, setGrao, hoje }
     filtradas.forEach(r => { const c = cont.get(chaveGrao(r.dc, grao)); if (c) c[r.g]++ })
     const serie = chaves.map(k => ({ rotulo: rotuloGrao(k, grao), ...(cont.get(k) as Record<Grupo, number>) }))
 
-    const casas = Array.from(agruparPor(doPeriodo, r => r.u)).map(([u, l]) => {
-      const ant = doAnt.filter(r => r.u === u).length
-      return {
-        u, total: l.length, ant, pessoas: l.reduce((s, r) => s + r.p, 0), b2b: l.filter(r => r.b).length,
-        time: l.filter(r => r.g === 'time').length, online: l.filter(r => r.g === 'online').length, corp: l.filter(r => r.g === 'corp').length,
-      }
-    }).sort((a, b) => b.total - a.total)
+    const casas = Array.from(agruparPor(doPeriodo, r => r.u)).map(([u, l]) => ({
+      u, total: l.length, ant: doAnt.filter(r => r.u === u).length, pessoas: l.reduce((s, r) => s + r.p, 0), b2b: l.filter(r => r.b).length,
+      time: l.filter(r => r.g === 'time').length, online: l.filter(r => r.g === 'online').length, corp: l.filter(r => r.g === 'corp').length,
+    })).sort((a, b) => b.total - a.total)
 
     return {
-      doPeriodo, filtradas, serie, casas,
+      filtradas, serie, casas,
       cards: [
-        { id: 'total', label: 'Reservas no período — todas', cor: C.texto, at: porGrupo(doPeriodo), an: porGrupo(doAnt) },
+        { id: 'total' as const, label: 'Reservas no período — todas', cor: C.texto, at: porGrupo(doPeriodo), an: porGrupo(doAnt) },
         ...GRUPOS.map(g => ({ id: g.id, label: g.label, cor: g.cor, at: porGrupo(doPeriodo, g.id), an: porGrupo(doAnt, g.id) })),
       ],
     }
   }, [dados.linhas, filtros, periodo, grao])
 
+  // Ano anterior (carrega à parte, não segura a tela)
+  const calcAno = useMemo(() => {
+    if (!ano.linhas) return null
+    const l = ano.linhas.filter(r => !filtros.unidades.length || filtros.unidades.includes(r.u))
+    const porId: Record<string, number> = { total: l.length }
+    GRUPOS.forEach(g => { porId[g.id] = l.filter(r => r.g === g.id).length })
+    const porCasa = new Map<string, number>()
+    l.forEach(r => porCasa.set(r.u, (porCasa.get(r.u) || 0) + 1))
+    return { porId, porCasa }
+  }, [ano.linhas, filtros])
+
   const erro = base.erro || dados.erro || paraHoje.erro
-  const grupoAtivo = (g: Grupo) => filtros.grupos.includes(g)
   const totalDia = periodo.inicio === periodo.fim
+  const semAno = !temAno ? 'sem histórico' : undefined
 
   return (
     <>
       {erro && <Aviso>{erro}</Aviso>}
-      {base.linhas ? <BlocoMeta base={base.linhas} config={config} hoje={hoje} /> : <div style={card}><Spinner texto="Calculando a meta..." /></div>}
+      {base.linhas ? <BlocoMeta base={base.linhas} config={config} hoje={hoje} hist={hist} /> : <div style={card}><Spinner texto="Calculando a meta..." /></div>}
       {base.linhas && <BlocoHoje base={base.linhas} paraHoje={paraHoje.linhas} filtros={filtros} hoje={hoje} />}
 
       {!calc ? <div style={card}><Spinner /></div> : (
         <>
           <div>
             <div style={{ fontSize: 12, color: C.suave, marginBottom: 8 }}>
-              Reservas criadas · {periodo.label} vs {periodo.labelAnt} · cards mostram cada origem separada (só o filtro de casa vale aqui)
+              Reservas criadas · {periodo.label} · comparado com {periodo.labelAnt} e com {periodo.labelAno} · cada card é uma origem (só o filtro de casa vale aqui)
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-              {calc.cards.map(c => (
-                <Kpi key={c.id} label={c.label} cor={c.cor} valor={n0(c.at.reservas)}
-                  detalhe={`${n0(c.at.pessoas)} pessoas · mesa ${n1(c.at.tam)}${c.at.b2b ? ` · ${n0(c.at.b2b)} B2B` : ''}`}
-                  anterior={n0(c.an.reservas)} v={variacao(c.at.reservas, c.an.reservas)} />
-              ))}
+              {calc.cards.map(c => {
+                const a = calcAno?.porId[c.id]
+                return (
+                  <Kpi key={c.id} label={c.label} cor={c.cor} valor={n0(c.at.reservas)}
+                    detalhe={`${n0(c.at.pessoas)} pessoas · mesa ${n1(c.at.tam)}${c.at.b2b ? ` · ${n0(c.at.b2b)} B2B` : ''}`}
+                    anterior={n0(c.an.reservas)} v={variacao(c.at.reservas, c.an.reservas)}
+                    anoAnterior={semAno || (a === undefined ? '…' : n0(a))} vAno={a === undefined ? null : variacao(c.at.reservas, a)} />
+                )
+              })}
             </div>
           </div>
 
@@ -247,7 +354,7 @@ export default function Resumo({ config, filtros, periodo, grao, setGrao, hoje }
                     <YAxis tick={{ fontSize: 11, fill: '#999' }} tickLine={false} axisLine={false} allowDecimals={false} />
                     <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${C.borda}` }} formatter={(v, n) => [n0(Number(v)), GRUPOS.find(g => g.id === n)?.label || String(n)]} />
                     <Legend formatter={v => GRUPOS.find(g => g.id === v)?.label || v} wrapperStyle={{ fontSize: 12 }} />
-                    {GRUPOS.filter(g => grupoAtivo(g.id)).map((g, i, arr) => (
+                    {GRUPOS.filter(g => filtros.grupos.includes(g.id)).map((g, i, arr) => (
                       <Bar key={g.id} dataKey={g.id} stackId="a" fill={g.cor} maxBarSize={36} radius={i === arr.length - 1 ? [3, 3, 0, 0] : undefined} />
                     ))}
                   </BarChart>
@@ -256,12 +363,12 @@ export default function Resumo({ config, filtros, periodo, grao, setGrao, hoje }
             </Secao>
           )}
 
-          <Secao titulo="Reservas criadas por casa" sub={`${periodo.label} · todas as origens, separadas · variação do total vs ${periodo.labelAnt}`}
+          <Secao titulo="Reservas criadas por casa" sub={`${periodo.label} · todas as origens, separadas · variação do total vs ${periodo.labelAnt} e vs ${periodo.labelAno}`}
             direita={<button style={botao} onClick={() => exportarExcel(`reservas_criadas_${periodo.inicio}_a_${periodo.fim}`, calc.filtradas)}>Exportar Excel</button>}>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead><tr>
-                  <th style={th}>Casa</th><th style={thNum}>Total</th><th style={thNum}>vs ant.</th>
+                  <th style={th}>Casa</th><th style={thNum}>Total</th><th style={thNum}>vs ant.</th><th style={thNum}>vs ano ant.</th>
                   {GRUPOS.map(g => <th key={g.id} style={{ ...thNum, color: g.cor }}>{g.label}</th>)}
                   <th style={thNum}>% time</th><th style={thNum}>Pessoas</th><th style={thNum}>B2B</th>
                 </tr></thead>
@@ -271,6 +378,7 @@ export default function Resumo({ config, filtros, periodo, grao, setGrao, hoje }
                       <td style={td}>{c.u}</td>
                       <td style={{ ...tdNum, fontWeight: 600 }}>{n0(c.total)}</td>
                       <td style={tdNum}><Var v={variacao(c.total, c.ant)} /></td>
+                      <td style={tdNum}>{calcAno ? <Var v={variacao(c.total, calcAno.porCasa.get(c.u) || 0)} /> : <span style={{ color: C.muito }}>—</span>}</td>
                       <td style={tdNum}>{n0(c.time)}</td><td style={tdNum}>{n0(c.online)}</td><td style={tdNum}>{n0(c.corp)}</td>
                       <td style={tdNum}>{pct(c.total ? c.time / c.total : null)}</td>
                       <td style={tdNum}>{n0(c.pessoas)}</td>
@@ -286,6 +394,10 @@ export default function Resumo({ config, filtros, periodo, grao, setGrao, hoje }
           </Secao>
         </>
       )}
+
+      {erroHist && <Aviso>Histórico mensal: {erroHist}</Aviso>}
+      {hist && base.linhas && <BlocoHistorico hist={hist} base={base.linhas} filtros={filtros} hoje={hoje} />}
     </>
   )
 }
+
