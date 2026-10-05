@@ -15,6 +15,7 @@ import { useLabels } from '../../hooks/useLabels';
 import { progressColor, AtingBadge } from '../ui/GoalProgress';
 import { sum, monthlyTotals, formatBRL, variation, calcTendFat, daysInMonth } from '../../utils/formatters';
 import InfoTip from '../ui/InfoTip';
+import ExportPorLoja from '../ui/ExportPorLoja';
 
 const STORE_COLORS = ['#97A624','#D9B504','#D9CB04','#8C1414','#0D9488','#7C3AED','#EA580C','#0284C7','#65A30D','#6B7280'];
 const BRLk = v => v >= 1e6 ? 'R$\u00a0'+(v/1e6).toFixed(1).replace('.',',')+'M'
@@ -543,7 +544,10 @@ export default function Stores() {
 
       {/* ── TABELA DE RANKING ── */}
       <div className="chart-card overflow-x-auto">
-        <h3 className="section-title mb-1">Ranking de Lojas</h3>
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="section-title mb-1">Ranking de Lojas</h3>
+          <ExportPorLoja />
+        </div>
         <p className="text-xs text-zinc-400 mb-4">
           Comparação YoY cortada no dia {periodo.lastDay} · Tend Fat = projeção do mês cheio
         </p>
