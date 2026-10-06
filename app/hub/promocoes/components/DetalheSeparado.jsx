@@ -2,13 +2,16 @@
 // Pacotes (pessoas/receita) e Promoções (consumo/custo) lado a lado, sem cruzar.
 'use client'
 
-import { agruparPacotes, agruparConsumo } from '../data/modelo'
+import { agruparPacotes, agruparConsumo, chavePacoteUsado, SEM_DETALHE } from '../data/modelo'
 import { TabelaOrdenavel, CmvTxt, brl, num, pct } from './ui'
 
 export default function DetalheSeparado({ dados, filtro }) {
   const { pacotes, consumoMes, consumoDia, nomes, categoriaDaChave } = dados
   const consumo = filtro.data ? consumoDia : consumoMes
-  const pac = [...agruparPacotes(pacotes, filtro, (p) => p.chave).entries()].map(([k, a]) => ({ k, nome: nomes.get(k) || k, ...a }))
+  const nomePac = new Map()
+  for (const p of pacotes) if (p.detalhe && p.promocaoPacote) nomePac.set(chavePacoteUsado(p), p.promocaoPacote)
+  const pac = [...agruparPacotes(pacotes, filtro, chavePacoteUsado).entries()]
+    .map(([k, a]) => ({ k, nome: k === SEM_DETALHE ? 'Reservas ainda sem detalhe' : nomePac.get(k) || k, ...a }))
   const pro = [...agruparConsumo(consumo, filtro, (c) => c.chave).entries()].map(([k, a]) => ({ k, nome: nomes.get(k) || k, tipo: categoriaDaChave.get(k) || '—', ...a }))
 
   return (
@@ -17,7 +20,9 @@ export default function DetalheSeparado({ dados, filtro }) {
         <p className="text-[10.5px] font-bold text-zinc-400 uppercase tracking-wide px-2 pt-1">Pacotes ({pac.length})</p>
         <TabelaOrdenavel
           colunas={[
-            { id: 'nome', label: 'Pacote', align: 'left', valor: (x) => x.nome, className: 'font-medium max-w-[220px] truncate' },
+            { id: 'nome', label: 'Pacote usado', align: 'left', valor: (x) => x.nome, className: 'font-medium max-w-[220px] truncate',
+              render: (x) => <span className={x.k === SEM_DETALHE ? 'italic text-zinc-400' : ''}>{x.nome}</span> },
+            { id: 'n', label: 'Reservas', valor: (x) => x.n, render: (x) => num(x.n) },
             { id: 'pessoas', label: 'Pessoas', valor: (x) => x.pessoas, render: (x) => num(x.pessoas) },
             { id: 'fat', label: 'Receita', valor: (x) => x.fat, render: (x) => brl(x.fat) },
             { id: 'ticket', label: 'Ticket', valor: (x) => x.ticket, render: (x) => brl(x.ticket) },
