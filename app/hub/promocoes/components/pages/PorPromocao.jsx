@@ -1,133 +1,100 @@
-// app/hub/promocoes/components/pages/PorPromocao.jsx
+// app/hub/promocoes/components/pages/PorPromocao.jsx  (aba "Promoções")
+// Relatório Promoções Utilizadas da ZIG, por nome da promoção: consumo e custo (ficha técnica).
 'use client'
 
 import { useMemo, useState } from 'react'
-import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, ReferenceLine } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { labelForUnit } from '@/lib/units'
-import { CMV_META } from '@/lib/promocoesConfig'
-import { agrupar, derivar, fatTotalPeriodo, statusPromo } from '../../data/modelo'
-import { Card, Aviso, TabelaOrdenavel, COLS_METRICAS, brl, brlK, pct, num, mesLabel, dataBR, diaSemana } from '../ui'
+import { agruparConsumo, mesAnterior } from '../../data/modelo'
+import { Card, Kpi, Aviso, TabelaOrdenavel, CmvTxt, Delta, brl, brlK, pct, num, mesLabel, dataBR, diaSemana, varPct } from '../ui'
 
 export default function PorPromocao({ dados, filtros }) {
-  const { pacotes, consumoMes, consumoDia, fatTotal, unidades, nomes, categoriaDaChave, fonteCustoMes } = dados
+  const { consumoMes, consumoDia, unidades, nomes, categoriaDaChave, fonteCustoMes, ultimoFechado } = dados
   const units = filtros.unidade ? [filtros.unidade] : unidades.map((u) => u.id)
   const mes = filtros.mes
-  const categoria = filtros.categoria || undefined
+  const parcial = mes === ultimoFechado.slice(0, 7)
   const [busca, setBusca] = useState('')
-  const [soProblemas, setSoProblemas] = useState(false)
   const [aberta, setAberta] = useState(null)
 
-  const ftMes = fatTotalPeriodo(fatTotal, units, { mes })
-
   const linhas = useMemo(() => {
-    const g = agrupar(pacotes, consumoMes, { units, mes, categoria }, (r) => r.chave)
-    return [...g.entries()].map(([chave, a]) => ({
-      chave,
-      nome: nomes.get(chave) || chave,
-      categoria: categoriaDaChave.get(chave) || '—',
-      ...derivar(a, ftMes),
-    }))
-  }, [pacotes, consumoMes, units.join(','), mes, categoria, ftMes])
+    const atual = agruparConsumo(consumoMes, { units, mes }, (c) => c.chave)
+    const ant = parcial ? new Map() : agruparConsumo(consumoMes, { units, mes: mesAnterior(mes) }, (c) => c.chave)
+    return [...atual.entries()].map(([k, a]) => ({ k, nome: nomes.get(k) || k, tipo: categoriaDaChave.get(k) || '—', ...a, custoAnt: ant.get(k)?.custo ?? null }))
+  }, [consumoMes, units.join(','), mes, parcial])
 
-  const filtradas = linhas.filter((l) => {
-    if (busca && !l.nome.toLowerCase().includes(busca.toLowerCase())) return false
-    if (soProblemas && !['atencao', 'critico', 'sem_receita', 'sem_consumo'].includes(statusPromo(l).id)) return false
-    return true
-  })
+  const tot = linhas.reduce((t, l) => ({ usos: t.usos + l.usos, cardapio: t.cardapio + l.cardapio, desconto: t.desconto + l.desconto, custo: t.custo + l.custo, pago: t.pago + l.pago, semCusto: t.semCusto + l.usosSemCusto }),
+    { usos: 0, cardapio: 0, desconto: 0, custo: 0, pago: 0, semCusto: 0 })
+  const filtradas = linhas.filter((l) => !busca || l.nome.toLowerCase().includes(busca.toLowerCase()))
 
   const colunas = [
     { id: 'nome', label: 'Promoção', align: 'left', valor: (l) => l.nome, className: 'font-semibold text-brand-black max-w-[260px] truncate' },
-    { id: 'categoria', label: 'Categoria', align: 'left', valor: (l) => l.categoria, className: 'text-zinc-500 whitespace-nowrap' },
-    { id: 'nDias', label: 'Dias', valor: (l) => l.nDias, render: (l) => num(l.nDias) },
-    COLS_METRICAS.pessoas,
-    COLS_METRICAS.fat,
-    COLS_METRICAS.ticket,
-    COLS_METRICAS.custo,
-    COLS_METRICAS.cmv,
-    COLS_METRICAS.margem,
-    COLS_METRICAS.margemPessoa,
-    { id: 'peso', label: 'Peso', valor: (l) => l.peso, render: (l) => pct(l.peso) },
-    COLS_METRICAS.status,
+    { id: 'tipo', label: 'Tipo', align: 'left', valor: (l) => l.tipo, className: 'text-zinc-500' },
+    { id: 'usos', label: 'Itens consumidos', valor: (l) => l.usos, render: (l) => num(l.usos) },
+    { id: 'cardapio', label: 'Valor de cardápio', valor: (l) => l.cardapio, render: (l) => brl(l.cardapio) },
+    { id: 'desconto', label: 'Desconto', valor: (l) => l.desconto, render: (l) => brl(l.desconto) },
+    { id: 'custo', label: 'Custo (ficha)', valor: (l) => l.custo, render: (l) => brl(l.custo) },
+    { id: 'var', label: 'Δ custo', valor: (l) => varPct(l.custo, l.custoAnt), render: (l) => <Delta v={varPct(l.custo, l.custoAnt)} invertido /> },
+    { id: 'cmvCardapio', label: 'CMV s/ cardápio', valor: (l) => l.cmvCardapio, render: (l) => <CmvTxt v={l.cmvCardapio} /> },
+    { id: 'cmvPago', label: 'CMV s/ pago', valor: (l) => l.cmvPago, render: (l) => (l.tipo === 'Desconto' ? <CmvTxt v={l.cmvPago} /> : <span className="text-zinc-300">—</span>) },
+    { id: 'cobertura', label: 'Com ficha', valor: (l) => l.cobertura, render: (l) => <span style={{ color: l.cobertura != null && l.cobertura < 0.95 ? '#B45309' : undefined }}>{pct(l.cobertura)}</span> },
   ]
 
   function detalhe(l) {
-    const filtroBase = { units, mes, chave: l.chave }
-    const porDia = agrupar(pacotes, consumoDia, filtroBase, (r) => r.data || '')
-    const dias = [...porDia.entries()].filter(([d]) => d)
-      .map(([data, a]) => ({ data, ...derivar(a, fatTotalPeriodo(fatTotal, units, { data })) }))
-      .sort((a, b) => a.data.localeCompare(b.data))
-    const porCasa = units.length > 1
-      ? [...agrupar(pacotes, consumoMes, filtroBase, (r) => r.unit).entries()].map(([u, a]) => ({ unit: u, nome: labelForUnit(u), ...derivar(a, fatTotalPeriodo(fatTotal, [u], { mes })) }))
-      : []
-    const grafico = dias.map((d) => ({ dia: `${d.data.slice(8)} ${diaSemana(d.data)}`, fat: d.fat, cmv: d.cmv }))
-
-    // Por dia da semana: média por ocorrência
-    const dow = {}
-    for (const d of dias) {
-      const k = diaSemana(d.data)
-      dow[k] ??= { dia: k, n: 0, fat: 0, custo: 0, pessoas: 0, usos: 0 }
-      dow[k].n++; dow[k].fat += d.fat; dow[k].custo += d.custo; dow[k].pessoas += d.pessoas; dow[k].usos += d.usos
+    const filtro = { units, mes, chave: l.k }
+    const produtos = new Map()
+    for (const c of consumoMes) {
+      if (c.chave !== l.k || c.mes !== mes || !units.includes(c.unit)) continue
+      const x = produtos.get(c.produto) || { produto: c.produto, usos: 0, cardapio: 0, custo: 0, temCusto: c.temCusto, custoUnit: c.custoUnit }
+      x.usos += c.usos; x.cardapio += c.cardapio || 0; x.custo += c.custo
+      produtos.set(c.produto, x)
     }
-    const ordemDow = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
-    const semana = ordemDow.filter((k) => dow[k]).map((k) => {
-      const x = dow[k]
-      return { ...x, fatMedio: x.fat / x.n, cmv: x.fat && x.usos ? x.custo / x.fat : null, ticket: x.pessoas ? x.fat / x.pessoas : null, margemMedia: x.usos ? (x.fat - x.custo) / x.n : null }
-    })
+    const prods = [...produtos.values()].map((x) => ({ ...x, cmv: x.cardapio ? x.custo / x.cardapio : null }))
+    const dias = [...agruparConsumo(consumoDia, filtro, (c) => c.data).entries()].map(([data, a]) => ({ data, ...a })).sort((a, b) => a.data.localeCompare(b.data))
+    const casas = units.length > 1 ? [...agruparConsumo(consumoMes, filtro, (c) => c.unit).entries()].map(([u, a]) => ({ unit: u, nome: labelForUnit(u), ...a })) : []
 
     return (
       <div className="space-y-3">
-        {fonteCustoMes[mes] !== 'diario' && (
-          <Aviso>O custo dia a dia deste mês ainda está sendo processado pelo pipeline diário — dias sem custo aparecem com CMV "—". O total do mês (linha acima) já usa o relatório mensal.</Aviso>
-        )}
-        <div className="bg-white rounded-lg border border-zinc-100 p-3">
-          <p className="text-[10.5px] font-bold text-zinc-400 uppercase tracking-wide mb-2">Dia a dia — faturamento (barras) e CMV (linha)</p>
-          <div style={{ width: '100%', height: 220 }}>
-            <ResponsiveContainer>
-              <ComposedChart data={grafico}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F0F0F0" />
-                <XAxis dataKey="dia" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-                <YAxis yAxisId="r" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} tickFormatter={brlK} width={58} />
-                <YAxis yAxisId="p" orientation="right" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} tickFormatter={pct} width={44} />
-                <Tooltip formatter={(v, n) => (n === 'CMV' ? pct(v) : brl(v))} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <ReferenceLine yAxisId="p" y={CMV_META} stroke="#97A624" strokeDasharray="4 4" />
-                <Bar yAxisId="r" dataKey="fat" name="Faturamento" fill="#9A3412" radius={[3, 3, 0, 0]} />
-                <Line yAxisId="p" dataKey="cmv" name="CMV" stroke="#8C1414" strokeWidth={2} dot={{ r: 2 }} connectNulls />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
           <div className="bg-white rounded-lg border border-zinc-100 p-2">
+            <p className="text-[10.5px] font-bold text-zinc-400 uppercase tracking-wide px-2 pt-1">O que foi consumido ({prods.length} produtos)</p>
             <TabelaOrdenavel
               colunas={[
-                { id: 'data', label: 'Dia', align: 'left', valor: (d) => d.data, render: (d) => `${dataBR(d.data)} ${diaSemana(d.data)}` },
-                COLS_METRICAS.fat, COLS_METRICAS.pessoas, COLS_METRICAS.ticket, COLS_METRICAS.cmv, COLS_METRICAS.margem, COLS_METRICAS.status,
+                { id: 'produto', label: 'Produto', align: 'left', valor: (x) => x.produto, render: (x) => <span>{x.produto}{!x.temCusto && <span className="ml-1 text-[9.5px] font-bold text-red-800">SEM FICHA</span>}</span> },
+                { id: 'usos', label: 'Qtd', valor: (x) => x.usos, render: (x) => num(x.usos) },
+                { id: 'custoUnit', label: 'Custo un.', valor: (x) => x.custoUnit, render: (x) => brl(x.custoUnit) },
+                { id: 'custo', label: 'Custo', valor: (x) => x.custo, render: (x) => brl(x.custo) },
+                { id: 'cardapio', label: 'Cardápio', valor: (x) => x.cardapio, render: (x) => brl(x.cardapio) },
+                { id: 'cmv', label: 'CMV', valor: (x) => x.cmv, render: (x) => <CmvTxt v={x.cmv} /> },
               ]}
-              linhas={dias} chave={(d) => d.data} ordemInicial={{ id: 'data', dir: 'asc' }}
+              linhas={prods} chave={(x) => x.produto} ordemInicial={{ id: 'custo', dir: 'desc' }}
             />
           </div>
           <div className="space-y-3">
-            <div className="bg-white rounded-lg border border-zinc-100 p-2">
-              <p className="text-[10.5px] font-bold text-zinc-400 uppercase tracking-wide px-2 pt-1">Média por dia da semana</p>
-              <TabelaOrdenavel
-                colunas={[
-                  { id: 'dia', label: 'Dia', align: 'left', valor: (x) => x.dia },
-                  { id: 'n', label: 'Ocorr.', valor: (x) => x.n },
-                  { id: 'fatMedio', label: 'Fat. médio', valor: (x) => x.fatMedio, render: (x) => brl(x.fatMedio) },
-                  { id: 'ticket', label: 'Ticket', valor: (x) => x.ticket, render: (x) => brl(x.ticket) },
-                  COLS_METRICAS.cmv,
-                  { id: 'margemMedia', label: 'Margem média', valor: (x) => x.margemMedia, render: (x) => brl(x.margemMedia) },
-                ]}
-                linhas={semana} chave={(x) => x.dia} ordemInicial={{ id: 'n', dir: 'desc' }}
-              />
+            <div className="bg-white rounded-lg border border-zinc-100 p-3">
+              <p className="text-[10.5px] font-bold text-zinc-400 uppercase tracking-wide mb-2">Custo por dia</p>
+              {fonteCustoMes[mes] !== 'diario' && <p className="text-[11px] text-amber-700 mb-1">Dia a dia ainda sendo processado neste mês.</p>}
+              <div style={{ width: '100%', height: 180 }}>
+                <ResponsiveContainer>
+                  <BarChart data={dias.map((d) => ({ dia: `${d.data.slice(8)} ${diaSemana(d.data)}`, custo: d.custo, usos: d.usos }))}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F0F0F0" />
+                    <XAxis dataKey="dia" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} tickFormatter={brlK} width={56} />
+                    <Tooltip formatter={(v, n) => (n === 'Custo' ? brl(v) : num(v))} />
+                    <Bar dataKey="custo" name="Custo" fill="#8C1414" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
-            {porCasa.length > 0 && (
+            {casas.length > 0 && (
               <div className="bg-white rounded-lg border border-zinc-100 p-2">
                 <TabelaOrdenavel
-                  colunas={[{ id: 'nome', label: 'Casa', align: 'left', valor: (x) => x.nome }, COLS_METRICAS.fat, COLS_METRICAS.pessoas, COLS_METRICAS.cmv, COLS_METRICAS.margem, COLS_METRICAS.status]}
-                  linhas={porCasa} chave={(x) => x.unit} ordemInicial={{ id: 'fat', dir: 'desc' }}
+                  colunas={[
+                    { id: 'nome', label: 'Casa', align: 'left', valor: (x) => x.nome },
+                    { id: 'usos', label: 'Itens', valor: (x) => x.usos, render: (x) => num(x.usos) },
+                    { id: 'custo', label: 'Custo', valor: (x) => x.custo, render: (x) => brl(x.custo) },
+                    { id: 'cmvCardapio', label: 'CMV s/ cardápio', valor: (x) => x.cmvCardapio, render: (x) => <CmvTxt v={x.cmvCardapio} /> },
+                  ]}
+                  linhas={casas} chave={(x) => x.unit} ordemInicial={{ id: 'custo', dir: 'desc' }}
                 />
               </div>
             )}
@@ -137,44 +104,38 @@ export default function PorPromocao({ dados, filtros }) {
     )
   }
 
-  const totalFiltradas = filtradas.reduce((s, l) => s + l.fat, 0)
-
   return (
     <div className="p-4 lg:p-6 space-y-4">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-lg font-bold text-brand-black">Por promoção — {mesLabel(mes)}</h1>
-          <p className="text-xs text-zinc-400">
-            {filtros.unidade ? labelForUnit(filtros.unidade) : 'Rede'} · {filtradas.length} promoções · {brl(totalFiltradas)} · clique numa linha pra ver dia a dia
-          </p>
+          <h1 className="text-lg font-bold text-brand-black">Promoções — {mesLabel(mes)}{parcial ? ' (parcial)' : ''}</h1>
+          <p className="text-xs text-zinc-400">{filtros.unidade ? labelForUnit(filtros.unidade) : 'Rede'} · relatório Promoções Utilizadas da ZIG, pelo nome da promoção · clique pra ver os produtos</p>
         </div>
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-1.5 text-xs text-zinc-500 cursor-pointer">
-            <input type="checkbox" checked={soProblemas} onChange={(e) => setSoProblemas(e.target.checked)} /> só com problema
-          </label>
-          <input
-            value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar promoção…"
-            className="px-3 py-1.5 rounded-lg border border-surface-border text-sm bg-white w-56"
-          />
-        </div>
+        <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar promoção…" className="px-3 py-1.5 rounded-lg border border-surface-border text-sm bg-white w-56" />
+      </div>
+
+      {tot.semCusto > 0 && (
+        <Aviso>{num(tot.semCusto)} itens consumidos não têm custo na ficha técnica (custo entra como zero). A lista está na Conferência.</Aviso>
+      )}
+
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <Kpi label="Itens consumidos" valor={num(tot.usos)} />
+        <Kpi label="Valor de cardápio" valor={brlK(tot.cardapio)} sub={`desconto ${brlK(tot.desconto)}`} />
+        <Kpi label="Custo (ficha técnica)" valor={brlK(tot.custo)} />
+        <Kpi label="CMV s/ cardápio" valor={pct(tot.cardapio ? tot.custo / tot.cardapio : null)} sub="custo ÷ valor de cardápio" />
+        <Kpi label="Pago pelo cliente" valor={brlK(tot.pago)} sub="só promoções de desconto" />
       </div>
 
       <Card className="p-0">
         <TabelaOrdenavel
-          colunas={colunas}
-          linhas={filtradas}
-          chave={(l) => l.chave}
-          ordemInicial={{ id: 'fat', dir: 'desc' }}
-          onLinhaClick={(k) => setAberta((a) => (a === k ? null : k))}
-          aberta={aberta}
-          renderDetalhe={detalhe}
+          colunas={colunas} linhas={filtradas} chave={(l) => l.k} ordemInicial={{ id: 'custo', dir: 'desc' }}
+          onLinhaClick={(k) => setAberta((a) => (a === k ? null : k))} aberta={aberta} renderDetalhe={detalhe}
         />
       </Card>
 
       <p className="text-[11px] text-zinc-400">
-        Cada linha junta o pacote (faturamento/pessoas) e a promoção utilizada (itens consumidos/custo) que têm o mesmo nome.
-        "Sem consumo" = pacote vendido sem item lançado na promoção de mesmo nome (comum em reservas com nome do cliente);
-        "Sem receita casada" = itens consumidos numa promoção sem pacote de mesmo nome. A aba Conferência lista esses casos.
+        Valor de cardápio = quantidade × preço da ficha técnica. CMV s/ cardápio = quanto custa cada R$ 1 de cardápio entregue na promoção.
+        Tipo Desconto = o cliente paga parte do item (receita = cardápio − desconto, CMV s/ pago). A rentabilidade do total (custo das promoções ÷ receita dos pacotes) está na Visão geral, Por casa e Análise diária.
       </p>
     </div>
   )
