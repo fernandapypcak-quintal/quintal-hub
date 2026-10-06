@@ -1,246 +1,212 @@
 // app/hub/promocoes/data/usePromocoesData.js
 //
-// Junta duas fontes:
-//  1) O Apps Script novo de Promoções Utilizadas + Pacotes (categorizado)
-//  2) A mesma fonte de Faturamento Total que o módulo /hub/faturamento já usa
-// e devolve uma tabela mensal por unidade, pronta pro Dashboard.
+// Carrega e normaliza tudo que o módulo usa:
+//  1) /api/promocoes  → pacotes, promoções utilizadas (mensal + diário), ficha técnica, status
+//  2) loadData() do /hub/faturamento → faturamento total por casa/dia (canal CASA)
+//     (mesma regra de corte planilha/ZIG/ao vivo do dashboard de faturamento —
+//      antes este módulo somava as três fontes por cima e duplicava dias)
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { unitIdFromString, labelForUnit, ALL_UNIT_IDS } from '@/lib/units'
-import { custoDoProduto } from '@/lib/catalogoCustos'
-import { URL_PROMOCOES_PACOTES as URL_PROMOCOES } from '@/lib/promocoesConfig'
+import { CUSTO_POR_PRODUTO } from '@/lib/catalogoCustos'
+import { COLUNA_FATURAMENTO_PACOTE } from '@/lib/promocoesConfig'
+import { loadData as carregarFaturamento } from '../../faturamento/data/loader'
+import { chavePromo, chaveProduto, numero, mesDe, ultimoDiaDoMes } from './modelo'
 
-const URL_FATURAMENTO = 'https://script.google.com/macros/s/AKfycbyEoeYAWVUGc8n-_J61Sd91XDhkRPJOaVQnvUbk_-UcWyuaRtoyvFwtqMMcFq8_H80vwA/exec'
-
-const CATEGORIAS = ['All Inclusive', 'C&C', 'Clássicos', 'Pacotes dias Promo', 'Pacotes']
-
-function mesLabelToAnoMes(mesLabel) {
-  const s = String(mesLabel || '').trim()
-  // formato esperado: "MM/AAAA"
-  let m = s.match(/^(\d{2})\/(\d{4})$/)
-  if (m) return `${m[2]}-${m[1]}`
-  // o Google Sheets às vezes converte "MM/AAAA" sozinho pra uma Date, e o
-  // Apps Script devolve isso como "AAAA-MM-DD" — trata esse caso também.
-  m = s.match(/^(\d{4})-(\d{2})/)
-  if (m) return `${m[1]}-${m[2]}`
-  return null
+function expandir(t) {
+  if (!t?.cols?.length) return []
+  const texto = new Set(t.texto || [])
+  return t.rows.map((r) => {
+    const o = {}
+    t.cols.forEach((c, i) => { o[c] = texto.has(i) ? t.dict[r[i]] : r[i] })
+    return o
+  })
 }
 
-function dataToAnoMes(dataStr) {
-  // "2026-07-05" -> "2026-07"
-  const s = String(dataStr || '')
-  return s.length >= 7 ? s.slice(0, 7) : null
+function hojeSP() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
+}
+function diaAnterior(d) {
+  const [a, m, dd] = d.split('-').map(Number)
+  const x = new Date(Date.UTC(a, m - 1, dd - 1))
+  return x.toISOString().slice(0, 10)
 }
 
-async function fetchJson(url) {
-  const r = await fetch(url)
-  if (!r.ok) throw new Error(`Erro ${r.status} ao buscar ${url}`)
-  return r.json()
+function montarFicha(linhas) {
+  const mapa = new Map()
+  // fallback: catálogo embutido (Mai/Jun 2026) só pro que a ficha ao vivo não tiver
+  for (const [nome, custo] of Object.entries(CUSTO_POR_PRODUTO)) {
+    mapa.set(chaveProduto(nome), { custo, preco: null, origem: 'catalogo' })
+  }
+  for (const [nome, custo, preco] of linhas || []) {
+    const c = numero(custo)
+    if (!nome || !(c > 0)) continue
+    mapa.set(chaveProduto(nome), { custo: c, preco: numero(preco) || null, origem: 'ficha' })
+  }
+  return mapa
 }
 
-// ── Faturamento Total por unidade + mês (só canal CASA — dine-in) ──────────
-async function carregarFaturamentoPorMes() {
-  const totais = {} // { unitId: { anoMes: valor } }
+export function processar(api, linhasFaturamento) {
+  const status = api.status || {}
+  const ultimoFechado = status.ultimoDiaFechado || diaAnterior(hojeSP())
+  const ficha = montarFicha(api.ficha)
+  // Catálogo pro Simulador (só a ficha ao vivo/cache; vazio → simulador usa o snapshot)
+  const catalogo = (api.ficha || [])
+    .map(([produto, custo, preco, categoria]) => ({ produto: String(produto || '').trim(), categoria: String(categoria || 'OUTROS').trim() || 'OUTROS', custo: numero(custo), preco: numero(preco) }))
+    .filter((p) => p.produto)
 
-  function acumular(loja, anoMes, valor) {
-    const unitId = unitIdFromString(loja)
-    if (!unitId || !anoMes || !valor) return
-    if (!totais[unitId]) totais[unitId] = {}
-    totais[unitId][anoMes] = (totais[unitId][anoMes] || 0) + valor
-  }
-
-  const [resPlanilha, resZig, resZigLive] = await Promise.allSettled([
-    fetchJson(`${URL_FATURAMENTO}?tipo=dados`),
-    fetchJson(`${URL_FATURAMENTO}?tipo=zig`),
-    fetchJson(`${URL_FATURAMENTO}?tipo=zigLive&dias=3`),
-  ])
-
-  if (resPlanilha.status === 'fulfilled') {
-    for (const r of resPlanilha.value?.dados || []) {
-      const canal = String(r.Canal || '').trim().toUpperCase()
-      if (canal !== 'CASA') continue
-      const ano = Number(r.Ano), mes = Number(r.Mes)
-      if (!ano || !mes) continue
-      const anoMes = `${ano}-${String(mes).padStart(2, '0')}`
-      acumular(r.Loja, anoMes, parseFloat(String(r.Valor).replace(',', '.')) || 0)
-    }
-  }
-
-  for (const res of [resZig, resZigLive]) {
-    if (res.status !== 'fulfilled') continue
-    for (const r of res.value?.zig || []) {
-      const canal = String(r.Canal || '').trim().toUpperCase()
-      if (canal !== 'CASA') continue
-      const anoMes = dataToAnoMes(r.Data)
-      acumular(r.Loja, anoMes, parseFloat(r.Valor) || 0)
-    }
-  }
-
-  return totais // { unitId: { '2026-06': 123456.78, ... } }
-}
-
-// ── Promoções + Pacotes categorizados ───────────────────────────────────────
-async function carregarPromocoesPacotes() {
-  const [pacotes, promocoes] = await Promise.all([
-    fetchJson(`${URL_PROMOCOES}?tipo=pacotes`),
-    fetchJson(`${URL_PROMOCOES}?tipo=promocoes_utilizadas`),
-  ])
-  return { pacotes: pacotes || [], promocoes: promocoes || [] }
-}
-
-// Relatório diário de Promoções Utilizadas — alimentado por um pipeline
-// resumível (trigger a cada 10min no Apps Script). Pode vir vazio/parcial
-// enquanto o histórico ainda está sendo processado — nesse caso o CMV
-// diário simplesmente não aparece pros dias que faltam.
-async function carregarPromocoesDiario() {
-  try {
-    const dados = await fetchJson(`${URL_PROMOCOES}?tipo=promocoes_utilizadas_diario`)
-    return Array.isArray(dados) ? dados : []
-  } catch (e) {
-    return []
-  }
-}
-
-// ── Monta a estrutura final: por unidade+mês, valores por categoria ────────
-function montarEstrutura(pacotes, promocoes, faturamentoPorMes) {
-  // base[unitId][anoMes] = { faturamento: {categoria: valor}, pessoas: {categoria: valor}, faturamentoTotal, custoPromo: {categoria: valor} }
-  const base = {}
-
-  function getSlot(unitId, anoMes) {
-    if (!base[unitId]) base[unitId] = {}
-    if (!base[unitId][anoMes]) {
-      base[unitId][anoMes] = {
-        faturamento: Object.fromEntries(CATEGORIAS.map(c => [c, 0])),
-        pessoas: Object.fromEntries(CATEGORIAS.map(c => [c, 0])),
-        custoDesconto: Object.fromEntries(CATEGORIAS.map(c => [c, 0])),
-        custoTotal: Object.fromEntries(CATEGORIAS.map(c => [c, 0])),
-        faturamentoTotal: faturamentoPorMes?.[unitId]?.[anoMes] || 0,
-      }
-    }
-    return base[unitId][anoMes]
-  }
-
-  // Pacotes → Faturamento + Nº de pessoas (Confirmados) por categoria
-  for (const r of pacotes) {
-    const unitId = unitIdFromString(r.unidade || r.loja)
-    const anoMes = mesLabelToAnoMes(r.mes) || dataToAnoMes(r.data)
-    if (!unitId || !anoMes) continue
-    const categoria = r.categoria
-    if (!CATEGORIAS.includes(categoria)) continue
-
-    const slot = getSlot(unitId, anoMes)
-    slot.faturamento[categoria] += (parseFloat(r.faturamento_r) || 0) + (parseFloat(r.emitido_nf_r) || 0)
-    slot.pessoas[categoria] += parseFloat(r.confirmados) || 0
-  }
-
-  // Promoções utilizadas → soma de desconto (proxy pra intensidade de uso,
-  // usado só de apoio — o CMV real por categoria depende do custo do produto,
-  // que fica pro próximo passo quando cruzarmos com o catálogo de custos)
-  for (const r of promocoes) {
-    const unitId = unitIdFromString(r.unidade || r.loja)
-    const anoMes = mesLabelToAnoMes(r.mes)
-    if (!unitId || !anoMes) continue
-    const categoria = r.categoria
-    if (!CATEGORIAS.includes(categoria)) continue
-
-    const slot = getSlot(unitId, anoMes)
-    slot.custoDesconto[categoria] += parseFloat(r.desconto_total_r) || 0
-
-    const custoUnitario = custoDoProduto(r.produto)
-    const usos = parseFloat(r.usos) || 0
-    if (custoUnitario != null) {
-      slot.custoTotal[categoria] += custoUnitario * usos
-    }
-  }
-
-  return base
-}
-
-// ── Estrutura diária: Faturamento + Pessoas (do relatório de Pacotes, que
-// já tem data exata) e Custo/CMV (do relatório diário de Promoções
-// Utilizadas, quando disponível pra aquele dia) ────────────────────────────
-function montarEstruturaDiaria(pacotes, promocoesDiario) {
-  const base = {} // base[unitId][data 'AAAA-MM-DD'] = { faturamento: {cat:v}, pessoas: {cat:v}, custoTotal: {cat:v} }
-
-  function getSlot(unitId, data) {
-    if (!base[unitId]) base[unitId] = {}
-    if (!base[unitId][data]) {
-      base[unitId][data] = {
-        faturamento: Object.fromEntries(CATEGORIAS.map(c => [c, 0])),
-        pessoas: Object.fromEntries(CATEGORIAS.map(c => [c, 0])),
-        custoTotal: Object.fromEntries(CATEGORIAS.map(c => [c, 0])),
-        temCustoDoDia: false,
-      }
-    }
-    return base[unitId][data]
-  }
-
-  for (const r of pacotes) {
-    const unitId = unitIdFromString(r.unidade || r.loja)
+  // ── Pacotes ──────────────────────────────────────────────────────────────
+  const pacotes = []
+  for (const r of expandir(api.pacotes)) {
+    const unit = unitIdFromString(r.unidade || r.loja)
     const data = String(r.data || '').slice(0, 10)
-    if (!unitId || !data) continue
-    const categoria = r.categoria
-    if (!CATEGORIAS.includes(categoria)) continue
-
-    const slot = getSlot(unitId, data)
-    slot.faturamento[categoria] += (parseFloat(r.faturamento_r) || 0) + (parseFloat(r.emitido_nf_r) || 0)
-    slot.pessoas[categoria] += parseFloat(r.confirmados) || 0
+    if (!unit || !/^\d{4}-\d{2}-\d{2}$/.test(data) || data > ultimoFechado) continue
+    const faturamento = numero(r.faturamento_r)
+    const valor = numero(r.valor_do_pacote_r)
+    pacotes.push({
+      tipo: 'pacote',
+      unit, data, mes: data.slice(0, 7),
+      nome: String(r.nome_do_pacote || '(sem nome)').trim(),
+      chave: chavePromo(r.nome_do_pacote),
+      categoria: r.categoria,
+      pessoas: numero(r.confirmados),
+      convidados: numero(r.convidados),
+      valor, faturamento,
+      emitido: numero(r.emitido_nf_r),
+      fat: COLUNA_FATURAMENTO_PACOTE === 'valor' ? valor : faturamento,
+    })
   }
 
-  for (const r of promocoesDiario || []) {
-    const unitId = unitIdFromString(r.unidade || r.loja)
-    const data = String(r.data || '').slice(0, 10)
-    if (!unitId || !data) continue
-    const categoria = r.categoria
-    if (!CATEGORIAS.includes(categoria)) continue
-
-    const slot = getSlot(unitId, data)
-    slot.temCustoDoDia = true
-    const custoUnitario = custoDoProduto(r.produto)
-    const usos = parseFloat(r.usos) || 0
-    if (custoUnitario != null) {
-      slot.custoTotal[categoria] += custoUnitario * usos
+  // ── Consumo (Promoções Utilizadas) ───────────────────────────────────────
+  const semCusto = new Map() // produto → usos (pra Conferência)
+  function linhaConsumo(r, data, mes) {
+    const unit = unitIdFromString(r.unidade || r.loja)
+    if (!unit || !mes) return null
+    const usos = numero(r.usos)
+    const f = ficha.get(chaveProduto(r.produto))
+    return {
+      tipo: 'consumo',
+      unit, data, mes,
+      nome: String(r.promocao || '').trim(),
+      chave: chavePromo(r.promocao),
+      categoria: r.categoria,
+      produto: String(r.produto || '').trim(),
+      usos,
+      desconto: numero(r.desconto_total_r),
+      temCusto: !!f,
+      custoUnit: f ? f.custo : null,
+      custo: f ? f.custo * usos : 0,
     }
   }
 
-  return base
+  const consumoDia = []
+  for (const r of expandir(api.promocoesDiario)) {
+    const data = String(r.data || '').slice(0, 10)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) continue
+    const l = linhaConsumo(r, data, data.slice(0, 7))
+    if (l) consumoDia.push(l)
+  }
+  const consumoMensalBruto = []
+  for (const r of expandir(api.promocoesMensal)) {
+    const l = linhaConsumo(r, null, mesDe(r.mes))
+    if (l) consumoMensalBruto.push(l)
+  }
+
+  // Mês "coberto" pelo diário = todos os dias fechados do mês já processados.
+  // Coberto → usa o diário (mês = soma exata dos dias). Senão → usa o mensal.
+  const diarioDesde = status.diarioDesde || null
+  const diarioAte = status.diarioAte || null
+  const mesCoberto = (mes) => {
+    if (!diarioDesde || !diarioAte) return false
+    if (`${mes}-01` < diarioDesde) return false
+    const fim = ultimoDiaDoMes(mes) < ultimoFechado ? ultimoDiaDoMes(mes) : ultimoFechado
+    return diarioAte >= fim
+  }
+
+  const mesesSet = new Set([...pacotes.map((p) => p.mes), ...consumoMensalBruto.map((c) => c.mes), ...consumoDia.map((c) => c.mes)])
+  const meses = [...mesesSet].filter(Boolean).sort()
+  const fonteCustoMes = {}
+  const consumoMes = []
+  for (const mes of meses) {
+    const usarDiario = mesCoberto(mes)
+    fonteCustoMes[mes] = usarDiario ? 'diario' : 'mensal'
+    const origem = usarDiario ? consumoDia : consumoMensalBruto
+    for (const c of origem) if (c.mes === mes) consumoMes.push(c)
+  }
+  for (const c of [...consumoMes, ...consumoDia]) {
+    if (!c.temCusto) semCusto.set(c.produto, (semCusto.get(c.produto) || 0) + c.usos)
+  }
+
+  // ── Faturamento total por casa ───────────────────────────────────────────
+  const fatTotal = { dia: {}, mes: {} }
+  for (const r of linhasFaturamento || []) {
+    if (r.Canal !== 'CASA') continue
+    const unit = unitIdFromString(r.Loja)
+    if (!unit || !r.Data || r.Data > ultimoFechado) continue
+    fatTotal.dia[unit] ??= {}
+    fatTotal.mes[unit] ??= {}
+    fatTotal.dia[unit][r.Data] = (fatTotal.dia[unit][r.Data] || 0) + r.Valor
+    fatTotal.mes[unit][r.Ano_Mes] = (fatTotal.mes[unit][r.Ano_Mes] || 0) + r.Valor
+  }
+
+  // ── Nome de exibição por promoção (grafia mais frequente) ────────────────
+  const contagem = new Map()
+  for (const r of [...pacotes, ...consumoMes]) {
+    if (!contagem.has(r.chave)) contagem.set(r.chave, new Map())
+    const m = contagem.get(r.chave)
+    m.set(r.nome, (m.get(r.nome) || 0) + 1)
+  }
+  const nomes = new Map()
+  for (const [k, m] of contagem) nomes.set(k, [...m.entries()].sort((a, b) => b[1] - a[1])[0][0] || k)
+
+  const categoriaDaChave = new Map()
+  for (const r of consumoMes) categoriaDaChave.set(r.chave, r.categoria)
+  for (const r of pacotes) categoriaDaChave.set(r.chave, r.categoria) // pacote tem prioridade
+
+  const unitsComDado = new Set([...pacotes.map((p) => p.unit), ...consumoMes.map((c) => c.unit)])
+  const unidades = ALL_UNIT_IDS.filter((u) => unitsComDado.has(u)).map((id) => ({ id, label: labelForUnit(id) }))
+
+  return {
+    pacotes, consumoMes, consumoDia, fatTotal, meses, unidades, catalogo,
+    nomes, categoriaDaChave, fonteCustoMes, ultimoFechado,
+    status, geradoEm: api.geradoEm, fichaAoVivo: api.fichaAoVivo,
+    produtosSemCusto: [...semCusto.entries()].sort((a, b) => b[1] - a[1]),
+    temFaturamentoTotal: Object.keys(fatTotal.mes).length > 0,
+  }
 }
 
 export function usePromocoesData() {
   const [dados, setDados] = useState(null)
-  const [dadosDiarios, setDadosDiarios] = useState(null)
-  const [pacotesRaw, setPacotesRaw] = useState([])
-  const [promocoesDiarioRaw, setPromocoesDiarioRaw] = useState([])
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState(null)
+  const [avisoFaturamento, setAvisoFaturamento] = useState(null)
 
   useEffect(() => {
     let cancelado = false
-
-    async function carregar() {
+    ;(async () => {
       setLoading(true)
       setErro(null)
       try {
-        const [faturamentoPorMes, { pacotes, promocoes }, promocoesDiario] = await Promise.all([
-          carregarFaturamentoPorMes(),
-          carregarPromocoesPacotes(),
-          carregarPromocoesDiario(),
+        const [resApi, resFat] = await Promise.allSettled([
+          fetch('/api/promocoes', { cache: 'no-store' }).then(async (r) => {
+            const j = await r.json()
+            if (!r.ok || j.ok === false) throw new Error(j.erro || `HTTP ${r.status}`)
+            return j
+          }),
+          carregarFaturamento(false),
         ])
         if (cancelado) return
-        setDados(montarEstrutura(pacotes, promocoes, faturamentoPorMes))
-        setDadosDiarios(montarEstruturaDiaria(pacotes, promocoesDiario))
-        setPacotesRaw(pacotes)
-        setPromocoesDiarioRaw(promocoesDiario)
+        if (resApi.status === 'rejected') throw resApi.reason
+        if (resFat.status === 'rejected') setAvisoFaturamento('Faturamento total das casas indisponível agora — o Peso das promoções fica em branco.')
+        setDados(processar(resApi.value, resFat.status === 'fulfilled' ? resFat.value : []))
       } catch (e) {
-        if (!cancelado) setErro(e.message)
+        if (!cancelado) setErro(e.message || String(e))
       } finally {
         if (!cancelado) setLoading(false)
       }
-    }
-
-    carregar()
+    })()
     return () => { cancelado = true }
   }, [])
 
-  return { dados, dadosDiarios, pacotesRaw, promocoesDiarioRaw, loading, erro, CATEGORIAS, ALL_UNIT_IDS, labelForUnit }
+  return { dados, loading, erro, avisoFaturamento }
 }
