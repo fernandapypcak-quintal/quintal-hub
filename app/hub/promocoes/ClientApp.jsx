@@ -6,17 +6,18 @@ import Sidebar from './components/layout/Sidebar'
 import BottomNav from './components/layout/BottomNav'
 import VisaoGeral from './components/pages/VisaoGeral'
 import PorCasa from './components/pages/PorCasa'
+import Pacotes from './components/pages/Pacotes'
 import PorPromocao from './components/pages/PorPromocao'
 import AnaliseDiaria from './components/pages/AnaliseDiaria'
 import Conferencia from './components/pages/Conferencia'
 import SimuladorPromocoesClientApp from '../simulador-promocoes/ClientApp'
 import { usePromocoesData } from './data/usePromocoesData'
 import { Carregando, Aviso, mesLabel } from './components/ui'
-import { CATEGORIAS_PROMO } from '@/lib/promocoesConfig'
 
 const PAGES = {
   visao: VisaoGeral,
   casas: PorCasa,
+  pacotes: Pacotes,
   promocoes: PorPromocao,
   diaria: AnaliseDiaria,
   conferencia: Conferencia,
@@ -90,12 +91,6 @@ export default function PromocoesClientApp({ allowedLojas = '*' }) {
                 <select value={filtros.unidade} onChange={(e) => set('unidade', e.target.value)} style={selectStyle}>
                   {(podeVerTodas || unidades.length > 1) && <option value="" style={opt}>{podeVerTodas ? 'Rede (todas)' : 'Minhas casas'}</option>}
                   {unidades.map((u) => <option key={u.id} value={u.id} style={opt}>{u.label}</option>)}
-                </select>
-              )}
-              {activePage !== 'conferencia' && (
-                <select value={filtros.categoria} onChange={(e) => set('categoria', e.target.value)} style={selectStyle}>
-                  <option value="" style={opt}>Todas as categorias</option>
-                  {CATEGORIAS_PROMO.map((c) => <option key={c} value={c} style={opt}>{c}</option>)}
                 </select>
               )}
             </div>
