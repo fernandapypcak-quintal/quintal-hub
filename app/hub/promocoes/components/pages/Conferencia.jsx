@@ -10,7 +10,7 @@ import { agrupar, total, fatTotalPeriodo } from '../../data/modelo'
 import { Card, Kpi, TabelaOrdenavel, brl, pct, num, mesLabel, dataBR } from '../ui'
 
 export default function Conferencia({ dados, filtros }) {
-  const { pacotes, consumoMes, fatTotal, unidades, nomes, fonteCustoMes, status, geradoEm, fichaAoVivo, ultimoFechado } = dados
+  const { pacotes, consumoMes, fatTotal, unidades, nomes, fonteCustoMes, status, geradoEm, fichaAoVivo, ultimoFechado, tipoPromo } = dados
   const units = filtros.unidade ? [filtros.unidade] : unidades.map((u) => u.id)
   const mes = filtros.mes
 
@@ -39,7 +39,15 @@ export default function Conferencia({ dados, filtros }) {
 
     const casasSemFat = units.filter((u) => fatTotalPeriodo(fatTotal, [u], { mes }) == null && tot.nPacotes > 0)
 
-    return { tot, fatCasado, custoCasado, pacotesSemConsumo, consumoSemPacote, semCusto: [...semCusto.values()], casasSemFat }
+    // Tipo de cada promoção de consumo do mês (pacote x desconto parcial)
+    const tipos = [...agrupar([], consumoMes, f, (x) => x.chave).entries()].map(([k, a]) => ({
+      k, nome: nomes.get(k) || k,
+      tipo: tipoPromo?.get(k)?.tipo || 'pacote',
+      pctDesconto: tipoPromo?.get(k)?.pctDesconto ?? null,
+      usos: a.usos, custo: a.custo, fatItens: a.fatItens,
+    }))
+
+    return { tot, fatCasado, custoCasado, pacotesSemConsumo, consumoSemPacote, semCusto: [...semCusto.values()], casasSemFat, tipos }
   }, [pacotes, consumoMes, fatTotal, units.join(','), mes])
 
   const { tot } = r
@@ -52,13 +60,9 @@ export default function Conferencia({ dados, filtros }) {
         <p className="text-xs text-zinc-400">O que pode fazer o número não bater, e onde corrigir.</p>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <Kpi label="Cobertura de custo" valor={pct(cobertura)} corValor={cobertura != null && cobertura < 0.95 ? '#B45309' : undefined}
           sub={`${num(tot.usosSemCusto)} de ${num(tot.usos)} itens sem custo`} />
-        <Kpi label="Faturamento casado" valor={pct(tot.fat ? r.fatCasado / tot.fat : null)}
-          sub="pacotes com promoção de mesmo nome" />
-        <Kpi label="Custo casado" valor={pct(tot.custo ? r.custoCasado / tot.custo : null)}
-          sub="consumo com pacote de mesmo nome" />
         <Kpi label="Fonte do custo no mês" valor={fonteCustoMes[mes] === 'diario' ? 'Diário' : 'Mensal'}
           sub={fonteCustoMes[mes] === 'diario' ? 'soma exata dos dias' : 'diário ainda processando'} />
       </div>
@@ -84,13 +88,14 @@ export default function Conferencia({ dados, filtros }) {
           <table className="w-full text-[12.5px]">
             <tbody className="divide-y divide-zinc-100">
               <tr><td className="py-1.5 text-zinc-500">Valor do pacote</td><td className="py-1.5 text-right font-mono">{brl(tot.valor)}</td></tr>
-              <tr className={COLUNA_FATURAMENTO_PACOTE === 'faturamento' ? 'font-bold' : ''}><td className="py-1.5 text-zinc-500">Faturamento</td><td className="py-1.5 text-right font-mono">{brl(tot.faturamentoZig)}</td></tr>
-              <tr><td className="py-1.5 text-zinc-500">Emitido NF</td><td className="py-1.5 text-right font-mono">{brl(tot.emitido)}</td></tr>
+              <tr><td className="py-1.5 text-zinc-500">Faturamento (pago na casa)</td><td className="py-1.5 text-right font-mono">{brl(tot.faturamentoZig)}</td></tr>
+              <tr><td className="py-1.5 text-zinc-500">Emissão de NF (faturado por nota)</td><td className="py-1.5 text-right font-mono">{brl(tot.emitido)}</td></tr>
+              <tr className="font-bold"><td className="py-1.5 text-zinc-500">Receita usada no dashboard</td><td className="py-1.5 text-right font-mono">{brl(tot.fat - tot.fatItens)}</td></tr>
               <tr><td className="py-1.5 text-zinc-500">Pacotes / confirmados / convidados</td><td className="py-1.5 text-right font-mono">{num(tot.nPacotes)} / {num(tot.pessoas)} / {num(tot.convidados)}</td></tr>
             </tbody>
           </table>
           <p className="text-[10.5px] text-zinc-400 mt-2">
-            O dashboard usa a coluna em negrito como faturamento (configurável em lib/promocoesConfig.js). Confira esses totais contra o relatório de Pacotes no painel da ZIG.
+            Receita = Faturamento + Emissão de NF (configurável em lib/promocoesConfig.js). Confira contra o relatório de Pacotes no painel da ZIG.
           </p>
         </Card>
       </div>
@@ -110,32 +115,23 @@ export default function Conferencia({ dados, filtros }) {
         </p>
       </Card>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <Card titulo={`Pacotes sem consumo de mesmo nome (${r.pacotesSemConsumo.length})`}>
-          <TabelaOrdenavel
-            colunas={[
-              { id: 'nome', label: 'Pacote', align: 'left', valor: (x) => x.nome, className: 'max-w-[240px] truncate' },
-              { id: 'n', label: 'Qtd', valor: (x) => x.n },
-              { id: 'pessoas', label: 'Pessoas', valor: (x) => x.pessoas, render: (x) => num(x.pessoas) },
-              { id: 'fat', label: 'Faturamento', valor: (x) => x.fat, render: (x) => brl(x.fat) },
-            ]}
-            linhas={r.pacotesSemConsumo} chave={(x) => x.k} ordemInicial={{ id: 'fat', dir: 'desc' }} vazia="Nenhum."
-          />
-          <p className="text-[10.5px] text-zinc-400 mt-2">Receita sem custo associado → CMV dessa promoção não sai, e o CMV da categoria fica subestimado.</p>
-        </Card>
-        <Card titulo={`Consumo sem pacote de mesmo nome (${r.consumoSemPacote.length})`}>
-          <TabelaOrdenavel
-            colunas={[
-              { id: 'nome', label: 'Promoção', align: 'left', valor: (x) => x.nome, className: 'max-w-[240px] truncate' },
-              { id: 'usos', label: 'Usos', valor: (x) => x.usos, render: (x) => num(x.usos) },
-              { id: 'custo', label: 'Custo', valor: (x) => x.custo, render: (x) => brl(x.custo) },
-              { id: 'desconto', label: 'Desconto', valor: (x) => x.desconto, render: (x) => brl(x.desconto) },
-            ]}
-            linhas={r.consumoSemPacote} chave={(x) => x.k} ordemInicial={{ id: 'custo', dir: 'desc' }} vazia="Nenhum."
-          />
-          <p className="text-[10.5px] text-zinc-400 mt-2">Custo sem receita associada → infla o CMV da categoria. Normalmente é reserva cadastrada com nome do cliente.</p>
-        </Card>
-      </div>
+      <Card titulo={`Como cada promoção de consumo foi classificada (${r.tipos.length})`}>
+        <TabelaOrdenavel
+          colunas={[
+            { id: 'nome', label: 'Promoção (consumo)', align: 'left', valor: (x) => x.nome, className: 'font-medium max-w-[260px] truncate' },
+            { id: 'tipo', label: 'Tipo', align: 'left', valor: (x) => x.tipo, render: (x) => (x.tipo === 'desconto' ? 'Desconto parcial' : 'Item de pacote') },
+            { id: 'pctDesconto', label: '% desconto médio', valor: (x) => x.pctDesconto, render: (x) => pct(x.pctDesconto) },
+            { id: 'usos', label: 'Usos', valor: (x) => x.usos, render: (x) => num(x.usos) },
+            { id: 'custo', label: 'Custo', valor: (x) => x.custo, render: (x) => brl(x.custo) },
+            { id: 'fatItens', label: 'Receita dos itens', valor: (x) => x.fatItens, render: (x) => (x.tipo === 'desconto' ? brl(x.fatItens) : '—') },
+          ]}
+          linhas={r.tipos} chave={(x) => x.k} ordemInicial={{ id: 'custo', dir: 'desc' }} vazia="Nenhuma."
+        />
+        <p className="text-[10.5px] text-zinc-400 mt-2">
+          Item de pacote = sai com ~100% de desconto (a receita vem da reserva). Desconto parcial = cliente paga parte do item (receita = cardápio − desconto) e entra na categoria Descontos.
+        </p>
+      </Card>
+
     </div>
   )
 }
