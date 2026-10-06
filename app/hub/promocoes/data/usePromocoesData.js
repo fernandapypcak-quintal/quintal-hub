@@ -153,12 +153,10 @@ export function processar(api, linhasFaturamento) {
   // Coberto → usa o diário (mês = soma exata dos dias). Senão → usa o mensal.
   const diarioDesde = status.diarioDesde || null
   const diarioAte = status.diarioAte || null
-  const mesCoberto = (mes) => {
-    if (!diarioDesde || !diarioAte) return false
-    if (`${mes}-01` < diarioDesde) return false
-    const fim = ultimoDiaDoMes(mes) < ultimoFechado ? ultimoDiaDoMes(mes) : ultimoFechado
-    return diarioAte >= fim
-  }
+  // Mês com consumo por dia → usa o diário (mês = soma dos dias). Sem dia → consumo mensal (abr/mai).
+  const mesesComDiario = new Set(consumoDia.map((c) => c.mes))
+  const mesCoberto = (mes) => mesesComDiario.has(mes)
+
 
   const mesesSet = new Set([...pacotes.map((p) => p.mes), ...consumoMensalBruto.map((c) => c.mes), ...consumoDia.map((c) => c.mes)])
   const meses = [...mesesSet].filter(Boolean).sort()
