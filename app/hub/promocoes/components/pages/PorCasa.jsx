@@ -3,8 +3,8 @@
 
 import { useMemo, useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts'
-import { CATEGORIAS_PROMO } from '@/lib/promocoesConfig'
 import { agrupar, total, derivar, fatTotalPeriodo, mesAnterior, corCmv } from '../../data/modelo'
+import DetalheSeparado from '../DetalheSeparado'
 import { Card, TabelaOrdenavel, COLS_METRICAS, brl, brlK, pct, mesLabel, varPct, Delta } from '../ui'
 
 export default function PorCasa({ dados, filtros }) {
@@ -47,36 +47,15 @@ export default function PorCasa({ dados, filtros }) {
   const grafico = [...linhas].filter((l) => l.peso != null).sort((a, b) => b.peso - a.peso)
 
   function detalhe(l) {
-    const ft = l.fatTotal
-    const porCat = agrupar(pacotes, consumoMes, { units: [l.unit], mes }, (r) => r.categoria)
-    const cats = CATEGORIAS_PROMO.map((c) => ({ nome: c, ...derivar(porCat.get(c) || total([], [], {}), ft) }))
-    const porPromo = agrupar(pacotes, consumoMes, { units: [l.unit], mes, categoria }, (r) => r.chave)
-    const top = [...porPromo.entries()].map(([k, a]) => ({ nome: nomes.get(k) || k, ...derivar(a, ft) }))
-      .sort((a, b) => b.fat - a.fat).slice(0, 8)
-    const colsDet = [
-      { id: 'nome', label: 'Categoria', align: 'left', valor: (x) => x.nome },
-      COLS_METRICAS.fat, COLS_METRICAS.peso, COLS_METRICAS.cmv, COLS_METRICAS.pessoas, COLS_METRICAS.ticket, COLS_METRICAS.margem,
-    ]
-    return (
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <div className="bg-white rounded-lg border border-zinc-100 p-2">
-          <TabelaOrdenavel colunas={colsDet} linhas={cats} chave={(x) => x.nome} ordemInicial={{ id: 'fat', dir: 'desc' }} />
-        </div>
-        <div className="bg-white rounded-lg border border-zinc-100 p-2">
-          <TabelaOrdenavel
-            colunas={[{ id: 'nome', label: 'Principais promoções', align: 'left', valor: (x) => x.nome }, COLS_METRICAS.fat, COLS_METRICAS.cmv, COLS_METRICAS.pessoas, COLS_METRICAS.status]}
-            linhas={top} chave={(x) => x.nome} ordemInicial={{ id: 'fat', dir: 'desc' }}
-          />
-        </div>
-      </div>
-    )
+    return <DetalheSeparado dados={dados} filtro={{ units: [l.unit], mes }} />
   }
+
 
   return (
     <div className="p-4 lg:p-6 space-y-4">
       <div>
         <h1 className="text-lg font-bold text-brand-black">Por casa — {mesLabel(mes)}{mes === ultimoFechado.slice(0, 7) ? ' (parcial)' : ''}</h1>
-        <p className="text-xs text-zinc-400">{categoria || 'Todas as promoções'} · clique numa casa pra abrir por categoria e promoção</p>
+        <p className="text-xs text-zinc-400">Todas as promoções · clique numa casa pra ver pacotes e promoções</p>
       </div>
 
       <Card titulo="Peso das promoções no faturamento de cada casa">
