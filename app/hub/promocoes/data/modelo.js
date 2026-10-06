@@ -305,3 +305,10 @@ export function estimarCustoPacotes(pacotes, consumoDia, consumoMes) {
     p.metodoCusto = metodo
   }
 }
+
+// Pacote usado pela reserva (PACOTE 03, QUINTAL 2…) — vem do detalhe da ZIG.
+// Sem detalhe ainda → todas juntas em SEM_DETALHE.
+export const SEM_DETALHE = '__sem_detalhe__'
+export function chavePacoteUsado(p) {
+  return p.detalhe && p.promocaoPacote ? chavePromo(p.promocaoPacote) : SEM_DETALHE
+}
