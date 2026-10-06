@@ -11,7 +11,7 @@ import { unitIdFromString, labelForUnit, ALL_UNIT_IDS } from '@/lib/units'
 import { CUSTO_POR_PRODUTO } from '@/lib/catalogoCustos'
 import { COLUNA_FATURAMENTO_PACOTE } from '@/lib/promocoesConfig'
 import { loadData as carregarFaturamento } from '../../faturamento/data/loader'
-import { chavePromo, chaveProduto, numero, mesDe, ultimoDiaDoMes } from './modelo'
+import { chavePromo, chaveProduto, numero, mesDe, ultimoDiaDoMes, categorizarPromocao } from './modelo'
 
 function expandir(t) {
   if (!t?.cols?.length) return []
@@ -61,6 +61,8 @@ export function processar(api, linhasFaturamento) {
     const unit = unitIdFromString(r.unidade || r.loja)
     const data = String(r.data || '').slice(0, 10)
     if (!unit || !/^\d{4}-\d{2}-\d{2}$/.test(data) || data > ultimoFechado) continue
+    const categoria = categorizarPromocao(r.nome_do_pacote)
+    if (!categoria) continue // desconto interno (funcionário, sócio…)
     const faturamento = numero(r.faturamento_r)
     const valor = numero(r.valor_do_pacote_r)
     pacotes.push({
@@ -68,7 +70,7 @@ export function processar(api, linhasFaturamento) {
       unit, data, mes: data.slice(0, 7),
       nome: String(r.nome_do_pacote || '(sem nome)').trim(),
       chave: chavePromo(r.nome_do_pacote),
-      categoria: r.categoria,
+      categoria,
       pessoas: numero(r.confirmados),
       convidados: numero(r.convidados),
       valor, faturamento,
@@ -82,6 +84,8 @@ export function processar(api, linhasFaturamento) {
   function linhaConsumo(r, data, mes) {
     const unit = unitIdFromString(r.unidade || r.loja)
     if (!unit || !mes) return null
+    const categoria = categorizarPromocao(r.promocao)
+    if (!categoria) return null
     const usos = numero(r.usos)
     const f = ficha.get(chaveProduto(r.produto))
     return {
@@ -89,7 +93,7 @@ export function processar(api, linhasFaturamento) {
       unit, data, mes,
       nome: String(r.promocao || '').trim(),
       chave: chavePromo(r.promocao),
-      categoria: r.categoria,
+      categoria,
       produto: String(r.produto || '').trim(),
       usos,
       desconto: numero(r.desconto_total_r),
