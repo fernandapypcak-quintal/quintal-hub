@@ -6,6 +6,7 @@ import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, C
 import { labelForUnit } from '@/lib/units'
 import { CMV_META } from '@/lib/promocoesConfig'
 import { agrupar, derivar, fatTotalPeriodo, total } from '../../data/modelo'
+import DetalheSeparado from '../DetalheSeparado'
 import { Card, Kpi, Aviso, TabelaOrdenavel, COLS_METRICAS, brl, brlK, pct, mesLabel, dataBR, diaSemana } from '../ui'
 
 export default function AnaliseDiaria({ dados, filtros }) {
@@ -69,36 +70,9 @@ export default function AnaliseDiaria({ dados, filtros }) {
   ]
 
   function detalhe(d) {
-    const ft = d.fatTotal
-    const g = agrupar(pacotes, consumoDia, { units, data: d.data, categoria }, (r) => r.chave)
-    const promos = [...g.entries()].map(([k, a]) => ({ chave: k, nome: nomes.get(k) || k, categoria: categoriaDaChave.get(k) || '—', ...derivar(a, ft) }))
-    const porCasa = units.length > 1
-      ? [...agrupar(pacotes, consumoDia, { units, data: d.data, categoria }, (r) => r.unit).entries()]
-          .map(([u, a]) => ({ unit: u, nome: labelForUnit(u), ...derivar(a, fatTotalPeriodo(fatTotal, [u], { data: d.data })) }))
-      : []
-    return (
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
-        <div className="bg-white rounded-lg border border-zinc-100 p-2 xl:col-span-2">
-          <TabelaOrdenavel
-            colunas={[
-              { id: 'nome', label: 'Promoção', align: 'left', valor: (x) => x.nome, className: 'font-medium max-w-[240px] truncate' },
-              { id: 'categoria', label: 'Categoria', align: 'left', valor: (x) => x.categoria, className: 'text-zinc-500' },
-              COLS_METRICAS.fat, COLS_METRICAS.pessoas, COLS_METRICAS.ticket, COLS_METRICAS.cmv, COLS_METRICAS.margem, COLS_METRICAS.status,
-            ]}
-            linhas={promos} chave={(x) => x.chave} ordemInicial={{ id: 'fat', dir: 'desc' }}
-          />
-        </div>
-        {porCasa.length > 0 && (
-          <div className="bg-white rounded-lg border border-zinc-100 p-2">
-            <TabelaOrdenavel
-              colunas={[{ id: 'nome', label: 'Casa', align: 'left', valor: (x) => x.nome }, COLS_METRICAS.fat, COLS_METRICAS.peso, COLS_METRICAS.cmv]}
-              linhas={porCasa} chave={(x) => x.unit} ordemInicial={{ id: 'fat', dir: 'desc' }}
-            />
-          </div>
-        )}
-      </div>
-    )
+    return <DetalheSeparado dados={dados} filtro={{ units, data: d.data }} />
   }
+
 
   const totMes = derivar(total(pacotes, consumoDia, { units, mes, categoria }), null)
 
@@ -106,7 +80,7 @@ export default function AnaliseDiaria({ dados, filtros }) {
     <div className="p-4 lg:p-6 space-y-4">
       <div>
         <h1 className="text-lg font-bold text-brand-black">Análise diária — {mesLabel(mes)}</h1>
-        <p className="text-xs text-zinc-400">{filtros.unidade ? labelForUnit(filtros.unidade) : 'Rede'} · {categoria || 'todas as promoções'} · clique num dia pra ver as promoções</p>
+        <p className="text-xs text-zinc-400">{filtros.unidade ? labelForUnit(filtros.unidade) : 'Rede'} · todas as promoções · clique num dia pra ver pacotes e promoções</p>
       </div>
 
       {diasSemCusto > 0 && (
