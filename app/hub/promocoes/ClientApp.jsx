@@ -32,14 +32,15 @@ const opt = { color: '#0D0F14' }
 
 export default function PromocoesClientApp({ allowedLojas = '*' }) {
   const [activePage, setActivePage] = useState('visao')
-  const { dados, loading, erro, avisoFaturamento } = usePromocoesData()
+
+  const [filtros, setFiltros] = useState({ mes: '', unidade: '', categoria: '' })
+  const set = (k, v) => setFiltros((f) => ({ ...f, [k]: v }))
+  // Carrega só o mês escolhido (+ o anterior, pra comparação)
+  const { dados, loading, erro, avisoFaturamento } = usePromocoesData(filtros.mes)
 
   const podeVerTodas = allowedLojas === '*'
   const unidades = dados?.unidades || []
   const meses = useMemo(() => [...(dados?.meses || [])].reverse(), [dados])
-
-  const [filtros, setFiltros] = useState({ mes: '', unidade: '', categoria: '' })
-  const set = (k, v) => setFiltros((f) => ({ ...f, [k]: v }))
 
   // Defaults quando os dados chegam: mês mais recente; unidade fixa p/ quem só vê uma
   useEffect(() => {
@@ -84,7 +85,7 @@ export default function PromocoesClientApp({ allowedLojas = '*' }) {
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               <select value={filtros.mes} onChange={(e) => set('mes', e.target.value)} style={selectStyle}>
                 {meses.map((m) => (
-                  <option key={m} value={m} style={opt}>{mesLabel(m)}{m === dados.ultimoFechado.slice(0, 7) ? ' (parcial)' : ''}</option>
+                  <option key={m} value={m} style={opt}>{mesLabel(m)}{m === dados.ultimoFechado?.slice(0, 7) ? ' (parcial)' : ''}</option>
                 ))}
               </select>
               {activePage !== 'casas' && (
@@ -100,11 +101,11 @@ export default function PromocoesClientApp({ allowedLojas = '*' }) {
         <main className="flex-1 overflow-y-auto pb-20 lg:pb-0">
           {semFiltros ? (
             <SimuladorPromocoesClientApp dados={dados} mostrarBarraVoltar={false} />
-          ) : loading ? (
+          ) : loading || (dados && filtros.mes && dados.mesCarregado !== filtros.mes) ? (
             <Carregando />
           ) : erro ? (
             <div className="p-6"><Aviso tom="red">Erro ao carregar promoções: {erro}</Aviso></div>
-          ) : !dados?.meses.length ? (
+          ) : !dados?.meses?.length ? (
             <div className="p-6 text-sm text-zinc-400">Nenhum dado de promoções ainda.</div>
           ) : filtros.mes ? (
             <>
