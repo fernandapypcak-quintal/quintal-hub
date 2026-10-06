@@ -19,7 +19,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { Plus, Minus, Trash2, Search, Save, X, Flame, TrendingDown, TrendingUp, ChefHat, History, PenLine, BookOpen, Check, Users } from 'lucide-react'
 import PRODUTOS_FALLBACK from '@/lib/catalogoFallback.json'
 import { CMV_META, CMV_CRITICO } from '@/lib/promocoesConfig'
-import { chaveProduto, agruparConsumo, agruparPacotes, ultimoDiaDoMes } from '../promocoes/data/modelo'
+import { chaveProduto, chavePromo, agruparConsumo, agruparPacotes, ultimoDiaDoMes } from '../promocoes/data/modelo'
 
 function normalizar(str) {
   return String(str || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim()
@@ -187,18 +187,19 @@ export default function SimuladorPromocoesClientApp({ dados = null, mostrarBarra
   }, [catalogo, busca, categoria])
 
   // ---------- Histórico (dados do HUB) ----------
-  // Promoção (Promoções Utilizadas) = o que foi consumido.
-  // Pacote (relatório de Pacotes) = quantas pessoas e quanto pagaram.
-  // Consumo por pessoa = itens da promoção ÷ pessoas do pacote escolhido.
+  // Uma lista só: cada pacote/promoção com o nº de pessoas que a gente consegue saber.
+  //  • "reservas": reservas que usaram esse pacote (detalhe da ZIG) → pessoas, ticket e
+  //    tudo que elas consumiram (exato).
+  //  • "mesmo nome": reserva com o mesmo nome da promoção (ex.: Rodízio) → pessoas da
+  //    reserva + consumo do relatório de promoções.
+  //  • sem pessoas: dá pra digitar o nº de pessoas.
   const temHistorico = !!dados?.pacotes
   const [histModo, setHistModo] = useState('mes') // 'mes' | 'dia'
   const [histMes, setHistMes] = useState('3m')
   const [histDia, setHistDia] = useState('')
   const [histUnidade, setHistUnidade] = useState('')
   const [buscaPromo, setBuscaPromo] = useState('')
-  const [buscaPacote, setBuscaPacote] = useState('')
   const [promoSel, setPromoSel] = useState(null)
-  const [pacoteSel, setPacoteSel] = useState(null)
   const [pessoasManual, setPessoasManual] = useState('')
 
   const ultimos3 = useMemo(() => {
@@ -220,88 +221,93 @@ export default function SimuladorPromocoesClientApp({ dados = null, mostrarBarra
   const periodoLabel = filtroHist.data ? dataBR(histDia) : histMes === '3m' ? ultimos3.map(mesLabel).join(', ') : mesLabel(histMes)
   const casaLabel = histUnidade ? dados?.unidades.find((u) => u.id === histUnidade)?.label : 'Rede'
 
-  const promosHist = useMemo(() => {
+  const opcoes = useMemo(() => {
     if (!temHistorico) return []
-    return [...agruparConsumo(consumoHist, filtroHist, (c) => c.chave).entries()]
-      .map(([chave, a]) => ({ chave, nome: dados.nomes.get(chave) || chave, ...a }))
-      .sort((a, b) => b.custo - a.custo)
+    // relatório de promoções: itens por promoção
+    const rel = new Map()
+    for (const c of consumoHist) {
+      if (!noFiltro(c, filtroHist) || c.categoria === 'Desconto') continue
+      const x = rel.get(c.chave) || { nome: dados.nomes.get(c.chave) || c.nome, usos: 0, custo: 0, itens: new Map() }
+      x.usos += c.usos; x.custo += c.custo
+      const k = chaveProduto(c.produto)
+      const y = x.itens.get(k) || { produto: c.produto, usos: 0 }
+      y.usos += c.usos; x.itens.set(k, y)
+      rel.set(c.chave, x)
+    }
+    // reservas que usaram cada pacote (detalhe da ZIG): tudo que consumiram
+    const res = new Map()
+    for (const p of dados.pacotes) {
+      if (!p.detalhe || !p.promocaoPacote || !noFiltro(p, filtroHist)) continue
+      const k = chavePromo(p.promocaoPacote)
+      const x = res.get(k) || { nome: p.promocaoPacote, n: 0, pessoas: 0, fat: 0, custo: 0, itens: new Map() }
+      x.n++; x.pessoas += p.pessoas; x.fat += p.fat; x.custo += p.custoExato || 0
+      for (const it of p.itens || []) {
+        if (!it.qtd) continue
+        const kk = chaveProduto(it.produto)
+        const y = x.itens.get(kk) || { produto: it.produto, usos: 0 }
+        y.usos += it.qtd; x.itens.set(kk, y)
+      }
+      res.set(k, x)
+    }
+    // reserva com o mesmo nome da promoção
+    const porNome = agruparPacotes(dados.pacotes, filtroHist, (p) => p.chave)
+
+    const chaves = new Set([...rel.keys(), ...res.keys()])
+    return [...chaves].map((k) => {
+      const r = res.get(k), c = rel.get(k), nm = porNome.get(k)
+      if (r && r.pessoas > 0) return { chave: k, nome: r.nome, fonte: 'reservas', pessoas: r.pessoas, n: r.n, fat: r.fat, ticket: r.fat / r.pessoas, custo: r.custo, itens: r.itens, usos: c?.usos || 0 }
+      if (c && nm && nm.pessoas > 0) return { chave: k, nome: c.nome, fonte: 'nome', pessoas: nm.pessoas, n: nm.n, fat: nm.fat, ticket: nm.fat / nm.pessoas, custo: c.custo, itens: c.itens, usos: c.usos }
+      return { chave: k, nome: c?.nome || k, fonte: null, pessoas: 0, fat: null, ticket: null, custo: c?.custo || 0, itens: c?.itens || new Map(), usos: c?.usos || 0 }
+    }).sort((a, b) => (b.pessoas > 0) - (a.pessoas > 0) || b.pessoas - a.pessoas || b.custo - a.custo)
   }, [dados, consumoHist, filtroHist, temHistorico])
 
-  const pacotesHist = useMemo(() => {
-    if (!temHistorico) return []
-    return [...agruparPacotes(dados.pacotes, filtroHist, (p) => p.chave).entries()]
-      .map(([chave, a]) => ({ chave, nome: dados.nomes.get(chave) || chave, ...a }))
-      .filter((p) => p.pessoas > 0)
-      .sort((a, b) => b.pessoas - a.pessoas)
-  }, [dados, filtroHist, temHistorico])
+  const promoEscolhida = opcoes.find((o) => o.chave === promoSel) || null
+  const pessoasBase = promoEscolhida?.pessoas > 0 ? promoEscolhida.pessoas : num(pessoasManual, 0)
 
-  // Ao escolher a promoção, já sugere o pacote de mesmo nome (se existir)
-  useEffect(() => {
-    if (!promoSel) return
-    if (pacotesHist.some((p) => p.chave === promoSel)) setPacoteSel(promoSel)
-  }, [promoSel])
-
-  const promoEscolhida = promosHist.find((p) => p.chave === promoSel) || null
-  const pacoteEscolhido = pacotesHist.find((p) => p.chave === pacoteSel) || null
-  const pessoasBase = pacoteEscolhido ? pacoteEscolhido.pessoas : num(pessoasManual, 0)
-
-  function itensDaPromo(chave, filtro = filtroHist, consumo = consumoHist) {
-    const mapa = new Map()
-    for (const c of consumo) {
-      if (c.chave !== chave || !noFiltro(c, filtro)) continue
-      const k = chaveProduto(c.produto)
-      const x = mapa.get(k) || { produto: c.produto, usos: 0 }
-      x.usos += c.usos
-      mapa.set(k, x)
-    }
-    return mapa
-  }
-
-  function montarBase(promo, pacote, nPessoas) {
+  function montarBase(op, nPessoas) {
     return {
-      nome: promo.nome,
-      pacoteNome: pacote?.nome || null,
+      nome: op.nome,
+      fonte: op.fonte,
       pessoas: nPessoas,
-      ticket: pacote?.ticket ?? null,
-      receita: pacote?.fat ?? null,
-      custoPessoa: nPessoas > 0 ? promo.custo / nPessoas : null,
-      cmv: pacote?.fat ? promo.custo / pacote.fat : null,
+      ticket: op.ticket ?? null,
+      receita: op.fat ?? null,
+      custoPessoa: nPessoas > 0 ? op.custo / nPessoas : null,
+      cmv: op.fat ? op.custo / op.fat : null,
       periodo: periodoLabel,
       casa: casaLabel,
     }
   }
 
   function carregarDoHistorico() {
-    if (!promoEscolhida) { setAviso('Escolha a promoção (o que foi consumido).'); return }
-    if (!(pessoasBase > 0)) { setAviso('Escolha o pacote de onde vem o nº de pessoas, ou digite o nº de pessoas.'); return }
-    const itens = itensDaPromo(promoEscolhida.chave)
+    if (!promoEscolhida) { setAviso('Escolha o pacote.'); return }
+    if (!(pessoasBase > 0)) { setAviso('Esse pacote ainda não tem nº de pessoas — digite quantas pessoas.'); return }
     let semFicha = 0
-    const novo = [...itens.values()].map((x) => {
+    const novo = [...promoEscolhida.itens.values()].map((x) => {
       const it = itemDoCatalogo(catalogoPorChave, x.produto)
       if (it.semFicha) semFicha++
       return { ...it, qtd: +(x.usos / pessoasBase).toFixed(3) }
-    }).sort((a, b) => b.qtd * b.custo - a.qtd * a.custo)
+    }).filter((i) => i.qtd > 0).sort((a, b) => b.qtd * b.custo - a.qtd * a.custo)
     setCarrinho(novo)
     setNomePromo(promoEscolhida.nome)
     setPessoas('1')
     setModoPreco('fixo')
-    if (pacoteEscolhido?.ticket) setPrecoFixo(String(pacoteEscolhido.ticket.toFixed(2)).replace('.', ','))
-    setBase(montarBase(promoEscolhida, pacoteEscolhido, pessoasBase))
+    if (promoEscolhida.ticket) setPrecoFixo(String(promoEscolhida.ticket.toFixed(2)).replace('.', ','))
+    setBase(montarBase(promoEscolhida, pessoasBase))
     setAviso(semFicha ? `${semFicha} produto(s) sem ficha técnica entraram com custo R$ 0 — ajuste na lista ou cadastre na ficha.` : null)
   }
 
-  // Ajusta as quantidades do pacote montado pelo consumo real da promoção escolhida no Histórico
+  // Ajusta as quantidades do pacote montado pelo consumo real do pacote escolhido em "Pacote real"
   function aplicarConsumoReal() {
     if (!promoEscolhida || !(pessoasBase > 0)) return
-    const itens = itensDaPromo(promoEscolhida.chave)
+    const itens = promoEscolhida.itens
     setCarrinho((prev) => prev.map((i) => {
       const x = itens.get(i.key)
       return { ...i, qtd: x ? +(x.usos / pessoasBase).toFixed(3) : 0, qtdTexto: undefined }
     }))
     const fora = [...itens.keys()].filter((k) => !carrinho.some((i) => i.key === k)).length
-    setBase(montarBase(promoEscolhida, pacoteEscolhido, pessoasBase))
+    setBase(montarBase(promoEscolhida, pessoasBase))
     setAviso(`Quantidades = consumo de "${promoEscolhida.nome}" ÷ ${pessoasBase.toLocaleString('pt-BR')} pessoas (${casaLabel}, ${periodoLabel}). Itens sem consumo ficaram com 0.` +
-      (fora ? ` ${fora} item(ns) consumidos na promoção não estão neste pacote.` : ''))
+      (fora ? ` ${fora} item(ns) consumidos no pacote real não estão neste cardápio.` : ''))
   }
 
   // ---------- Carrinho ----------
@@ -352,16 +358,13 @@ export default function SimuladorPromocoesClientApp({ dados = null, mostrarBarra
 
     // Se o cardápio tem promoção/pacote real equivalente, já aplica o consumo médio (filtro atual do Histórico)
     const kws = [].concat(cardapio.base || [])
-    const bate = (chave) => kws.some((kw) => chave.includes(kw))
-    const promoRef = kws.length ? promosHist.filter((p) => bate(p.chave)).sort((a, b) => b.usos - a.usos)[0] : null
-    const pacoteRef = kws.length ? pacotesHist.filter((p) => bate(p.chave)).sort((a, b) => b.pessoas - a.pessoas)[0] : null
-    if (promoRef && pacoteRef) {
-      const itens = itensDaPromo(promoRef.chave)
-      setCarrinho(novo.map((i) => { const x = itens.get(i.key); return { ...i, qtd: x ? +(x.usos / pacoteRef.pessoas).toFixed(3) : 0 } }))
-      setBase(montarBase(promoRef, pacoteRef, pacoteRef.pessoas))
-      setAviso(`Quantidades = consumo de "${promoRef.nome}" ÷ ${pacoteRef.pessoas.toLocaleString('pt-BR')} pessoas de "${pacoteRef.nome}" (${casaLabel}, ${periodoLabel}).` + (semFicha ? ` ${semFicha} item(ns) sem ficha técnica (custo R$ 0).` : ''))
+    const ref = kws.length ? opcoes.filter((o) => o.pessoas > 0 && kws.some((kw) => o.chave.includes(kw))).sort((a, b) => b.pessoas - a.pessoas)[0] : null
+    if (ref) {
+      setCarrinho(novo.map((i) => { const x = ref.itens.get(i.key); return { ...i, qtd: x ? +(x.usos / ref.pessoas).toFixed(3) : 0 } }))
+      setBase(montarBase(ref, ref.pessoas))
+      setAviso(`Quantidades = consumo de "${ref.nome}" ÷ ${ref.pessoas.toLocaleString('pt-BR')} pessoas (${casaLabel}, ${periodoLabel}).` + (semFicha ? ` ${semFicha} item(ns) sem ficha técnica (custo R$ 0).` : ''))
     } else {
-      setAviso('Quantidade entrou como 1 de cada item por pessoa — isso é o PIOR caso (ninguém come tudo). Ajuste as quantidades ou aplique o consumo real de uma promoção (aba Promoção real).' + (semFicha ? ` ${semFicha} item(ns) sem ficha técnica (custo R$ 0).` : ''))
+      setAviso('Quantidade entrou como 1 de cada item por pessoa — isso é o PIOR caso (ninguém come tudo). Ajuste as quantidades ou aplique o consumo de um pacote real (aba Pacote real).' + (semFicha ? ` ${semFicha} item(ns) sem ficha técnica (custo R$ 0).` : ''))
     }
   }
 
@@ -424,7 +427,7 @@ export default function SimuladorPromocoesClientApp({ dados = null, mostrarBarra
         <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
           {[
             { id: 'manual', icon: PenLine, label: 'Montar do zero' },
-            { id: 'historico', icon: History, label: 'Promoção real' },
+            { id: 'historico', icon: History, label: 'Pacote real' },
             { id: 'cardapios', icon: BookOpen, label: 'Cardápios fixos' },
           ].map(({ id, icon: Icon, label: l }) => (
             <button key={id} onClick={() => setModoOrigem(id)} style={{ ...tab, flex: '0 0 auto', padding: '8px 16px', ...(modoOrigem === id ? tabAtiva : {}) }}>
@@ -469,7 +472,7 @@ export default function SimuladorPromocoesClientApp({ dados = null, mostrarBarra
 
           {modoOrigem === 'historico' && (
             <div style={card}>
-              <div style={tituloCard}>Promoção real — consumo por pessoa</div>
+              <div style={tituloCard}>Pacote real — consumo por pessoa</div>
               {!temHistorico ? (
                 <div style={{ fontSize: 13, color: '#9ca3af', padding: '12px 0' }}>Os dados do dashboard ainda não carregaram. Abra a Visão geral e volte aqui.</div>
               ) : (
@@ -498,47 +501,44 @@ export default function SimuladorPromocoesClientApp({ dados = null, mostrarBarra
                     <div style={avisoBox}>O consumo dia a dia está processado até {dataBR(dados.status.diarioAte)} — esse dia ainda não tem itens.</div>
                   )}
 
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#3f3f46', margin: '4px 0 6px' }}>1 · Promoção (o que foi consumido)</div>
                   <div style={{ position: 'relative', marginBottom: 6 }}>
                     <Search size={15} style={{ position: 'absolute', left: 10, top: 10, color: '#9ca3af' }} />
-                    <input value={buscaPromo} onChange={(e) => setBuscaPromo(e.target.value)} placeholder="Buscar promoção..." style={inputBusca} />
+                    <input value={buscaPromo} onChange={(e) => setBuscaPromo(e.target.value)} placeholder="Buscar pacote (ex.: PACOTE 03, Rodízio)…" style={inputBusca} />
                   </div>
-                  <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid #F0F0F0', borderRadius: 8, marginBottom: 12 }}>
-                    {promosHist.filter((p) => !buscaPromo || normalizar(p.nome).includes(normalizar(buscaPromo))).map((p) => (
-                      <div key={p.chave} onClick={() => setPromoSel(p.chave)}
-                        style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '7px 10px', borderBottom: '1px solid #F4F4F0', cursor: 'pointer', background: promoSel === p.chave ? '#f0f4e0' : 'transparent' }}>
-                        <span style={{ fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.nome}</span>
-                        <span className="font-mono" style={{ fontSize: 11.5, color: '#71717a', flexShrink: 0 }}>{p.usos.toLocaleString('pt-BR')} itens · custo {formatR$(p.custo)}</span>
+                  <div style={{ maxHeight: 360, overflowY: 'auto', border: '1px solid #F0F0F0', borderRadius: 8, marginBottom: 8 }}>
+                    {opcoes.filter((o) => !buscaPromo || normalizar(o.nome).includes(normalizar(buscaPromo))).map((o) => (
+                      <div key={o.chave} onClick={() => { setPromoSel(o.chave); setPessoasManual('') }}
+                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '8px 10px', borderBottom: '1px solid #F4F4F0', cursor: 'pointer', background: promoSel === o.chave ? '#f0f4e0' : 'transparent' }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o.nome}</div>
+                          <div style={{ fontSize: 10.5, color: '#9ca3af' }}>
+                            {o.fonte === 'reservas' ? `${o.n} reserva(s) usaram esse pacote` : o.fonte === 'nome' ? 'pessoas da reserva de mesmo nome' : 'sem nº de pessoas — dá pra digitar'}
+                          </div>
+                        </div>
+                        <div className="font-mono" style={{ fontSize: 11.5, color: o.pessoas > 0 ? '#3f3f46' : '#B45309', flexShrink: 0, textAlign: 'right' }}>
+                          {o.pessoas > 0
+                            ? <>{o.pessoas.toLocaleString('pt-BR')} pessoas · ticket {formatR$(o.ticket)}<br /><span style={{ color: '#9ca3af' }}>custo/pessoa {formatR$(o.custo / o.pessoas)}</span></>
+                            : <>{o.usos.toLocaleString('pt-BR')} itens · custo {formatR$(o.custo)}</>}
+                        </div>
                       </div>
                     ))}
-                    {promosHist.length === 0 && <div style={{ padding: 12, color: '#9ca3af', fontSize: 12.5 }}>Nenhuma promoção nesse filtro.</div>}
+                    {opcoes.length === 0 && <div style={{ padding: 12, color: '#9ca3af', fontSize: 12.5 }}>Nada nesse filtro.</div>}
                   </div>
-
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#3f3f46', margin: '4px 0 6px' }}>2 · Pacote (de onde vem o nº de pessoas e o ticket)</div>
-                  <div style={{ position: 'relative', marginBottom: 6 }}>
-                    <Search size={15} style={{ position: 'absolute', left: 10, top: 10, color: '#9ca3af' }} />
-                    <input value={buscaPacote} onChange={(e) => setBuscaPacote(e.target.value)} placeholder="Buscar pacote..." style={inputBusca} />
-                  </div>
-                  <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid #F0F0F0', borderRadius: 8, marginBottom: 8 }}>
-                    {pacotesHist.filter((p) => !buscaPacote || normalizar(p.nome).includes(normalizar(buscaPacote))).map((p) => (
-                      <div key={p.chave} onClick={() => { setPacoteSel(p.chave === pacoteSel ? null : p.chave); setPessoasManual('') }}
-                        style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '7px 10px', borderBottom: '1px solid #F4F4F0', cursor: 'pointer', background: pacoteSel === p.chave ? '#f0f4e0' : 'transparent' }}>
-                        <span style={{ fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.nome}</span>
-                        <span className="font-mono" style={{ fontSize: 11.5, color: '#71717a', flexShrink: 0 }}>{p.pessoas.toLocaleString('pt-BR')} pessoas · ticket {formatR$(p.ticket)}</span>
-                      </div>
-                    ))}
-                    {pacotesHist.length === 0 && <div style={{ padding: 12, color: '#9ca3af', fontSize: 12.5 }}>Nenhum pacote com pessoas nesse filtro.</div>}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                    <span style={{ fontSize: 12, color: '#71717a' }}>ou nº de pessoas:</span>
-                    <input value={pessoasManual} onChange={(e) => { setPessoasManual(e.target.value); setPacoteSel(null) }} placeholder="ex: 120" inputMode="decimal" style={{ ...inputMini, width: 90 }} />
+                  {promoEscolhida && !(promoEscolhida.pessoas > 0) && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <span style={{ fontSize: 12, color: '#71717a' }}>Quantas pessoas consumiram "{promoEscolhida.nome}"?</span>
+                      <input value={pessoasManual} onChange={(e) => setPessoasManual(e.target.value)} placeholder="ex: 120" inputMode="decimal" style={{ ...inputMini, width: 90 }} />
+                    </div>
+                  )}
+                  <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 10, lineHeight: 1.5 }}>
+                    Consumo por pessoa = tudo que foi consumido ÷ pessoas. O preço entra como o ticket real. Os pacotes sem nº de pessoas passam a ter assim que o detalhe das reservas for puxado da ZIG.
                   </div>
 
                   <button onClick={carregarDoHistorico} disabled={!promoEscolhida || !(pessoasBase > 0)}
                     style={{ ...btnPreto, width: '100%', padding: '10px 12px', opacity: !promoEscolhida || !(pessoasBase > 0) ? 0.4 : 1 }}>
                     {promoEscolhida && pessoasBase > 0
-                      ? `Carregar "${promoEscolhida.nome}" ÷ ${pessoasBase.toLocaleString('pt-BR')} pessoas →`
-                      : 'Escolha a promoção e as pessoas'}
+                      ? `Carregar "${promoEscolhida.nome}" (${pessoasBase.toLocaleString('pt-BR')} pessoas) →`
+                      : promoEscolhida ? 'Digite o nº de pessoas' : 'Escolha o pacote'}
                   </button>
                 </>
               )}
@@ -671,7 +671,7 @@ export default function SimuladorPromocoesClientApp({ dados = null, mostrarBarra
                   <span style={{ flex: 1, minWidth: 200 }}>
                     {promoEscolhida && pessoasBase > 0
                       ? <>Consumo real: <b>{promoEscolhida.nome}</b> ÷ {pessoasBase.toLocaleString('pt-BR')} pessoas · {casaLabel} · {periodoLabel}</>
-                      : 'Pra usar o consumo real, escolha promoção e pessoas na aba "Promoção real".'}
+                      : 'Pra usar o consumo real, escolha o pacote na aba "Pacote real".'}
                   </span>
                   <button onClick={aplicarConsumoReal} disabled={!promoEscolhida || !(pessoasBase > 0)}
                     style={{ ...btnPreto, opacity: !promoEscolhida || !(pessoasBase > 0) ? 0.4 : 1 }}>Aplicar nas quantidades</button>
@@ -731,7 +731,7 @@ export default function SimuladorPromocoesClientApp({ dados = null, mostrarBarra
               {base && (
                 <div style={{ background: '#FAFAF8', border: '1px solid #E8E8E2', borderRadius: 10, padding: '10px 12px', marginBottom: 12, fontSize: 12 }}>
                   <div style={{ fontWeight: 700, marginBottom: 4 }}>
-                    Real: {base.nome}{base.pacoteNome && base.pacoteNome !== base.nome ? ` + pacote ${base.pacoteNome}` : ''}
+                    Real: {base.nome}
                     <span style={{ fontWeight: 400, color: '#9ca3af' }}> · {base.casa} · {base.periodo}</span>
                   </div>
                   <div className="font-mono" style={{ display: 'flex', gap: 14, flexWrap: 'wrap', color: '#3f3f46' }}>
