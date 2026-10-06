@@ -227,8 +227,9 @@ export function agruparPacotes(pacotes, filtro, chaveFn) {
   for (const p of pacotes) {
     if (!passa(p, f)) continue
     const k = chaveFn(p)
-    const a = mapa.get(k) || { n: 0, pessoas: 0, convidados: 0, produtos: 0, fat: 0, faturamento: 0, emitido: 0, dias: new Set(), casas: new Set() }
+    const a = mapa.get(k) || { n: 0, pessoas: 0, convidados: 0, produtos: 0, fat: 0, faturamento: 0, emitido: 0, custo: 0, fatComCusto: 0, nComCusto: 0, dias: new Set(), casas: new Set() }
     a.n += 1; a.pessoas += p.pessoas; a.convidados += p.convidados; a.produtos += p.produtos || 0
+    if (p.custoEst != null) { a.custo += p.custoEst; a.fatComCusto += p.fat; a.nComCusto += 1 }
     a.fat += p.fat; a.faturamento += p.faturamento; a.emitido += p.emitido
     a.dias.add(p.data); a.casas.add(p.unit)
     mapa.set(k, a)
@@ -238,6 +239,9 @@ export function agruparPacotes(pacotes, filtro, chaveFn) {
     a.produtosPessoa = a.pessoas ? a.produtos / a.pessoas : null
     a.nDias = a.dias.size
     a.nCasas = a.casas.size
+    a.cmv = a.fatComCusto > 0 ? a.custo / a.fatComCusto : null
+    a.margem = a.nComCusto ? a.fatComCusto - a.custo : null
+    a.custoPessoa = a.nComCusto && a.pessoas ? a.custo / a.pessoas : null
   }
   return mapa
 }
@@ -265,4 +269,39 @@ export function agruparConsumo(consumo, filtro, chaveFn) {
     a.nDias = a.dias.size
   }
   return mapa
+}
+
+// ── CMV estimado por pacote ────────────────────────────────────────────────
+// O relatório de Pacotes traz quantos PRODUTOS cada reserva consumiu, mas não
+// quais. O custo vem do consumo das promoções do mesmo dia e casa:
+//   custo da reserva = produtos da reserva × custo médio por produto
+// usando, nesta ordem: a promoção de MESMO NOME no dia → todas as promoções de
+// pacote da casa no dia → média da casa no mês. (Promoções de desconto ficam fora.)
+export function estimarCustoPacotes(pacotes, consumoDia, consumoMes) {
+  const soma = () => ({ custo: 0, usos: 0 })
+  const porNomeDia = new Map(), porDia = new Map(), porMes = new Map()
+  const add = (mapa, k, c) => { const x = mapa.get(k) || soma(); x.custo += c.custo; x.usos += c.usos; mapa.set(k, x) }
+  for (const c of consumoDia) {
+    if (c.categoria !== 'Pacote' || !c.temCusto || !c.usos) continue
+    add(porNomeDia, `${c.unit}|${c.data}|${c.chave}`, c)
+    add(porDia, `${c.unit}|${c.data}`, c)
+  }
+  for (const c of consumoMes) {
+    if (c.categoria !== 'Pacote' || !c.temCusto || !c.usos) continue
+    add(porMes, `${c.unit}|${c.mes}`, c)
+  }
+  const media = (x) => (x && x.usos > 0 ? x.custo / x.usos : null)
+  for (const p of pacotes) {
+    p.custoEst = null
+    p.metodoCusto = null
+    if (p.custoExato != null) { p.custoEst = p.custoExato; p.custoProduto = p.produtos ? p.custoExato / p.produtos : null; p.metodoCusto = 'exato (consumo da reserva)'; continue }
+    if (!p.produtos) continue
+    let m = media(porNomeDia.get(`${p.unit}|${p.data}|${p.chave}`)), metodo = 'promoção de mesmo nome no dia'
+    if (m == null) { m = media(porDia.get(`${p.unit}|${p.data}`)); metodo = 'média das promoções da casa no dia' }
+    if (m == null) { m = media(porMes.get(`${p.unit}|${p.mes}`)); metodo = 'média da casa no mês' }
+    if (m == null) continue
+    p.custoEst = p.produtos * m
+    p.custoProduto = m
+    p.metodoCusto = metodo
+  }
 }
