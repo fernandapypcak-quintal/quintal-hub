@@ -34,7 +34,8 @@ export default function VisaoGeral({ dados, filtros }) {
   }, [pacotes, consumoMes, fatTotal, meses, units.join(','), categoria])
 
   const atual = porMes[mes]?.filtrado
-  const ant = porMes[mesAnterior(mes)]?.filtrado
+  // Mês em andamento não é comparado com mês fechado (daria −80%, −90%…)
+  const ant = parcial(mes) ? null : porMes[mesAnterior(mes)]?.filtrado
 
   const serie = meses.map((m) => ({
     mes: mesLabel(m) + (parcial(m) ? '*' : ''),
@@ -55,7 +56,7 @@ export default function VisaoGeral({ dados, filtros }) {
         return (
           <td key={m} className="py-1.5 px-3 text-right font-mono tabular-nums">
             {cmv ? <CmvTxt v={v} /> : fmt(v)}
-            {d != null && i > 0 && (
+            {d != null && i > 0 && !parcial(m) && (
               <div className="text-[10px] font-normal" style={{ color: d === 0 ? '#a1a1aa' : (cmv ? d < 0 : d > 0) ? '#5f6b12' : '#8C1414' }}>
                 {cmv || fmt === pct ? pp(d) : `${d > 0 ? '+' : ''}${pct(d)}`}
               </div>
@@ -118,7 +119,7 @@ export default function VisaoGeral({ dados, filtros }) {
             </ComposedChart>
           </ResponsiveContainer>
         </div>
-        {serie.some((s) => s.mes.endsWith('*')) && <p className="text-[10.5px] text-zinc-400 mt-1">* mês em andamento</p>}
+        {serie.some((s) => s.mes.endsWith('*')) && <p className="text-[10.5px] text-zinc-400 mt-1">* mês em andamento (sem variação % contra o mês anterior)</p>}
       </Card>
 
       <Card titulo="Resumo por categoria" className="overflow-hidden">
