@@ -21,6 +21,7 @@ export default function DetalheSeparado({ dados, filtro }) {
             { id: 'pessoas', label: 'Pessoas', valor: (x) => x.pessoas, render: (x) => num(x.pessoas) },
             { id: 'fat', label: 'Receita', valor: (x) => x.fat, render: (x) => brl(x.fat) },
             { id: 'ticket', label: 'Ticket', valor: (x) => x.ticket, render: (x) => brl(x.ticket) },
+            { id: 'cmv', label: 'CMV (est.)', valor: (x) => x.cmv, render: (x) => <CmvTxt v={x.cmv} /> },
           ]}
           linhas={pac} chave={(x) => x.k} ordemInicial={{ id: 'fat', dir: 'desc' }} vazia="Nenhum pacote."
         />
