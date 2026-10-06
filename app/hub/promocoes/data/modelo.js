@@ -60,7 +60,7 @@ export function mesAnterior(mes) {
 // ── Acumuladores ────────────────────────────────────────────────────────────
 export function novoAcc() {
   return {
-    fat: 0, valor: 0, faturamentoZig: 0, emitido: 0,
+    fat: 0, fatPacote: 0, fatItens: 0, valor: 0, faturamentoZig: 0, emitido: 0,
     pessoas: 0, convidados: 0, nPacotes: 0,
     custo: 0, usos: 0, usosSemCusto: 0, desconto: 0, descontoSemCusto: 0,
     dias: new Set(),
@@ -69,6 +69,7 @@ export function novoAcc() {
 
 export function somarPacote(acc, p) {
   acc.fat += p.fat
+  acc.fatPacote += p.fat
   acc.valor += p.valor
   acc.faturamentoZig += p.faturamento
   acc.emitido += p.emitido
@@ -79,6 +80,11 @@ export function somarPacote(acc, p) {
 }
 
 export function somarConsumo(acc, c) {
+  // Promoção de desconto (ex.: Parceiros 20%): a receita está no próprio item
+  // (preço de cardápio − desconto). Item de pacote tem receita 0 aqui — ela
+  // vem do relatório de Pacotes.
+  acc.fat += c.fatItens || 0
+  acc.fatItens += c.fatItens || 0
   acc.usos += c.usos
   acc.desconto += c.desconto
   if (c.temCusto) acc.custo += c.custo
@@ -162,12 +168,13 @@ export function corCmv(cmv) {
 // Aplicada aqui também, pra o dashboard não depender da categoria gravada
 // na planilha (que pode estar com a regra antiga).
 // null = excluir (desconto interno). Ajuste as listas aqui E no .gs.
-const EXCLUIR = ['funcionario', 'socio', 'holding', 'supervisao', 'diretoria', 'colaborador']
+// "Descontos" não sai daqui: é atribuída no carregamento, pra promoção que
+// dá desconto parcial no item (ver classificarTipoPromo em usePromocoesData).
+const EXCLUIR = ['funcionario', 'socio', 'holding', 'supervisao', 'diretoria', 'colaborador', 'proprietario', 'ceo']
 const ALL_INCLUSIVE = ['all inclusive']
 const CEC_BEBIDA = ['chopp', 'chope', 'choop', 'cerveja']
 const CEC_COMIDA = ['churrasco', 'carne']
 const CLASSICOS = ['rodizio', 'classico']
-const DIAS_PROMO = ['quarta', 'gin', 'festa junina', 'boteco', 'segunda', 'terca', 'quinta', 'sexta', 'sabado', 'domingo']
 
 function levenshtein(a, b) {
   const m = a.length, n = b.length
@@ -209,6 +216,53 @@ export function categorizarPromocao(nome) {
   // "Cerveja e Churrasco", "Chopp Churrasco", "Carne & Chope", "C&C")
   if ((contem(palavras, CEC_BEBIDA) && contem(palavras, CEC_COMIDA)) || ` ${palavras.join(' ')} `.includes(' c e c ')) return 'C&C'
   if (contem(palavras, CLASSICOS)) return 'Clássicos'
-  if (contem(palavras, DIAS_PROMO)) return 'Pacotes dias Promo'
   return 'Pacotes'
+}
+
+// ── Visões separadas (sem cruzar reserva x promoção) ───────────────────────
+// PACOTES: pelo nome do pacote no relatório de Pacotes → pessoas, receita, ticket
+export function agruparPacotes(pacotes, filtro, chaveFn) {
+  const f = normFiltro(filtro)
+  const mapa = new Map()
+  for (const p of pacotes) {
+    if (!passa(p, f)) continue
+    const k = chaveFn(p)
+    const a = mapa.get(k) || { n: 0, pessoas: 0, convidados: 0, produtos: 0, fat: 0, faturamento: 0, emitido: 0, dias: new Set(), casas: new Set() }
+    a.n += 1; a.pessoas += p.pessoas; a.convidados += p.convidados; a.produtos += p.produtos || 0
+    a.fat += p.fat; a.faturamento += p.faturamento; a.emitido += p.emitido
+    a.dias.add(p.data); a.casas.add(p.unit)
+    mapa.set(k, a)
+  }
+  for (const a of mapa.values()) {
+    a.ticket = a.pessoas ? a.fat / a.pessoas : null
+    a.produtosPessoa = a.pessoas ? a.produtos / a.pessoas : null
+    a.nDias = a.dias.size
+    a.nCasas = a.casas.size
+  }
+  return mapa
+}
+
+// PROMOÇÕES: pelo nome da promoção no Promoções Utilizadas → consumo e custo
+export function agruparConsumo(consumo, filtro, chaveFn) {
+  const f = normFiltro(filtro)
+  const mapa = new Map()
+  for (const c of consumo) {
+    if (!passa(c, f)) continue
+    const k = chaveFn(c)
+    const a = mapa.get(k) || { usos: 0, cardapio: 0, desconto: 0, pago: 0, custo: 0, usosSemCusto: 0, dias: new Set(), casas: new Set() }
+    a.usos += c.usos; a.cardapio += c.cardapio || 0; a.desconto += c.desconto; a.pago += c.fatItens || 0
+    if (c.temCusto) a.custo += c.custo; else a.usosSemCusto += c.usos
+    if (c.data) a.dias.add(c.data)
+    a.casas.add(c.unit)
+    mapa.set(k, a)
+  }
+  for (const a of mapa.values()) {
+    const temAlgumCusto = a.usos > a.usosSemCusto
+    a.cmvCardapio = a.cardapio > 0 && temAlgumCusto ? a.custo / a.cardapio : null   // custo ÷ valor de cardápio consumido
+    a.cmvPago = a.pago > 0 && temAlgumCusto ? a.custo / a.pago : null               // só promoções de desconto
+    a.pctDesconto = a.cardapio > 0 ? a.desconto / a.cardapio : null
+    a.cobertura = a.usos ? 1 - a.usosSemCusto / a.usos : null
+    a.nDias = a.dias.size
+  }
+  return mapa
 }
