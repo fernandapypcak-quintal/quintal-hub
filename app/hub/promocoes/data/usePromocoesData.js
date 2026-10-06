@@ -1,7 +1,9 @@
 // app/hub/promocoes/data/usePromocoesData.js
 //
 // Carrega e normaliza tudo que o módulo usa:
-//  1) /api/promocoes  → pacotes, promoções utilizadas (mensal + diário), ficha técnica, status
+//  1) /api/promocoes?acao=meta    → meses disponíveis + resumo mensal (gráfico) + status
+//     /api/promocoes?acao=periodo → mês escolhido + anterior: pacotes, reservas (detalhe),
+//                                    consumo por reserva, promoções utilizadas, ficha técnica
 //  2) loadData() do /hub/faturamento → faturamento total por casa/dia (canal CASA)
 //     (mesma regra de corte planilha/ZIG/ao vivo do dashboard de faturamento —
 //      antes este módulo somava as três fontes por cima e duplicava dias)
@@ -11,7 +13,7 @@ import { unitIdFromString, labelForUnit, ALL_UNIT_IDS } from '@/lib/units'
 import { CUSTO_POR_PRODUTO } from '@/lib/catalogoCustos'
 import { COLUNA_FATURAMENTO_PACOTE, DESCONTO_PARCIAL_MIN, DESCONTO_PARCIAL_MAX } from '@/lib/promocoesConfig'
 import { loadData as carregarFaturamento } from '../../faturamento/data/loader'
-import { chavePromo, chaveProduto, numero, mesDe, ultimoDiaDoMes, categorizarPromocao } from './modelo'
+import { chavePromo, chaveProduto, numero, mesDe, ultimoDiaDoMes, categorizarPromocao, estimarCustoPacotes } from './modelo'
 
 function expandir(t) {
   if (!t?.cols?.length) return []
@@ -47,7 +49,8 @@ function montarFicha(linhas) {
 }
 
 export function processar(api, linhasFaturamento) {
-  const status = api.status || {}
+  const status = { ...(api.status || {}) }
+  status.diarioAte = status.diarioAte || status.coletadoAte || null
   const ultimoFechado = status.ultimoDiaFechado || diaAnterior(hojeSP())
   const ficha = montarFicha(api.ficha)
   // Catálogo pro Simulador (só a ficha ao vivo/cache; vazio → simulador usa o snapshot)
@@ -73,6 +76,7 @@ export function processar(api, linhasFaturamento) {
       chave: chavePromo(nome),
       categoria: 'Pacote',
       produtos: numero(r.produtos),
+      id: String(r.id_reserva || ''),
       pessoas: numero(r.confirmados),
       convidados: numero(r.convidados),
       valor, faturamento,
@@ -166,6 +170,57 @@ export function processar(api, linhasFaturamento) {
     const origem = usarDiario ? consumoDia : consumoMensalBruto
     for (const c of origem) if (c.mes === mes) consumoMes.push(c)
   }
+  // ── Detalhe de cada reserva ("Mais detalhes" da ZIG) → receita e CMV exatos ──
+  const detReserva = new Map()
+  for (const r of expandir(api.pacotesReservas)) {
+    if (r.status && r.status !== 'ok') continue
+    detReserva.set(String(r.id_reserva), {
+      receita: numero(r.receita_r),
+      valorPacote: numero(r.valor_do_pacote_r),
+      produtosPagos: numero(r.produtos_pagos_r),
+      nfAvulsa: numero(r.nf_avulsa_r),
+      gorjeta: numero(r.gorjeta_r),
+      itens: [],
+    })
+  }
+  for (const r of expandir(api.pacotesConsumo)) {
+    const d = detReserva.get(String(r.id_reserva))
+    if (!d) continue
+    const qtd = numero(r.qtd)
+    const f = ficha.get(chaveProduto(r.produto))
+    d.itens.push({
+      promocao: String(r.promocao || '').trim(),
+      produto: String(r.produto || '').trim(),
+      qtd,
+      precoUnit: numero(r.preco_unit_r),
+      pago: numero(r.valor_pago_r),
+      desconto: numero(r.desconto_r),
+      temCusto: !!f,
+      custo: f ? f.custo * qtd : 0,
+    })
+  }
+  for (const p of pacotes) {
+    const d = p.id ? detReserva.get(p.id) : null
+    if (!d) continue
+    // promoção principal = a que mais teve itens (ignora "ADICIONAL ...")
+    const porPromo = new Map()
+    for (const it of d.itens) if (it.promocao) porPromo.set(it.promocao, (porPromo.get(it.promocao) || 0) + it.qtd)
+    const ordenadas = [...porPromo.entries()].sort((a, b) => b[1] - a[1]).map(([n]) => n)
+    p.detalhe = true
+    p.promocoes = ordenadas
+    p.promocaoPacote = ordenadas.find((n) => !/^adicional/i.test(n)) || ordenadas[0] || null
+    p.itens = d.itens
+    p.faturamento = d.valorPacote + d.produtosPagos
+    p.emitido = d.nfAvulsa
+    p.gorjeta = d.gorjeta
+    p.fat = d.receita
+    p.produtos = d.itens.reduce((s, it) => s + it.qtd, 0)
+    p.custoExato = d.itens.reduce((s, it) => s + it.custo, 0)
+    p.itensSemCusto = d.itens.filter((it) => !it.temCusto && it.qtd > 0 && it.precoUnit > 0).length
+  }
+
+  estimarCustoPacotes(pacotes, consumoDia, consumoMes)
+
   for (const c of [...consumoMes, ...consumoDia]) {
     if (!c.temCusto) semCusto.set(c.produto, (semCusto.get(c.produto) || 0) + c.usos)
   }
@@ -202,36 +257,83 @@ export function processar(api, linhasFaturamento) {
   return {
     pacotes, consumoMes, consumoDia, fatTotal, meses, unidades, catalogo,
     nomes, categoriaDaChave, fonteCustoMes, ultimoFechado, tipoPromo,
-    status, geradoEm: api.geradoEm, fichaAoVivo: api.fichaAoVivo,
+    status, geradoEm: status.atualizadoEm || null, fichaAoVivo: api.fichaAoVivo,
     produtosSemCusto: [...semCusto.entries()].sort((a, b) => b[1] - a[1]),
     temFaturamentoTotal: Object.keys(fatTotal.mes).length > 0,
+    reservasComDetalhe: pacotes.filter((p) => p.detalhe).length,
   }
 }
 
-export function usePromocoesData() {
+// Resumo mensal (resumo.json do Apps Script) → { mes: { unitId: {...} } }
+function processarResumo(resumo) {
+  const out = {}
+  for (const [mes, porUni] of Object.entries(resumo || {})) {
+    out[mes] = {}
+    for (const [uni, v] of Object.entries(porUni || {})) {
+      const id = unitIdFromString(uni)
+      if (!id) continue
+      const x = out[mes][id] || { reservas: 0, pessoas: 0, receita: 0, usos: 0, desconto: 0, custo: 0, cardapio: 0 }
+      for (const k of Object.keys(x)) x[k] += numero(v[k])
+      out[mes][id] = x
+    }
+  }
+  return out
+}
+
+async function getJson(url) {
+  const r = await fetch(url, { cache: 'no-store' })
+  const j = await r.json().catch(() => ({ ok: false, erro: `HTTP ${r.status}` }))
+  if (!r.ok || j.ok === false) throw new Error(j.erro || `HTTP ${r.status}`)
+  return j
+}
+
+// mes = 'AAAA-MM' escolhido no filtro (vazio → último mês disponível)
+export function usePromocoesData(mes) {
+  const [meta, setMeta] = useState(null)
+  const [linhasFat, setLinhasFat] = useState(null)
   const [dados, setDados] = useState(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState(null)
   const [avisoFaturamento, setAvisoFaturamento] = useState(null)
 
+  // 1) meta + faturamento total (uma vez)
   useEffect(() => {
+    let cancelado = false
+    ;(async () => {
+      try {
+        const [m, f] = await Promise.allSettled([getJson('/api/promocoes?acao=meta'), carregarFaturamento(false)])
+        if (cancelado) return
+        if (m.status === 'rejected') throw m.reason
+        if (f.status === 'rejected') setAvisoFaturamento('Faturamento total das casas indisponível agora — o Peso das promoções fica em branco.')
+        setLinhasFat(f.status === 'fulfilled' ? f.value : [])
+        setMeta({ ...m.value, resumoPorUnit: processarResumo(m.value.resumo) })
+      } catch (e) {
+        if (!cancelado) { setErro(e.message || String(e)); setLoading(false) }
+      }
+    })()
+    return () => { cancelado = true }
+  }, [])
+
+  const mesAlvo = mes || meta?.meses?.[meta.meses.length - 1] || ''
+
+  // 2) período (mês escolhido + anterior) — recarrega quando o mês muda
+  useEffect(() => {
+    if (!meta || linhasFat === null) return
+    if (!mesAlvo) { setLoading(false); setDados({ vazio: true, meses: [] }); return }
     let cancelado = false
     ;(async () => {
       setLoading(true)
       setErro(null)
       try {
-        const [resApi, resFat] = await Promise.allSettled([
-          fetch('/api/promocoes', { cache: 'no-store' }).then(async (r) => {
-            const j = await r.json()
-            if (!r.ok || j.ok === false) throw new Error(j.erro || `HTTP ${r.status}`)
-            return j
-          }),
-          carregarFaturamento(false),
-        ])
+        const api = await getJson(`/api/promocoes?acao=periodo&mes=${mesAlvo}`)
         if (cancelado) return
-        if (resApi.status === 'rejected') throw resApi.reason
-        if (resFat.status === 'rejected') setAvisoFaturamento('Faturamento total das casas indisponível agora — o Peso das promoções fica em branco.')
-        setDados(processar(resApi.value, resFat.status === 'fulfilled' ? resFat.value : []))
+        api.status = { ...(meta.status || {}), ...(api.status || {}) }
+        const d = processar(api, linhasFat)
+        d.mesesCarregados = d.meses
+        d.meses = meta.meses            // todos os meses (seletor)
+        d.resumo = meta.resumoPorUnit    // gráfico de evolução
+        d.mesCarregado = mesAlvo
+        setDados(d)
       } catch (e) {
         if (!cancelado) setErro(e.message || String(e))
       } finally {
@@ -239,7 +341,7 @@ export function usePromocoesData() {
       }
     })()
     return () => { cancelado = true }
-  }, [])
+  }, [meta, linhasFat, mesAlvo])
 
-  return { dados, loading, erro, avisoFaturamento }
+  return { dados, meta, loading, erro, avisoFaturamento, mesAlvo }
 }
