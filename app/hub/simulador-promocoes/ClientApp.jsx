@@ -19,7 +19,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { Plus, Minus, Trash2, Search, Save, X, Flame, TrendingDown, TrendingUp, ChefHat, History, PenLine, BookOpen, Check, Users } from 'lucide-react'
 import PRODUTOS_FALLBACK from '@/lib/catalogoFallback.json'
 import { CMV_META, CMV_CRITICO } from '@/lib/promocoesConfig'
-import { chaveProduto, chavePromo, agruparConsumo, agruparPacotes, ultimoDiaDoMes } from '../promocoes/data/modelo'
+import { chaveProduto, chavePromo, agruparConsumo, agruparPacotes, ultimoDiaDoMes, categorizarPromocao } from '../promocoes/data/modelo'
 
 function normalizar(str) {
   return String(str || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim()
@@ -221,44 +221,70 @@ export default function SimuladorPromocoesClientApp({ dados = null, mostrarBarra
   const periodoLabel = filtroHist.data ? dataBR(histDia) : histMes === '3m' ? ultimos3.map(mesLabel).join(', ') : mesLabel(histMes)
   const casaLabel = histUnidade ? dados?.unidades.find((u) => u.id === histUnidade)?.label : 'Rede'
 
+  // Famílias que têm nome diferente na reserva e na promoção (ex.: reserva "CHOPP & CHURRASCO",
+  // promoção "CERVEJA & CHURRASCO"; "ALL INCLUSIVE" x "PACOTE ALL INCLUSIVE"). Viram UMA linha só.
+  const FAMILIAS = { 'C&C': 'Chopp / Cerveja & Churrasco', 'All Inclusive': 'All Inclusive', 'Clássicos': 'Rodízio de Espetos Clássicos' }
+  const familia = (nome) => { const c = categorizarPromocao(nome); return c && FAMILIAS[c] ? c : null }
+
   const opcoes = useMemo(() => {
     if (!temHistorico) return []
-    // relatório de promoções: itens por promoção
+    const addItem = (mapa, produto, qtd) => {
+      const k = chaveProduto(produto)
+      const y = mapa.get(k) || { produto, usos: 0 }
+      y.usos += qtd; mapa.set(k, y)
+    }
+    const fam = {}
+    const getFam = (f) => (fam[f] = fam[f] || { promos: new Set(), reservas: new Set(), usos: 0, custo: 0, itens: new Map(), pessoas: 0, fat: 0, n: 0 })
+
+    // relatório de promoções: itens por promoção (famílias vão pra linha da família)
     const rel = new Map()
     for (const c of consumoHist) {
       if (!noFiltro(c, filtroHist) || c.categoria === 'Desconto') continue
+      const f = familia(c.nome)
+      if (f) { const x = getFam(f); x.promos.add(c.nome); x.usos += c.usos; x.custo += c.custo; addItem(x.itens, c.produto, c.usos); continue }
       const x = rel.get(c.chave) || { nome: dados.nomes.get(c.chave) || c.nome, usos: 0, custo: 0, itens: new Map() }
-      x.usos += c.usos; x.custo += c.custo
-      const k = chaveProduto(c.produto)
-      const y = x.itens.get(k) || { produto: c.produto, usos: 0 }
-      y.usos += c.usos; x.itens.set(k, y)
+      x.usos += c.usos; x.custo += c.custo; addItem(x.itens, c.produto, c.usos)
       rel.set(c.chave, x)
     }
-    // reservas que usaram cada pacote (detalhe da ZIG): tudo que consumiram
+    // reservas
     const res = new Map()
+    const porNome = new Map()
     for (const p of dados.pacotes) {
-      if (!p.detalhe || !p.promocaoPacote || !noFiltro(p, filtroHist)) continue
-      const k = chavePromo(p.promocaoPacote)
-      const x = res.get(k) || { nome: p.promocaoPacote, n: 0, pessoas: 0, fat: 0, custo: 0, itens: new Map() }
-      x.n++; x.pessoas += p.pessoas; x.fat += p.fat; x.custo += p.custoExato || 0
-      for (const it of p.itens || []) {
-        if (!it.qtd) continue
-        const kk = chaveProduto(it.produto)
-        const y = x.itens.get(kk) || { produto: it.produto, usos: 0 }
-        y.usos += it.qtd; x.itens.set(kk, y)
+      if (!noFiltro(p, filtroHist)) continue
+      const f = familia(p.promocaoPacote || p.nome) || familia(p.nome)
+      if (f) { const x = getFam(f); x.reservas.add(p.nome); x.pessoas += p.pessoas; x.fat += p.fat; x.n++; continue }
+      if (p.detalhe && p.promocaoPacote) {
+        // pacote usado (detalhe da ZIG): tudo que as reservas consumiram — exato
+        const k = chavePromo(p.promocaoPacote)
+        const x = res.get(k) || { nome: p.promocaoPacote, n: 0, pessoas: 0, fat: 0, custo: 0, itens: new Map() }
+        x.n++; x.pessoas += p.pessoas; x.fat += p.fat; x.custo += p.custoExato || 0
+        for (const it of p.itens || []) if (it.qtd) addItem(x.itens, it.produto, it.qtd)
+        res.set(k, x)
+      } else {
+        const x = porNome.get(p.chave) || { pessoas: 0, fat: 0, n: 0 }
+        x.pessoas += p.pessoas; x.fat += p.fat; x.n++
+        porNome.set(p.chave, x)
       }
-      res.set(k, x)
     }
-    // reserva com o mesmo nome da promoção
-    const porNome = agruparPacotes(dados.pacotes, filtroHist, (p) => p.chave)
 
+    const out = []
+    for (const [f, x] of Object.entries(fam)) {
+      if (!x.usos) continue
+      out.push({
+        chave: 'fam:' + f, nome: FAMILIAS[f], fonte: x.pessoas > 0 ? 'familia' : null,
+        detalheFonte: `promoções: ${[...x.promos].join(', ')}${x.reservas.size ? ` · reservas: ${[...x.reservas].slice(0, 3).join(', ')}${x.reservas.size > 3 ? '…' : ''}` : ''}`,
+        pessoas: x.pessoas, n: x.n, fat: x.pessoas ? x.fat : null, ticket: x.pessoas ? x.fat / x.pessoas : null,
+        custo: x.custo, itens: x.itens, usos: x.usos,
+      })
+    }
     const chaves = new Set([...rel.keys(), ...res.keys()])
-    return [...chaves].map((k) => {
+    for (const k of chaves) {
       const r = res.get(k), c = rel.get(k), nm = porNome.get(k)
-      if (r && r.pessoas > 0) return { chave: k, nome: r.nome, fonte: 'reservas', pessoas: r.pessoas, n: r.n, fat: r.fat, ticket: r.fat / r.pessoas, custo: r.custo, itens: r.itens, usos: c?.usos || 0 }
-      if (c && nm && nm.pessoas > 0) return { chave: k, nome: c.nome, fonte: 'nome', pessoas: nm.pessoas, n: nm.n, fat: nm.fat, ticket: nm.fat / nm.pessoas, custo: c.custo, itens: c.itens, usos: c.usos }
-      return { chave: k, nome: c?.nome || k, fonte: null, pessoas: 0, fat: null, ticket: null, custo: c?.custo || 0, itens: c?.itens || new Map(), usos: c?.usos || 0 }
-    }).sort((a, b) => (b.pessoas > 0) - (a.pessoas > 0) || b.pessoas - a.pessoas || b.custo - a.custo)
+      if (r && r.pessoas > 0) out.push({ chave: k, nome: r.nome, fonte: 'reservas', pessoas: r.pessoas, n: r.n, fat: r.fat, ticket: r.fat / r.pessoas, custo: r.custo, itens: r.itens, usos: c?.usos || 0 })
+      else if (c && nm && nm.pessoas > 0) out.push({ chave: k, nome: c.nome, fonte: 'nome', pessoas: nm.pessoas, n: nm.n, fat: nm.fat, ticket: nm.fat / nm.pessoas, custo: c.custo, itens: c.itens, usos: c.usos })
+      else if (c) out.push({ chave: k, nome: c.nome, fonte: null, pessoas: 0, fat: null, ticket: null, custo: c.custo, itens: c.itens, usos: c.usos })
+    }
+    return out.sort((a, b) => (b.pessoas > 0) - (a.pessoas > 0) || b.pessoas - a.pessoas || b.custo - a.custo)
   }, [dados, consumoHist, filtroHist, temHistorico])
 
   const promoEscolhida = opcoes.find((o) => o.chave === promoSel) || null
@@ -358,7 +384,9 @@ export default function SimuladorPromocoesClientApp({ dados = null, mostrarBarra
 
     // Se o cardápio tem promoção/pacote real equivalente, já aplica o consumo médio (filtro atual do Histórico)
     const kws = [].concat(cardapio.base || [])
-    const ref = kws.length ? opcoes.filter((o) => o.pessoas > 0 && kws.some((kw) => o.chave.includes(kw))).sort((a, b) => b.pessoas - a.pessoas)[0] : null
+    const famCard = familia(cardapio.nome)
+    const ref = (famCard && opcoes.find((o) => o.chave === 'fam:' + famCard && o.pessoas > 0))
+      || (kws.length ? opcoes.filter((o) => o.pessoas > 0 && kws.some((kw) => o.chave.includes(kw))).sort((a, b) => b.pessoas - a.pessoas)[0] : null)
     if (ref) {
       setCarrinho(novo.map((i) => { const x = ref.itens.get(i.key); return { ...i, qtd: x ? +(x.usos / ref.pessoas).toFixed(3) : 0 } }))
       setBase(montarBase(ref, ref.pessoas))
@@ -511,8 +539,11 @@ export default function SimuladorPromocoesClientApp({ dados = null, mostrarBarra
                         style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '8px 10px', borderBottom: '1px solid #F4F4F0', cursor: 'pointer', background: promoSel === o.chave ? '#f0f4e0' : 'transparent' }}>
                         <div style={{ minWidth: 0 }}>
                           <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o.nome}</div>
-                          <div style={{ fontSize: 10.5, color: '#9ca3af' }}>
-                            {o.fonte === 'reservas' ? `${o.n} reserva(s) usaram esse pacote` : o.fonte === 'nome' ? 'pessoas da reserva de mesmo nome' : 'sem nº de pessoas — dá pra digitar'}
+                          <div style={{ fontSize: 10.5, color: '#9ca3af', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={o.detalheFonte || ''}>
+                            {o.fonte === 'reservas' ? `${o.n} reserva(s) usaram esse pacote`
+                              : o.fonte === 'familia' ? o.detalheFonte
+                              : o.fonte === 'nome' ? 'pessoas da reserva de mesmo nome'
+                              : o.detalheFonte ? `${o.detalheFonte} · sem reserva no período` : 'sem nº de pessoas — dá pra digitar'}
                           </div>
                         </div>
                         <div className="font-mono" style={{ fontSize: 11.5, color: o.pessoas > 0 ? '#3f3f46' : '#B45309', flexShrink: 0, textAlign: 'right' }}>
