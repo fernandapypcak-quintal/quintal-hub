@@ -157,3 +157,58 @@ export function corCmv(cmv) {
   if (cmv <= CMV_CRITICO) return '#B45309'
   return '#8C1414'
 }
+
+// ── Categorização (mesma regra do QuintalPromocoes.gs) ─────────────────────
+// Aplicada aqui também, pra o dashboard não depender da categoria gravada
+// na planilha (que pode estar com a regra antiga).
+// null = excluir (desconto interno). Ajuste as listas aqui E no .gs.
+const EXCLUIR = ['funcionario', 'socio', 'holding', 'supervisao', 'diretoria', 'colaborador']
+const ALL_INCLUSIVE = ['all inclusive']
+const CEC_BEBIDA = ['chopp', 'chope', 'choop', 'cerveja']
+const CEC_COMIDA = ['churrasco', 'carne']
+const CLASSICOS = ['rodizio', 'classico']
+const DIAS_PROMO = ['quarta', 'gin', 'festa junina', 'boteco', 'segunda', 'terca', 'quinta', 'sexta', 'sabado', 'domingo']
+
+function levenshtein(a, b) {
+  const m = a.length, n = b.length
+  if (!m) return n
+  if (!n) return m
+  let prev = Array.from({ length: n + 1 }, (_, j) => j)
+  for (let i = 1; i <= m; i++) {
+    const cur = [i]
+    for (let j = 1; j <= n; j++) {
+      cur[j] = a[i - 1] === b[j - 1] ? prev[j - 1] : 1 + Math.min(prev[j], cur[j - 1], prev[j - 1])
+    }
+    prev = cur
+  }
+  return prev[n]
+}
+
+function semPlural(p) {
+  return p.length > 4 && p.endsWith('es') ? p.slice(0, -2) : p.length > 3 && p.endsWith('s') ? p.slice(0, -1) : p
+}
+
+function palavraCasa(palavra, alvo) {
+  const p = semPlural(palavra)
+  if (palavra === alvo || p === alvo) return true
+  if (alvo.length < 5 || p.length < 5) return false
+  if (Math.abs(p.length - alvo.length) > 2) return false
+  return levenshtein(p, alvo) <= (alvo.length <= 6 ? 1 : 2)
+}
+
+function contem(palavras, lista) {
+  const frase = ` ${palavras.join(' ')} `
+  return lista.some((alvo) => (alvo.includes(' ') ? frase.includes(` ${alvo} `) : palavras.some((p) => palavraCasa(p, alvo))))
+}
+
+export function categorizarPromocao(nome) {
+  const palavras = chavePromo(nome).split(' ').filter(Boolean)
+  if (contem(palavras, EXCLUIR)) return null
+  if (contem(palavras, ALL_INCLUSIVE)) return 'All Inclusive'
+  // C&C = chopp/cerveja + churrasco/carne, em qualquer ordem e grafia ("Festival Chopp & Churrasco",
+  // "Cerveja e Churrasco", "Chopp Churrasco", "Carne & Chope", "C&C")
+  if ((contem(palavras, CEC_BEBIDA) && contem(palavras, CEC_COMIDA)) || ` ${palavras.join(' ')} `.includes(' c e c ')) return 'C&C'
+  if (contem(palavras, CLASSICOS)) return 'Clássicos'
+  if (contem(palavras, DIAS_PROMO)) return 'Pacotes dias Promo'
+  return 'Pacotes'
+}
