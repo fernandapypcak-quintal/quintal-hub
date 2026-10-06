@@ -3,7 +3,8 @@
 export const PAGINAS_PROMO = [
   { id: 'visao',       icon: '🏠', label: 'Visão geral',   curto: 'Geral' },
   { id: 'casas',       icon: '🏪', label: 'Por casa',      curto: 'Casas' },
-  { id: 'promocoes',   icon: '🎟️', label: 'Por promoção',  curto: 'Promos' },
+  { id: 'pacotes',     icon: '📦', label: 'Pacotes',       curto: 'Pacotes' },
+  { id: 'promocoes',   icon: '🎟️', label: 'Promoções',     curto: 'Promos' },
   { id: 'diaria',      icon: '📅', label: 'Análise diária', curto: 'Diária' },
   { id: 'conferencia', icon: '🔎', label: 'Conferência',   curto: 'Conferir' },
   { id: 'simulador',   icon: '🧮', label: 'Simulador',     curto: 'Simular' },
