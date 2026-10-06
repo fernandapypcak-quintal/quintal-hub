@@ -3,108 +3,64 @@
 
 import { useMemo } from 'react'
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
-import { CATEGORIAS_PROMO } from '@/lib/promocoesConfig'
-import { agrupar, total, derivar, fatTotalPeriodo, mesAnterior, corCmv } from '../../data/modelo'
-import { Card, Kpi, Aviso, brl, brlK, pct, pp, num, varPct, mesLabel, CmvTxt } from '../ui'
-
-const TOTAL = 'Total de Promoções'
+import { total, derivar, fatTotalPeriodo, mesAnterior, corCmv } from '../../data/modelo'
+import { Card, Kpi, Aviso, brl, brlK, pct, pp, num, varPct, mesLabel } from '../ui'
+import DetalheSeparado from '../DetalheSeparado'
 
 export default function VisaoGeral({ dados, filtros }) {
   const { pacotes, consumoMes, fatTotal, meses, unidades, ultimoFechado } = dados
   const units = filtros.unidade ? [filtros.unidade] : unidades.map((u) => u.id)
-  const categoria = filtros.categoria || undefined
   const mes = filtros.mes
   const idx = meses.indexOf(mes)
   const mesesTabela = meses.slice(Math.max(0, idx - 2), idx + 1)
   const parcial = (m) => m === ultimoFechado.slice(0, 7)
 
-  // Resumo por mês (todas as categorias + total)
+  // Total por mês (KPIs + gráfico)
   const porMes = useMemo(() => {
     const out = {}
     for (const m of meses) {
       const ft = fatTotalPeriodo(fatTotal, units, { mes: m })
-      const grupos = agrupar(pacotes, consumoMes, { units, mes: m }, (r) => r.categoria)
-      const cats = {}
-      for (const c of CATEGORIAS_PROMO) cats[c] = derivar(grupos.get(c) || total([], [], {}), ft)
-      const tot = derivar(total(pacotes, consumoMes, { units, mes: m, categoria }), ft)
-      cats[TOTAL] = derivar(total(pacotes, consumoMes, { units, mes: m }), ft)
-      out[m] = { cats, filtrado: tot, fatTotal: ft }
+      out[m] = derivar(total(pacotes, consumoMes, { units, mes: m }), ft)
     }
     return out
-  }, [pacotes, consumoMes, fatTotal, meses, units.join(','), categoria])
+  }, [pacotes, consumoMes, fatTotal, meses, units.join(',')])
 
-  const atual = porMes[mes]?.filtrado
-  // Mês em andamento não é comparado com mês fechado (daria −80%, −90%…)
-  const ant = parcial(mes) ? null : porMes[mesAnterior(mes)]?.filtrado
-
-  const serie = meses.map((m) => ({
-    mes: mesLabel(m) + (parcial(m) ? '*' : ''),
-    fat: porMes[m].filtrado.fat,
-    peso: porMes[m].filtrado.peso,
-    cmv: porMes[m].filtrado.cmv,
-  }))
-
+  const atual = porMes[mes]
+  const ant = parcial(mes) ? null : porMes[mesAnterior(mes)]
   if (!atual) return null
 
-  const linha = (label, getter, fmt, destaque = false, cmv = false) => (
-    <tr key={label} className={`border-t border-zinc-100 ${destaque ? 'bg-zinc-50/70 font-bold' : ''}`}>
-      <td className="py-1.5 px-3 text-left text-brand-black">{label}</td>
-      {mesesTabela.map((m, i) => {
-        const v = getter(porMes[m])
-        const vAnt = i > 0 ? getter(porMes[mesesTabela[i - 1]]) : null
-        const d = cmv || fmt === pct ? (v != null && vAnt != null ? v - vAnt : null) : varPct(v, vAnt)
-        return (
-          <td key={m} className="py-1.5 px-3 text-right font-mono tabular-nums">
-            {cmv ? <CmvTxt v={v} /> : fmt(v)}
-            {d != null && i > 0 && !parcial(m) && (
-              <div className="text-[10px] font-normal" style={{ color: d === 0 ? '#a1a1aa' : (cmv ? d < 0 : d > 0) ? '#5f6b12' : '#8C1414' }}>
-                {cmv || fmt === pct ? pp(d) : `${d > 0 ? '+' : ''}${pct(d)}`}
-              </div>
-            )}
-          </td>
-        )
-      })}
-    </tr>
-  )
-  const secao = (t) => (
-    <tr key={t}><td colSpan={mesesTabela.length + 1} className="pt-4 pb-1 px-3 text-[10.5px] font-bold tracking-wide text-zinc-400 uppercase">{t}</td></tr>
-  )
-  const cats = [...CATEGORIAS_PROMO, TOTAL]
+  const serie = meses.map((m) => ({ mes: mesLabel(m) + (parcial(m) ? '*' : ''), fat: porMes[m].fat, peso: porMes[m].peso, cmv: porMes[m].cmv }))
 
   return (
     <div className="p-4 lg:p-6 space-y-4">
       <div>
         <h1 className="text-lg font-bold text-brand-black">Visão geral — {mesLabel(mes)}{parcial(mes) ? ' (parcial)' : ''}</h1>
         <p className="text-xs text-zinc-400">
-          {filtros.unidade ? unidades.find((u) => u.id === filtros.unidade)?.label : 'Rede'}{categoria ? ` · ${categoria}` : ' · todas as promoções'}
+          {filtros.unidade ? unidades.find((u) => u.id === filtros.unidade)?.label : 'Rede'} · todas as promoções
           {parcial(mes) && ` · dados até ${ultimoFechado.split('-').reverse().join('/')}`}
         </p>
       </div>
 
       {atual.cobertura != null && atual.cobertura < 0.95 && (
-        <Aviso>
-          {pct(1 - atual.cobertura)} dos itens consumidos em promoção não têm custo na ficha técnica — o CMV está subestimado. Veja quais na aba Conferência.
-        </Aviso>
+        <Aviso>{pct(1 - atual.cobertura)} dos itens consumidos em promoção não têm custo na ficha técnica — o CMV está subestimado. Veja quais na Conferência.</Aviso>
       )}
 
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Faturamento promoções" valor={brlK(atual.fat)}
-          sub={ant ? `${varPct(atual.fat, ant.fat) >= 0 ? '▲' : '▼'} ${pct(Math.abs(varPct(atual.fat, ant.fat) ?? 0))} vs ${mesLabel(mesAnterior(mes))}` : null} />
+          sub={ant ? `${varPct(atual.fat, ant.fat) >= 0 ? '▲' : '▼'} ${pct(Math.abs(varPct(atual.fat, ant.fat) ?? 0))} vs ${mesLabel(mesAnterior(mes))}` : parcial(mes) ? 'mês em andamento' : null} />
         <Kpi label="CMV promoções" valor={pct(atual.cmv)} corValor={corCmv(atual.cmv)}
           sub={`custo ${brlK(atual.custo)}${atual.cobertura != null ? ` · cobertura ${pct(atual.cobertura)}` : ''}`} />
         <Kpi label="Peso no faturamento" valor={pct(atual.peso)}
           sub={atual.fatTotal != null ? `de ${brlK(atual.fatTotal)}${ant?.peso != null && atual.peso != null ? ` · ${pp(atual.peso - ant.peso)}` : ''}` : 'sem faturamento total'} />
-        <Kpi label="Pessoas" valor={num(atual.pessoas)}
-          sub={ant ? `${ant.pessoas ? `${varPct(atual.pessoas, ant.pessoas) >= 0 ? '▲' : '▼'} ${pct(Math.abs(varPct(atual.pessoas, ant.pessoas)))}` : ''} vs mês ant.` : null} />
-        <Kpi label="Ticket médio" valor={brl(atual.ticket)}
-          sub={ant?.ticket ? `mês ant. ${brl(ant.ticket)}` : null} />
+        <Kpi label="Pessoas" valor={num(atual.pessoas)} sub={ant?.pessoas ? `mês ant. ${num(ant.pessoas)}` : null} />
+        <Kpi label="Ticket médio" valor={brl(atual.ticket)} sub={ant?.ticket ? `mês ant. ${brl(ant.ticket)}` : null} />
         <Kpi label="Margem bruta" valor={brlK(atual.usos ? atual.margem : null)}
           sub={atual.margemPessoa != null && atual.usos ? `${brl(atual.margemPessoa)} por pessoa` : null}
           corValor={atual.usos && atual.margem < 0 ? '#8C1414' : undefined} />
       </div>
 
       <Card titulo="Evolução mensal — faturamento (barras), peso e CMV (linhas)">
-        <div style={{ width: '100%', height: 260 }}>
+        <div style={{ width: '100%', height: 250 }}>
           <ResponsiveContainer>
             <ComposedChart data={serie}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F0F0F0" />
@@ -119,41 +75,16 @@ export default function VisaoGeral({ dados, filtros }) {
             </ComposedChart>
           </ResponsiveContainer>
         </div>
-        {serie.some((s) => s.mes.endsWith('*')) && <p className="text-[10.5px] text-zinc-400 mt-1">* mês em andamento (sem variação % contra o mês anterior)</p>}
+        {serie.some((s) => s.mes.endsWith('*')) && <p className="text-[10.5px] text-zinc-400 mt-1">* mês em andamento</p>}
       </Card>
 
-      <Card titulo="Resumo por categoria" className="overflow-hidden">
-        <div className="overflow-x-auto -mx-4">
-          <table className="w-full text-[12.5px]">
-            <thead>
-              <tr className="text-right text-[10.5px] text-zinc-400 uppercase">
-                <th className="py-2 px-3 text-left">Categoria</th>
-                {mesesTabela.map((m) => <th key={m} className="py-2 px-3">{mesLabel(m)}{parcial(m) ? '*' : ''}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {secao('Faturamento')}
-              {cats.map((c) => linha(c, (d) => d.cats[c].fat, brl, c === TOTAL))}
-              {linha('Sem promoções', (d) => (d.fatTotal != null ? Math.max(0, d.fatTotal - d.cats[TOTAL].fat) : null), brl)}
-              {linha('Faturamento total da casa', (d) => d.fatTotal, brl, true)}
-              {secao('CMV')}
-              {cats.map((c) => linha(c, (d) => d.cats[c].cmv, pct, c === TOTAL, true))}
-              {secao('Peso sobre o faturamento total')}
-              {cats.map((c) => linha(c, (d) => d.cats[c].peso, pct, c === TOTAL))}
-              {secao('Nº de pessoas')}
-              {cats.map((c) => linha(c, (d) => d.cats[c].pessoas, num, c === TOTAL))}
-              {secao('Ticket médio')}
-              {cats.map((c) => linha(c, (d) => d.cats[c].ticket, brl, c === TOTAL))}
-              {secao('Margem bruta (faturamento − custo)')}
-              {cats.map((c) => linha(c, (d) => (d.cats[c].usos ? d.cats[c].margem : null), brl, c === TOTAL))}
-            </tbody>
-          </table>
-        </div>
+      <Card titulo={`Pacotes e promoções — ${mesLabel(mes)}`}>
+        <DetalheSeparado dados={dados} filtro={{ units, mes }} />
       </Card>
 
       <p className="text-[11px] text-zinc-400">
-        Faturamento e pessoas: relatório de Pacotes da ZIG (coluna Faturamento). Custo: itens consumidos nas promoções × custo da ficha técnica.
-        Peso: faturamento das promoções ÷ faturamento total da casa (canal CASA, mesma base do dashboard de Faturamento).
+        Receita e pessoas: relatório de Pacotes da ZIG (Faturamento + Emissão de NF). Custo: itens consumidos nas promoções (Promoções Utilizadas) × ficha técnica.
+        CMV = custo de todas as promoções ÷ receita de todos os pacotes (+ o que o cliente pagou nas promoções de desconto). Peso: receita ÷ faturamento total da casa (canal CASA).
       </p>
     </div>
   )
