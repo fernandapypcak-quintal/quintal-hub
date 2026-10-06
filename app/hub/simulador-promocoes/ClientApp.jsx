@@ -202,10 +202,11 @@ export default function SimuladorPromocoesClientApp({ dados = null, mostrarBarra
   const [pessoasManual, setPessoasManual] = useState('')
 
   const ultimos3 = useMemo(() => {
-    if (!dados?.meses?.length) return []
+    const lista = dados?.mesesCarregados || dados?.meses || []
+    if (!lista.length) return []
     const atual = dados.ultimoFechado?.slice(0, 7)
-    const fechados = dados.meses.filter((m) => m !== atual || dados.ultimoFechado === ultimoDiaDoMes(m))
-    return (fechados.length ? fechados : dados.meses).slice(-3)
+    const fechados = lista.filter((m) => m !== atual || dados.ultimoFechado === ultimoDiaDoMes(m))
+    return (fechados.length ? fechados : lista).slice(-3)
   }, [dados])
 
   const filtroHist = useMemo(() => {
@@ -485,8 +486,8 @@ export default function SimuladorPromocoesClientApp({ dados = null, mostrarBarra
                     </div>
                     {histModo === 'mes' ? (
                       <select value={histMes} onChange={(e) => setHistMes(e.target.value)} style={{ ...selectBox, width: 'auto', marginBottom: 0 }}>
-                        <option value="3m">Últimos 3 meses fechados</option>
-                        {[...(dados.meses || [])].reverse().map((m) => <option key={m} value={m}>{mesLabel(m)}</option>)}
+                        <option value="3m">Meses carregados (fechados)</option>
+                        {[...(dados.mesesCarregados || dados.meses || [])].reverse().map((m) => <option key={m} value={m}>{mesLabel(m)}</option>)}
                       </select>
                     ) : (
                       <input type="date" value={histDia} max={dados.ultimoFechado} onChange={(e) => setHistDia(e.target.value)} style={{ ...selectBox, width: 'auto', marginBottom: 0 }} />
