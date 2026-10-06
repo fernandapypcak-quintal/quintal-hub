@@ -12,6 +12,7 @@ export default function PorCasa({ dados, filtros }) {
   const mes = filtros.mes
   const categoria = filtros.categoria || undefined
   const [aberta, setAberta] = useState(null)
+  const parcial = mes === ultimoFechado.slice(0, 7)
 
   const linhas = useMemo(() => {
     const atual = agrupar(pacotes, consumoMes, { mes, categoria }, (r) => r.unit)
@@ -19,16 +20,16 @@ export default function PorCasa({ dados, filtros }) {
     return unidades.map((u) => {
       const d = derivar(atual.get(u.id) || total([], [], {}), fatTotalPeriodo(fatTotal, [u.id], { mes }))
       const a = ant.get(u.id)
-      return { ...d, unit: u.id, nome: u.label, fatAnt: a ? a.fat : null }
+      return { ...d, unit: u.id, nome: u.label, fatAnt: a && !parcial ? a.fat : null }
     })
-  }, [pacotes, consumoMes, fatTotal, unidades, mes, categoria])
+  }, [pacotes, consumoMes, fatTotal, unidades, mes, categoria, parcial])
 
   const rede = useMemo(() => {
     const units = unidades.map((u) => u.id)
     const d = derivar(total(pacotes, consumoMes, { mes, categoria }), fatTotalPeriodo(fatTotal, units, { mes }))
     const a = total(pacotes, consumoMes, { mes: mesAnterior(mes), categoria })
-    return { ...d, nome: 'Rede', fatAnt: a.nPacotes ? a.fat : null }
-  }, [pacotes, consumoMes, fatTotal, unidades, mes, categoria])
+    return { ...d, nome: 'Rede', fatAnt: a.nPacotes && !parcial ? a.fat : null }
+  }, [pacotes, consumoMes, fatTotal, unidades, mes, categoria, parcial])
 
   const colunas = [
     { id: 'nome', label: 'Casa', align: 'left', valor: (l) => l.nome, className: 'font-semibold text-brand-black' },
