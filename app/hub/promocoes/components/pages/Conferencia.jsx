@@ -71,10 +71,12 @@ export default function Conferencia({ dados, filtros }) {
         <Card titulo="Pipeline / fontes">
           <table className="w-full text-[12.5px]">
             <tbody className="divide-y divide-zinc-100">
-              <tr><td className="py-1.5 text-zinc-500">Diário processado até</td><td className="py-1.5 text-right font-mono">{dataBR(status?.diarioAte)}</td></tr>
+              <tr><td className="py-1.5 text-zinc-500">Coletado até (rotina das 8h)</td><td className="py-1.5 text-right font-mono">{dataBR(status?.diarioAte)}</td></tr>
+              <tr><td className="py-1.5 text-zinc-500">Reservas antigas na fila de detalhe</td><td className="py-1.5 text-right font-mono">{num(status?.pendentesDetalhe ?? 0)}</td></tr>
+              {status?.bloqueadoAte && <tr><td className="py-1.5 text-red-700">ZIG bloqueada até</td><td className="py-1.5 text-right font-mono text-red-700">{new Date(+status.bloqueadoAte).toLocaleString('pt-BR')}</td></tr>}
               <tr><td className="py-1.5 text-zinc-500">Último dia fechado</td><td className="py-1.5 text-right font-mono">{dataBR(ultimoFechado)}</td></tr>
-              <tr><td className="py-1.5 text-zinc-500">Dia operacional (06h→06h)</td><td className="py-1.5 text-right">{status?.janelaOperacional ? 'sim' : 'não'}</td></tr>
-              <tr><td className="py-1.5 text-zinc-500">Cache gerado em</td><td className="py-1.5 text-right font-mono">{geradoEm ? new Date(geradoEm).toLocaleString('pt-BR') : '—'}</td></tr>
+              <tr><td className="py-1.5 text-zinc-500">Última atualização</td><td className="py-1.5 text-right font-mono">{geradoEm ? new Date(geradoEm).toLocaleString('pt-BR') : '—'}</td></tr>
+              <tr><td className="py-1.5 text-zinc-500">Reservas com detalhe (consumo exato)</td><td className="py-1.5 text-right font-mono">{num(dados.reservasComDetalhe || 0)} de {num(dados.pacotes.length)}</td></tr>
               <tr><td className="py-1.5 text-zinc-500">Ficha técnica</td><td className="py-1.5 text-right">{fichaAoVivo ? 'ao vivo (aba Ficha_Tecnica)' : 'cópia do cache'}</td></tr>
               <tr><td className="py-1.5 text-zinc-500">Faturamento total das casas</td><td className="py-1.5 text-right">{dados.temFaturamentoTotal ? 'ok' : 'indisponível'}</td></tr>
               {r.casasSemFat.length > 0 && (
