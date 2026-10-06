@@ -8,28 +8,27 @@ import { Card, Kpi, Aviso, brl, brlK, pct, pp, num, varPct, mesLabel } from '../
 import DetalheSeparado from '../DetalheSeparado'
 
 export default function VisaoGeral({ dados, filtros }) {
-  const { pacotes, consumoMes, fatTotal, meses, unidades, ultimoFechado } = dados
+  const { pacotes, consumoMes, fatTotal, meses, unidades, ultimoFechado, resumo = {} } = dados
   const units = filtros.unidade ? [filtros.unidade] : unidades.map((u) => u.id)
   const mes = filtros.mes
-  const idx = meses.indexOf(mes)
-  const mesesTabela = meses.slice(Math.max(0, idx - 2), idx + 1)
   const parcial = (m) => m === ultimoFechado.slice(0, 7)
 
-  // Total por mês (KPIs + gráfico)
-  const porMes = useMemo(() => {
-    const out = {}
-    for (const m of meses) {
-      const ft = fatTotalPeriodo(fatTotal, units, { mes: m })
-      out[m] = derivar(total(pacotes, consumoMes, { units, mes: m }), ft)
-    }
-    return out
-  }, [pacotes, consumoMes, fatTotal, meses, units.join(',')])
+  // KPIs: mês escolhido e anterior (dados completos carregados)
+  const atual = useMemo(() => derivar(total(pacotes, consumoMes, { units, mes }), fatTotalPeriodo(fatTotal, units, { mes })),
+    [pacotes, consumoMes, fatTotal, mes, units.join(',')])
+  const ant = useMemo(() => (parcial(mes) ? null : derivar(total(pacotes, consumoMes, { units, mes: mesAnterior(mes) }), fatTotalPeriodo(fatTotal, units, { mes: mesAnterior(mes) }))),
+    [pacotes, consumoMes, fatTotal, mes, units.join(',')])
 
-  const atual = porMes[mes]
-  const ant = parcial(mes) ? null : porMes[mesAnterior(mes)]
+  // Gráfico: todos os meses, pelo resumo mensal gerado pelo Apps Script
+  const serie = useMemo(() => meses.map((m) => {
+    const porUni = resumo[m] || {}
+    const ids = filtros.unidade ? [filtros.unidade] : Object.keys(porUni)
+    let fat = 0, custo = 0
+    for (const u of ids) { fat += porUni[u]?.receita || 0; custo += porUni[u]?.custo || 0 }
+    const ft = fatTotalPeriodo(fatTotal, ids, { mes: m })
+    return { mes: mesLabel(m) + (parcial(m) ? '*' : ''), fat, peso: ft && fat ? fat / ft : null, cmv: fat ? custo / fat : null }
+  }), [resumo, meses, fatTotal, filtros.unidade])
   if (!atual) return null
-
-  const serie = meses.map((m) => ({ mes: mesLabel(m) + (parcial(m) ? '*' : ''), fat: porMes[m].fat, peso: porMes[m].peso, cmv: porMes[m].cmv }))
 
   return (
     <div className="p-4 lg:p-6 space-y-4">
