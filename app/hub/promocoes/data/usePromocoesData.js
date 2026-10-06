@@ -9,7 +9,7 @@
 import { useEffect, useState } from 'react'
 import { unitIdFromString, labelForUnit, ALL_UNIT_IDS } from '@/lib/units'
 import { CUSTO_POR_PRODUTO } from '@/lib/catalogoCustos'
-import { COLUNA_FATURAMENTO_PACOTE } from '@/lib/promocoesConfig'
+import { COLUNA_FATURAMENTO_PACOTE, DESCONTO_PARCIAL_MIN, DESCONTO_PARCIAL_MAX } from '@/lib/promocoesConfig'
 import { loadData as carregarFaturamento } from '../../faturamento/data/loader'
 import { chavePromo, chaveProduto, numero, mesDe, ultimoDiaDoMes, categorizarPromocao } from './modelo'
 
@@ -61,21 +61,25 @@ export function processar(api, linhasFaturamento) {
     const unit = unitIdFromString(r.unidade || r.loja)
     const data = String(r.data || '').slice(0, 10)
     if (!unit || !/^\d{4}-\d{2}-\d{2}$/.test(data) || data > ultimoFechado) continue
-    const categoria = categorizarPromocao(r.nome_do_pacote)
-    if (!categoria) continue // desconto interno (funcionário, sócio…)
+    if (categorizarPromocao(r.nome_do_pacote) === null) continue // funcionário, sócio, CEO…
     const faturamento = numero(r.faturamento_r)
     const valor = numero(r.valor_do_pacote_r)
+    const emitido = numero(r.emitido_nf_r)
+    const nome = String(r.nome_do_pacote || '(sem nome)').trim()
     pacotes.push({
       tipo: 'pacote',
       unit, data, mes: data.slice(0, 7),
-      nome: String(r.nome_do_pacote || '(sem nome)').trim(),
-      chave: chavePromo(r.nome_do_pacote),
-      categoria,
+      nome,
+      chave: chavePromo(nome),
+      categoria: 'Pacote',
+      produtos: numero(r.produtos),
       pessoas: numero(r.confirmados),
       convidados: numero(r.convidados),
       valor, faturamento,
-      emitido: numero(r.emitido_nf_r),
-      fat: COLUNA_FATURAMENTO_PACOTE === 'valor' ? valor : faturamento,
+      emitido,
+      fat: COLUNA_FATURAMENTO_PACOTE === 'valor' ? valor
+        : COLUNA_FATURAMENTO_PACOTE === 'faturamento' ? faturamento
+        : faturamento + emitido,
     })
   }
 
@@ -84,8 +88,8 @@ export function processar(api, linhasFaturamento) {
   function linhaConsumo(r, data, mes) {
     const unit = unitIdFromString(r.unidade || r.loja)
     if (!unit || !mes) return null
-    const categoria = categorizarPromocao(r.promocao)
-    if (!categoria) return null
+    if (categorizarPromocao(r.promocao) === null) return null // funcionário, sócio…
+    const categoria = 'Pacote'
     const usos = numero(r.usos)
     const f = ficha.get(chaveProduto(r.produto))
     return {
@@ -100,6 +104,9 @@ export function processar(api, linhasFaturamento) {
       temCusto: !!f,
       custoUnit: f ? f.custo : null,
       custo: f ? f.custo * usos : 0,
+      precoUnit: f?.preco || null,
+      fatItens: 0, // preenchido depois, só pra promoções de desconto
+      cardapio: f?.preco ? f.preco * usos : numero(r.desconto_total_r), // valor de cardápio do que foi consumido
     }
   }
 
@@ -114,6 +121,28 @@ export function processar(api, linhasFaturamento) {
   for (const r of expandir(api.promocoesMensal)) {
     const l = linhaConsumo(r, null, mesDe(r.mes))
     if (l) consumoMensalBruto.push(l)
+  }
+
+  // ── Tipo de promoção: item de pacote (sai de graça) x desconto parcial ──
+  // % desconto da promoção = desconto ÷ (usos × preço de cardápio), no histórico todo.
+  const somaTipo = new Map()
+  for (const c of [...consumoMensalBruto, ...consumoDia]) {
+    if (!c.precoUnit) continue
+    const x = somaTipo.get(c.chave) || { tabela: 0, desconto: 0 }
+    x.tabela += c.usos * c.precoUnit
+    x.desconto += c.desconto
+    somaTipo.set(c.chave, x)
+  }
+  const tipoPromo = new Map()
+  for (const [k, x] of somaTipo) {
+    const pct = x.tabela > 0 ? x.desconto / x.tabela : null
+    const tipo = pct != null && pct >= DESCONTO_PARCIAL_MIN && pct < DESCONTO_PARCIAL_MAX ? 'desconto' : 'pacote'
+    tipoPromo.set(k, { tipo, pctDesconto: pct })
+  }
+  for (const c of [...consumoMensalBruto, ...consumoDia]) {
+    if (tipoPromo.get(c.chave)?.tipo !== 'desconto') continue
+    c.categoria = 'Desconto'
+    c.fatItens = c.precoUnit ? Math.max(0, c.usos * c.precoUnit - c.desconto) : 0
   }
 
   // Mês "coberto" pelo diário = todos os dias fechados do mês já processados.
@@ -172,7 +201,7 @@ export function processar(api, linhasFaturamento) {
 
   return {
     pacotes, consumoMes, consumoDia, fatTotal, meses, unidades, catalogo,
-    nomes, categoriaDaChave, fonteCustoMes, ultimoFechado,
+    nomes, categoriaDaChave, fonteCustoMes, ultimoFechado, tipoPromo,
     status, geradoEm: api.geradoEm, fichaAoVivo: api.fichaAoVivo,
     produtosSemCusto: [...semCusto.entries()].sort((a, b) => b[1] - a[1]),
     temFaturamentoTotal: Object.keys(fatTotal.mes).length > 0,
