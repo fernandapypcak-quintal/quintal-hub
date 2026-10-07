@@ -48,6 +48,7 @@ const GAS_URL = '/api/pipedrive'
 type DealResumo = {
   id: string; empresa: string; titulo: string; status: string; stage_nome: string
   valor: number; data_evento: string; won_time: string; vendedor: string; unidade_nome: string
+  won_time_efetivo?: string; teve_aditivo?: string; valor_aditivo?: number | string
 }
 
 // Modal de comparação: mostra os negócios que compuseram o valor de um mês
@@ -306,9 +307,18 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
   )
 
   function exportarCSV() {
-    const linhas = [['Ano','Empresa','Unidade/Casa do evento','Valor','DataEvento','Fechou','Vendedor']]
-    dealsAnteriorCortado.forEach(d => linhas.push([String(anoAnterior), d.empresa||d.titulo, d.unidade_nome||'Não informado', String(parseFloat(String(d.valor))||0), d.data_evento||'', d.won_time||'', d.vendedor||'']))
-    dealsAtualCortado.forEach(d => linhas.push([String(anoAtual), d.empresa||d.titulo, d.unidade_nome||'Não informado', String(parseFloat(String(d.valor))||0), d.data_evento||'', d.won_time||'', d.vendedor||'']))
+    const linhas = [['Ano','Empresa','Unidade/Casa do evento','Valor','DataEvento','Fechou (último)','Data Fechamento Real','Teve Aditivo','Diferença do Aditivo','Vendedor']]
+    function linhaDeal(ano: number, d: DealResumo) {
+      const teveAditivo = d.teve_aditivo === 'SIM'
+      return [
+        String(ano), d.empresa||d.titulo, d.unidade_nome||'Não informado', String(parseFloat(String(d.valor))||0),
+        d.data_evento||'', d.won_time||'', d.won_time_efetivo||d.won_time||'',
+        teveAditivo ? 'Sim' : 'Não', teveAditivo ? String(parseFloat(String(d.valor_aditivo))||0) : '0',
+        d.vendedor||'',
+      ]
+    }
+    dealsAnteriorCortado.forEach(d => linhas.push(linhaDeal(anoAnterior, d)))
+    dealsAtualCortado.forEach(d => linhas.push(linhaDeal(anoAtual, d)))
     const csv = linhas.map(l => l.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n')
     const blob = new Blob(['\uFEFF'+csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
