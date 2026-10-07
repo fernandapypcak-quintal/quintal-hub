@@ -357,7 +357,7 @@ export type AditivoDeal = {
 export type AditivoMes = { mes: string; qtd: number; valorTotalAditivo: number; negocios: AditivoDeal[] }
 export type AditivosData = { meses: AditivoMes[]; total: number; valorTotalAditivos: number; aviso: string }
 
-export function useAditivos(filtros: Pick<Filtros, 'unidade' | 'vendedor'>) {
+export function useAditivos(filtros: Pick<Filtros, 'unidade' | 'vendedor'>, mesFiltro?: string) {
   const [dados, setDados] = useState<AditivosData | null>(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
@@ -367,13 +367,14 @@ export function useAditivos(filtros: Pick<Filtros, 'unidade' | 'vendedor'>) {
     const p = new URLSearchParams({ tipo: 'aditivos' })
     if (filtros.unidade)  p.set('unidade',  filtros.unidade)
     if (filtros.vendedor) p.set('vendedor', filtros.vendedor)
+    if (mesFiltro) p.set('mes_filtro', mesFiltro)
     fetch(`${GAS_URL}?${p}`)
       .then(r => r.json())
       .then(data => { if (data.erro) throw new Error(data.erro); setDados(data) })
       .catch(e => setErro(e.message))
       .finally(() => setLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtros.unidade, filtros.vendedor])
+  }, [filtros.unidade, filtros.vendedor, mesFiltro])
 
   return { dados, loading, erro }
 }
