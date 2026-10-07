@@ -354,7 +354,8 @@ export type AditivoDeal = {
   mesFechamentoOriginal: string; mesAditivo: string
   dataFechamentoOriginal: string; dataAditivo: string
 }
-export type AditivosData = { lista: AditivoDeal[]; total: number; valorTotalAditivos: number; aviso: string }
+export type AditivoMes = { mes: string; qtd: number; valorTotalAditivo: number; negocios: AditivoDeal[] }
+export type AditivosData = { meses: AditivoMes[]; total: number; valorTotalAditivos: number; aviso: string }
 
 export function useAditivos(filtros: Pick<Filtros, 'unidade' | 'vendedor'>) {
   const [dados, setDados] = useState<AditivosData | null>(null)
