@@ -739,50 +739,79 @@ type TicketBucket = { qtd: number; receita: number; pax: number; ticketMedio: nu
 type LinhaGranular = { periodo: string; label: string; leads: number; fechados: number; taxa: number; receita: number; deals: DealGranular[]; fechamento: TicketBucket; competencia: TicketBucket }
 type DadosGranular = { mensal: LinhaGranular[]; semanal: LinhaGranular[]; diario: LinhaGranular[] }
 
-// Sinaliza os deals com ADITIVO (reabriram e foram assinados de novo
-// depois). O valor já volta pro mês do fechamento original em todo o
-// dashboard — esse painel é só transparência de QUAIS e QUANTO, pra quem
-// olha o número não achar que sumiu alguma coisa sem explicação.
+// Sinaliza os deals com ADITIVO que mudou o fechamento de mês (reabriram e
+// foram assinados de novo num mês diferente do original). O valor já volta
+// pro mês do fechamento original em todo o dashboard — esse painel é só
+// transparência de QUAIS e QUANTO. Dois níveis: lista de meses recolhida
+// por padrão, clica num mês e abre os negócios daquele mês.
 function PainelAditivos({ filtros }: { filtros: any }) {
-  const [aberto, setAberto] = useState(false)
+  const [painelAberto, setPainelAberto] = useState(false)
+  const [mesesAbertos, setMesesAbertos] = useState<Set<string>>(new Set())
   const { dados, loading, erro } = useAditivos(filtros)
 
   if (loading) return null
-  if (erro || !dados || !Array.isArray(dados.lista) || dados.lista.length === 0) return null
+  if (erro || !dados || !Array.isArray(dados.meses) || dados.meses.length === 0) return null
+
+  function toggleMes(mes: string) {
+    setMesesAbertos(prev => {
+      const novo = new Set(prev)
+      novo.has(mes) ? novo.delete(mes) : novo.add(mes)
+      return novo
+    })
+  }
 
   return (
     <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: '16px 20px' }}>
-      <button onClick={() => setAberto(v => !v)}
+      <button onClick={() => setPainelAberto(v => !v)}
         style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: '#0D0F14' }}>
-          {aberto ? '▾' : '▸'} {dados.total} {dados.total === 1 ? 'negócio teve aditivo' : 'negócios tiveram aditivo'} (reabriram e foram assinados de novo depois)
+          {painelAberto ? '▾' : '▸'} {dados.total} {dados.total === 1 ? 'negócio teve aditivo' : 'negócios tiveram aditivo'} que mudou o fechamento de mês
         </div>
         <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'DM Mono, monospace', color: '#3B6D11' }}>
           +{fmtBRLCompacto(dados.valorTotalAditivos)}
         </div>
       </button>
 
-      {aberto && (
+      {painelAberto && (
         <div style={{ marginTop: 14 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 90px 90px 110px 110px', gap: 10, fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', marginBottom: 8, paddingBottom: 6, borderBottom: '0.5px solid #F0F0EC' }}>
-            <span>Empresa</span><span>Unidade</span>
-            <span style={{ textAlign: 'right' }}>Fech. original</span>
-            <span style={{ textAlign: 'right' }}>Aditivo em</span>
-            <span style={{ textAlign: 'right' }}>Valor aditivo</span>
-            <span style={{ textAlign: 'right' }}>Valor atual</span>
-          </div>
-          {dados.lista.map(x => (
-            <div key={x.id} style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 90px 90px 110px 110px', gap: 10, alignItems: 'center', padding: '6px 0', fontSize: 12 }}>
-              <span style={{ fontWeight: 600, color: '#0D0F14' }}>{x.empresa}</span>
-              <span style={{ color: '#9a9c9f' }}>{x.unidade_nome}</span>
-              <span style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace' }}>{labelMesAno(x.mesFechamentoOriginal)}</span>
-              <span style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', color: '#9a9c9f' }}>{labelMesAno(x.mesAditivo)}</span>
-              <span style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontWeight: 600, color: x.valorAditivo >= 0 ? '#3B6D11' : '#a32d2d' }}>
-                {x.valorAditivo >= 0 ? '+' : ''}{fmtBRLCompacto(x.valorAditivo)}
-              </span>
-              <span style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(x.valorAtual)}</span>
-            </div>
-          ))}
+          {dados.meses.map(m => {
+            const aberto = mesesAbertos.has(m.mes)
+            return (
+              <div key={m.mes} style={{ borderTop: '0.5px solid #F0F0EC', paddingTop: 10, paddingBottom: 10 }}>
+                <button onClick={() => toggleMes(m.mes)}
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0D0F14' }}>
+                    {aberto ? '▾' : '▸'} {labelMesAno(m.mes)} — {m.qtd} {m.qtd === 1 ? 'negócio' : 'negócios'}
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 600, fontFamily: 'DM Mono, monospace', color: m.valorTotalAditivo >= 0 ? '#3B6D11' : '#a32d2d' }}>
+                    {m.valorTotalAditivo >= 0 ? '+' : ''}{fmtBRLCompacto(m.valorTotalAditivo)}
+                  </div>
+                </button>
+
+                {aberto && (
+                  <div style={{ marginTop: 10, paddingLeft: 14 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 90px 110px 110px', gap: 10, fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', marginBottom: 8, paddingBottom: 6, borderBottom: '0.5px solid #F0F0EC' }}>
+                      <span>Empresa</span><span>Unidade</span>
+                      <span style={{ textAlign: 'right' }}>Aditivo em</span>
+                      <span style={{ textAlign: 'right' }}>Valor aditivo</span>
+                      <span style={{ textAlign: 'right' }}>Valor atual</span>
+                    </div>
+                    {m.negocios.map(x => (
+                      <div key={x.id} style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 90px 110px 110px', gap: 10, alignItems: 'center', padding: '6px 0', fontSize: 12 }}>
+                        <span style={{ fontWeight: 600, color: '#0D0F14' }}>{x.empresa}</span>
+                        <span style={{ color: '#9a9c9f' }}>{x.unidade_nome}</span>
+                        <span style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', color: '#9a9c9f' }}>{labelMesAno(x.mesAditivo)}</span>
+                        <span style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontWeight: 600, color: x.valorAditivo >= 0 ? '#3B6D11' : '#a32d2d' }}>
+                          {x.valorAditivo >= 0 ? '+' : ''}{fmtBRLCompacto(x.valorAditivo)}
+                        </span>
+                        <span style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(x.valorAtual)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
           <div style={{ fontSize: 10, color: '#c9c9c4', fontStyle: 'italic', marginTop: 10 }}>{dados.aviso}</div>
         </div>
       )}
