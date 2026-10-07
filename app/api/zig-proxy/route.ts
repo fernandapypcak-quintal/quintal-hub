@@ -20,6 +20,9 @@ import { getUserAccess } from '@/lib/permissions'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
+// Roda em São Paulo: o firewall da ZIG barra endereços de fora do Brasil
+// (a Vercel usa Washington/EUA por padrão).
+export const preferredRegion = 'gru1'
 
 const BASE = 'https://api.zigcore.com.br/enterprise-postgres'
 
@@ -62,6 +65,7 @@ export async function GET() {
     diagnostico: html ? `❌ A ZIG também bloqueia a Vercel: ${resumoHtml(texto)}` : '✅ A Vercel passa pelo firewall da ZIG (o erro de usuário abaixo é esperado).',
     resposta: html ? null : texto.slice(0, 300),
     cfRay: r.headers.get('cf-ray'),
+    regiaoVercel: process.env.VERCEL_REGION || null,
     usouOrigin: process.env.ZIG_ORIGIN || null,
   })
 }
