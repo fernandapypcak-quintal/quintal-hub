@@ -86,7 +86,7 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
     // Agrupa por MÊS (não por ano) — cada mês mostra seus dois anos e o
     // subtotal dele logo embaixo, antes de passar pro próximo mês. Mesma
     // ordem que já aparece na tela.
-    function secaoMes(b: typeof dados.blocos[number]) {
+    function secaoMes(b: BlocoFD) {
       return `<div class="secao-mes">
         <h2>${esc(MESES_LONG[b.mesFechamento-1])}</h2>
         ${b.mesEmCurso ? `<div class="sub" style="color:#8a7405;">Mês em curso — comparando dia 01 até ontem nos dois anos.</div>` : ''}
