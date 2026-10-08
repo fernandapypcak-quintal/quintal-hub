@@ -4,14 +4,17 @@
 import { useEffect, useState } from 'react'
 
 // ─── Tipos ────────────────────────────────────────────────────────────
-// Origem da reserva por atributos da própria reserva (não depende de operador → comparável entre anos)
-export type Grupo = 'central' | 'online' | 'b2b'
-// Quem fez (depende da lista de operadores de hoje → só para meta e aba Operadores)
-export type TipoOp = 'time' | 'outros' | 'online'
+// Origem atual: quem fez a reserva (lista de operadores da aba OPERADORES). Os 3 somam o total.
+export type Grupo = 'time' | 'online' | 'corp'
+// Para o passado não temos a equipe registrada: o histórico usa atributos da própria reserva
+// e cada origem atual é comparada com o equivalente mais próximo (HIST_DE).
+export type GrupoHist = 'central' | 'online' | 'b2b'
+export const HIST_DE: Record<Grupo, GrupoHist> = { time: 'central', online: 'online', corp: 'b2b' }
+export const HIST_LABEL: Record<GrupoHist, string> = { central: 'Central sem B2B', online: 'Online', b2b: 'B2B / corporativo' }
 export type Linha = {
   id: string; u: string; p: number; dc: string; h: string; dr: string
   c: string; og: string; o: string; t: string; m: boolean
-  oc: string; cd: string; cr: string; s: string; b: boolean; g: Grupo
+  oc: string; cd: string; cr: string; s: string; b: boolean; g: Grupo; gh: GrupoHist
 }
 export type Meta = { mes: string; faixas: number[]; desafio: number | null }
 export type Config = {
@@ -20,17 +23,11 @@ export type Config = {
 }
 export type Filtros = { grupos: Grupo[]; unidades: string[] }
 
-export const GRUPOS: { id: Grupo; label: string; cor: string }[] = [
-  { id: 'central', label: 'Central B2C', cor: '#0F766E' },
-  { id: 'online', label: 'Online', cor: '#97A624' },
-  { id: 'b2b', label: 'B2B / corporativo', cor: '#0ea5e9' },
+export const GRUPOS: { id: Grupo; label: string; cor: string; hist: string }[] = [
+  { id: 'time', label: 'Time de reservas', cor: '#0F766E', hist: 'no passado: central sem B2B' },
+  { id: 'online', label: 'Online', cor: '#97A624', hist: 'no passado: online' },
+  { id: 'corp', label: 'Corporativo / outros', cor: '#0ea5e9', hist: 'no passado: B2B' },
 ]
-export const TIPOS_OP: { id: TipoOp; label: string }[] = [
-  { id: 'time', label: 'Time de reservas' },
-  { id: 'outros', label: 'Outros operadores' },
-  { id: 'online', label: 'Online' },
-]
-export const tipoOp = (r: Linha): TipoOp => (r.m ? 'time' : r.t === 'Online' ? 'online' : 'outros')
 export const grupoLabel = (g: Grupo) => GRUPOS.find(x => x.id === g)?.label || g
 
 export const STATUS: { id: string; label: string; cor: string }[] = [
@@ -171,12 +168,13 @@ export function chavesGrao(ini: string, fim: string, g: Grao) {
 
 // ─── Projeção do mês (média de cada dia da semana nas últimas 4 semanas) ─────
 // `linhas` precisa cobrir pelo menos os 28 dias antes de hoje + o mês atual.
-export function projetarMes(linhas: Linha[], hoje: string) {
+// `peso` permite projetar pessoas em vez de reservas.
+export function projetarMes(linhas: Linha[], hoje: string, peso: (r: Linha) => number = () => 1) {
   const mes = hoje.slice(0, 7)
   const fimMes = ultimoDia(mes)
   const porData: Record<string, number> = {}
-  linhas.forEach(r => { porData[r.dc] = (porData[r.dc] || 0) + 1 })
-  const realizado = linhas.filter(r => r.dc.startsWith(mes)).length
+  linhas.forEach(r => { porData[r.dc] = (porData[r.dc] || 0) + peso(r) })
+  const realizado = linhas.filter(r => r.dc.startsWith(mes)).reduce((s, r) => s + peso(r), 0)
   const soma = [0, 0, 0, 0, 0, 0, 0], qtd = [0, 0, 0, 0, 0, 0, 0]
   for (let i = 1; i <= 28; i++) { const d = addDias(hoje, -i); soma[diaSemana(d)] += porData[d] || 0; qtd[diaSemana(d)]++ }
   const media = soma.map((x, i) => (qtd[i] ? x / qtd[i] : 0))
@@ -188,6 +186,11 @@ export function projetarMes(linhas: Linha[], hoje: string) {
 // ─── Agregações ─────────────────────────────────────────────────────────
 export function aplicarFiltros(l: Linha[], f: Filtros) {
   return l.filter(r => f.grupos.includes(r.g) && (!f.unidades.length || f.unidades.includes(r.u)))
+}
+// Para linhas do ano anterior: aplica a origem pelo equivalente histórico (a equipe era outra)
+export function aplicarFiltrosHist(l: Linha[], f: Filtros) {
+  const hs = f.grupos.map(g => HIST_DE[g])
+  return l.filter(r => hs.includes(r.gh) && (!f.unidades.length || f.unidades.includes(r.u)))
 }
 
 export type Resumo = {
@@ -225,9 +228,10 @@ const vazio = (): HistMes => ({ reservas: 0, pessoas: 0, b2b: 0, canceladas: 0, 
 
 export function histMensal(h: Historico, base: 'criacao' | 'reserva', f: Filtros, casa?: string) {
   const out = new Map<string, HistMes>()
+  const hs: string[] = f.grupos.map(g => HIST_DE[g])
   for (const [k, v] of Object.entries(h[base])) {
     const [mes, u, g] = k.split('|')
-    if (!f.grupos.includes(g as Grupo)) continue
+    if (!hs.includes(g)) continue
     if (f.unidades.length && !f.unidades.includes(u)) continue
     if (casa && u !== casa) continue
     const a = out.get(mes) || vazio()
@@ -241,9 +245,10 @@ export function histMensal(h: Historico, base: 'criacao' | 'reserva', f: Filtros
 // Por casa: Map<unidade, Map<mes, HistMes>>
 export function histPorCasa(h: Historico, base: 'criacao' | 'reserva', f: Filtros) {
   const out = new Map<string, Map<string, HistMes>>()
+  const hs: string[] = f.grupos.map(g => HIST_DE[g])
   for (const [k, v] of Object.entries(h[base])) {
     const [mes, u, g] = k.split('|')
-    if (!f.grupos.includes(g as Grupo)) continue
+    if (!hs.includes(g)) continue
     if (f.unidades.length && !f.unidades.includes(u)) continue
     const porMes = out.get(u) || new Map<string, HistMes>()
     const a = porMes.get(mes) || vazio()
@@ -300,6 +305,28 @@ export function useHistorico(versao = 0) {
   return { hist: estado.hist, erro: estado.erro }
 }
 
+// Exporta o histórico mensal (mês × origem × casa) nas duas bases de data
+export async function exportarHistorico(h: Historico, mesAtual: string) {
+  const XLSX = await import('xlsx')
+  const ini = inicioHistorico(h, mesAtual)
+  const linhas = (base: 'criacao' | 'reserva') => Object.entries(h[base])
+    .map(([k, v]) => { const [mes, u, g] = k.split('|'); return { mes, u, g: g as GrupoHist, v } })
+    .filter(x => x.mes >= ini)
+    .sort((a, b) => a.mes.localeCompare(b.mes) || a.u.localeCompare(b.u) || a.g.localeCompare(b.g))
+  const criacao = linhas('criacao').map(({ mes, u, g, v }) => ({
+    Mês: mes, Origem: HIST_LABEL[g], Unidade: u, Reservas: v[0], Pessoas: v[1], 'Mesa média': v[0] ? +(v[1] / v[0]).toFixed(1) : 0, 'Reservas B2B': v[2],
+  }))
+  const reserva = linhas('reserva').map(({ mes, u, g, v }) => ({
+    Mês: mes, Origem: HIST_LABEL[g], Unidade: u, Reservas: v[0], Pessoas: v[1], 'Mesa média': v[0] ? +(v[1] / v[0]).toFixed(1) : 0,
+    'Reservas B2B': v[2], Canceladas: v[3], 'Datas já passadas': v[4], Sentadas: v[5], 'No-show': v[6],
+    'Taxa sentada': v[4] ? +(v[5] / v[4]).toFixed(4) : null, 'Taxa no-show': v[4] ? +(v[6] / v[4]).toFixed(4) : null,
+  }))
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(reserva), 'Por data da reserva')
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(criacao), 'Por data de criação')
+  XLSX.writeFile(wb, `historico_reservas_${ini}_a_${mesAtual}.xlsx`)
+}
+
 // ─── Export Excel ─────────────────────────────────────────────────────────
 export async function exportarExcel(nome: string, linhas: Linha[]) {
   if (!linhas.length) { alert('Nada para exportar com os filtros atuais.'); return }
@@ -307,8 +334,8 @@ export async function exportarExcel(nome: string, linhas: Linha[]) {
   const dados = linhas.map(r => ({
     'ID reserva': r.id, Unidade: r.u, 'Data da reserva': r.dr ? dataLonga(r.dr) : '',
     'Data de criação': dataLonga(r.dc), 'Hora de criação': r.h, Pessoas: r.p,
-    Origem: grupoLabel(r.g), 'B2B': r.b ? 'Sim' : 'Não', Canal: r.c, 'Origem (Get In)': r.og, Operador: r.o,
-    'Quem fez': TIPOS_OP.find(x => x.id === tipoOp(r))?.label || '', 'Time do operador': r.t, 'Conta na meta': r.m ? 'Sim' : 'Não', Ocasião: r.oc, Cardápio: r.cd,
+    Origem: grupoLabel(r.g), 'B2B': r.b ? 'Sim' : 'Não', 'Canal da central': r.c === 'Painel Operacional' ? 'Sim' : 'Não', Canal: r.c, 'Origem (Get In)': r.og, Operador: r.o,
+    'Time do operador': r.t, 'Conta na meta': r.m ? 'Sim' : 'Não', Ocasião: r.oc, Cardápio: r.cd,
     'Possui criança': r.cr, Status: statusLabel(r.s),
   }))
   const ws = XLSX.utils.json_to_sheet(dados)
@@ -329,7 +356,8 @@ function descompactar(c: Compacta): Linha[] {
       id: String(r[0]), u: d[r[1] as number], p: Number(r[2]) || 0, dc: String(r[3]), h: String(r[4]), dr: String(r[5]),
       c: d[r[6] as number], og: d[r[7] as number], o: d[r[8] as number], t, m,
       oc: d[r[11] as number], cd: d[r[12] as number], cr: d[r[13] as number], s: d[r[14] as number], b: r[15] === 1,
-      g: r[15] === 1 ? 'b2b' : d[r[6] as number] === 'Painel Operacional' ? 'central' : 'online',
+      g: m ? 'time' : t === 'Online' ? 'online' : 'corp',
+      gh: r[15] === 1 ? 'b2b' : d[r[6] as number] === 'Painel Operacional' ? 'central' : 'online',
     }
   })
 }
