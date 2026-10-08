@@ -359,6 +359,34 @@ export type AditivoDeal = {
 export type AditivoMes = { mes: string; qtd: number; valorTotalAditivo: number; negocios: AditivoDeal[] }
 export type AditivosData = { meses: AditivoMes[]; total: number; valorTotalAditivos: number; aviso: string }
 
+export type CelulaMatriz = { mesCompetencia: string; qtd: number; valor: number }
+export type LinhaMatriz = { mesFechamento: string; qtdTotal: number; valorTotal: number; porCompetencia: CelulaMatriz[] }
+export type MatrizFechamentoCompetenciaData = {
+  anoFechamento: number; colunas: string[]; totalPorColuna: CelulaMatriz[]
+  linhas: LinhaMatriz[]; qtdGeral: number; valorGeral: number
+}
+
+export function useMatrizFechamentoCompetencia(filtros: Pick<Filtros, 'unidade' | 'vendedor'>, ano: string) {
+  const [dados, setDados] = useState<MatrizFechamentoCompetenciaData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [erro, setErro] = useState<string | null>(null)
+
+  useEffect(() => {
+    setLoading(true); setErro(null)
+    const p = new URLSearchParams({ tipo: 'matriz_fechamento_competencia', ano })
+    if (filtros.unidade)  p.set('unidade',  filtros.unidade)
+    if (filtros.vendedor) p.set('vendedor', filtros.vendedor)
+    fetch(`${GAS_URL}?${p}`)
+      .then(r => r.json())
+      .then(data => { if (data.erro) throw new Error(data.erro); setDados(data) })
+      .catch(e => setErro(e.message))
+      .finally(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtros.unidade, filtros.vendedor, ano])
+
+  return { dados, loading, erro }
+}
+
 export function useAditivos(filtros: Pick<Filtros, 'unidade' | 'vendedor'>, mesFiltro?: string) {
   const [dados, setDados] = useState<AditivosData | null>(null)
   const [loading, setLoading] = useState(true)
