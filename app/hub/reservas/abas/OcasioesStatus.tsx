@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import {
-  type Config, type Filtros, type Periodo, GRUPOS, STATUS, agruparPor, aplicarFiltros, exportarExcel,
+  type Config, type Filtros, type Periodo, GRUPOS, STATUS, agruparPor, aplicarFiltros, aplicarFiltrosHist, exportarExcel,
   n0, n1, pct, resumir, statusLabel, taxa, temHistoricoDesde, useLinhas, variacao,
 } from '../utils'
 import { Aviso, BarraH, C, Drawer, Secao, Spinner, Var, botao, card, td, tdNum, th, thNum } from '../ui'
@@ -16,7 +16,7 @@ export default function OcasioesStatus({ config, filtros, periodo }: { config: C
   const ano = useLinhas('criacao', temAno ? periodo.anoInicio : '', temAno ? periodo.anoFim : '')
   const anoPorOc = useMemo(() => {
     if (!ano.linhas) return null
-    return agruparPor(aplicarFiltros(ano.linhas, filtros), r => r.oc)
+    return agruparPor(aplicarFiltrosHist(ano.linhas, filtros), r => r.oc)
   }, [ano.linhas, filtros])
   const [aberto, setAberto] = useState<{ tipo: 'oc' | 's'; valor: string } | null>(null)
 
