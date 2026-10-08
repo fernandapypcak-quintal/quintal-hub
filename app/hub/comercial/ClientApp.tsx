@@ -9,6 +9,7 @@ import Calendario from './components/pages/Calendario'
 import Leads from './components/pages/Leads'
 import Conversoes from './components/pages/Conversoes'
 import PorLoja from './components/pages/PorLoja'
+import FechamentoDiario from './components/pages/FechamentoDiario'
 import Vendedores from './components/pages/Vendedores'
 import { useVendedores } from './useComercial'
 import { allowedNativeLabels } from '@/lib/units'
@@ -27,6 +28,7 @@ const PAGES: Record<string, React.ComponentType<any>> = {
   leads:      Leads,
   conversoes: Conversoes,
   por_loja:   PorLoja,
+  fechamento_diario: FechamentoDiario,
   vendedores: Vendedores,
 }
 
