@@ -6,6 +6,7 @@ const PAGES = [
   { id: 'leads',      icon: '📥', label: 'Leads diários' },
   { id: 'conversoes', icon: '🏆', label: 'Conversões' },
   { id: 'por_loja',   icon: '🏪', label: 'Por loja' },
+  { id: 'fechamento_diario', icon: '📆', label: 'Fechamento diário' },
   { id: 'vendedores', icon: '🧑‍💼', label: 'Vendedores' },
 ]
 
