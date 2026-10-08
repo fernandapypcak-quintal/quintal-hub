@@ -709,18 +709,18 @@ function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior, mesAtualNum,
           Escala com corte — barras hachuradas no topo estouram o teto do gráfico (valor exato sempre escrito, e na tabela abaixo).
         </div>
       )}
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14, height: 260, overflowX: 'auto', paddingBottom: 8, marginTop: teto < maior ? 0 : 20 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 20, height: 260, overflowX: 'auto', paddingBottom: 8, marginTop: teto < maior ? 0 : 20 }}>
         {anosGrafico.atual.meses.map((mAtualMes, i) => {
           const mAnt = anosGrafico.anterior.meses[i]
           return (
-            <div key={i} onClick={() => setMesSelecionado(i+1)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 78, flex: '1 0 78px', cursor: 'pointer' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 5, height: 200 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+            <div key={i} onClick={() => setMesSelecionado(i+1)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 128, flex: '1 0 128px', cursor: 'pointer' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 200 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%', minWidth: 60 }}>
                   <span style={{ fontSize: 10, fontWeight: 700, color: '#8a8c8f', fontFamily: 'DM Mono, monospace', marginBottom: 4, whiteSpace: 'nowrap' }}>{fmtBRLCompacto(mAnt[campo])}</span>
                   {estourou(mAnt[campo]) && <CorteTopo cor={corAnterior} />}
                   <div style={{ width: 24, height: `${alturaPx(mAnt[campo])}px`, background: corAnterior, borderRadius: '4px 4px 0 0' }} />
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%', minWidth: 60 }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: corAtual, fontFamily: 'DM Mono, monospace', marginBottom: 4, whiteSpace: 'nowrap' }}>{fmtBRLCompacto(mAtualMes[campo])}</span>
                   {estourou(mAtualMes[campo]) && <CorteTopo cor={corAtual} />}
                   <div style={{ width: 24, height: `${alturaPx(mAtualMes[campo])}px`, background: corAtual, borderRadius: '4px 4px 0 0' }} />
