@@ -56,8 +56,10 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
   const [competenciaSelecionada, setCompetenciaSelecionada] = useState<number[]>([mesSeguinte1, mesSeguinte2].sort((a,b)=>a-b))
   const [modoNumero, setModoNumero] = useState<'compacto' | 'completo'>('compacto')
 
+  const [anoMatriz, setAnoMatriz] = useState(anoPadrao)
+
   const { dados, loading, erro } = useFechamentoDiarioCompetencia(filtros, String(ano), mesesFechamentoSelecionados, competenciaSelecionada)
-  const matriz = useMatrizFechamentoCompetencia(filtros, String(ano))
+  const matriz = useMatrizFechamentoCompetencia(filtros, String(anoMatriz))
   const fmt = modoNumero === 'completo' ? fmtBRLCompleto : fmtBRLCompacto
 
   function toggleMesFechamento(m: number) {
@@ -68,7 +70,7 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
   }
 
   function imprimirDiario() {
-    if (!dados || !dados.temDrillDown) return
+    if (!dados || !dados.temDrillDown || !Array.isArray(dados.blocos)) return
     const labelComp = competenciaSelecionada.map(m => MESES_LONG[m-1]).join(' e ')
     const labelFech = dados.blocos.map(b => MESES_LONG[b.mesFechamento-1]).join(' + ')
     function blocoAnoHtml(anoLabel: number, mesFechamento: number, dias: DiaFD[]) {
@@ -107,6 +109,16 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
       <div class="sub">Comparando ${esc(String(dados.anoAnterior))} x ${esc(String(dados.anoAtual))}</div>
       ${secaoAno(dados.anoAnterior, 'diasAnterior')}
       ${secaoAno(dados.anoAtual, 'diasAtual')}
+      ${dados.blocos.map(b => `
+        <h2>Subtotal — ${esc(MESES_LONG[b.mesFechamento-1])}</h2>
+        <table class="resumo">
+          <thead><tr><th></th><th>${esc(String(dados!.anoAnterior))}</th><th>${esc(String(dados!.anoAtual))}</th><th>Diferença</th></tr></thead>
+          <tbody>
+            <tr><td>Nº de negócios</td><td>${b.totalAnterior.qtd}</td><td>${b.totalAtual.qtd}</td><td>${b.diferenca.qtd >= 0 ? '+' : ''}${b.diferenca.qtd}</td></tr>
+            <tr class="total"><td>Valor total</td><td>${esc(fmt(b.totalAnterior.valor))}</td><td>${esc(fmt(b.totalAtual.valor))}</td><td>${b.diferenca.valor >= 0 ? '+' : ''}${esc(fmt(b.diferenca.valor))}</td></tr>
+          </tbody>
+        </table>`).join('')}
+      <h2>Total geral</h2>
       <table class="resumo">
         <thead><tr><th></th><th>${esc(String(dados.anoAnterior))}</th><th>${esc(String(dados.anoAtual))}</th><th>Diferença</th></tr></thead>
         <tbody>
@@ -119,9 +131,9 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
   }
 
   function imprimirMatriz() {
-    if (!matriz.dados) return
+    if (!matriz.dados || !Array.isArray(matriz.dados.colunas) || !Array.isArray(matriz.dados.linhas) || !Array.isArray(matriz.dados.totalPorColuna)) return
     const d = matriz.dados
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Fechamento x Competência ${esc(String(ano))}</title>
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Fechamento x Competência ${esc(String(anoMatriz))}</title>
       <style>
         * { box-sizing: border-box; }
         @page { size: landscape; margin: 10mm; }
@@ -135,7 +147,7 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
         .qtd { font-weight: 700; } .valor { color: #888; display: block; font-size: 10px; }
       </style>
     </head><body>
-      <h1>Fechamento × Competência — ${esc(String(ano))} (quantidade e valor de negócios ganhos por mês de fechamento, abertos por mês de competência do evento)</h1>
+      <h1>Fechamento × Competência — ${esc(String(anoMatriz))} (quantidade e valor de negócios ganhos por mês de fechamento, abertos por mês de competência do evento)</h1>
       <div style="font-size:11px;color:#888;margin-bottom:8px;">Dados até ${esc(new Date().toLocaleDateString('pt-BR'))} — o mês de fechamento em curso ainda está incompleto.</div>
       <table>
         <thead><tr><th>Fechamento \\ Competência</th>${d.colunas.map(c => `<th>${esc(labelMesAno(c))}</th>`).join('')}<th>Total</th></tr></thead>
@@ -156,17 +168,23 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
     abrirImpressao(html)
   }
 
-  const deltaGeral = dados && dados.geralAno.acumuladoAnterior > 0
+  const deltaGeral = dados && dados.geralAno && dados.geralAno.acumuladoAnterior > 0
     ? ((dados.geralAno.acumuladoAtual - dados.geralAno.acumuladoAnterior) / dados.geralAno.acumuladoAnterior) * 100
     : null
 
-  const linhasMatrizComDados = matriz.dados ? matriz.dados.linhas.filter(l => l.qtdTotal > 0) : []
+  // Checa a forma da resposta antes de usar — se o backend ainda estiver
+  // numa versão antiga (sem 'blocos'/'colunas' etc.) ou devolver algo
+  // inesperado, essas seções simplesmente não aparecem, em vez de
+  // derrubar a página inteira.
+  const matrizValida = !!matriz.dados && Array.isArray(matriz.dados.colunas) && Array.isArray(matriz.dados.linhas) && Array.isArray(matriz.dados.totalPorColuna)
+  const linhasMatrizComDados = matrizValida ? matriz.dados!.linhas.filter(l => l.qtdTotal > 0) : []
+  const diarioValido = !!dados && Array.isArray(dados.blocos)
 
   return (
     <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1400, margin: '0 auto' }}>
 
       {/* Geral do ano */}
-      {dados && (
+      {dados && dados.geralAno && (
         <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>Geral do ano · Fechamento</div>
           <div style={{ fontSize: 11, color: '#9a9c9f', marginBottom: 14 }}>Acumulado de 01/jan até {fmtDataBR(dados.geralAno.corteData)} (ontem), nos dois anos — comparação de ritmo, dia equivalente.</div>
@@ -238,13 +256,13 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
         </div>
       )}
 
-      {!loading && !erro && dados && !dados.temDrillDown && (
+      {!loading && !erro && dados && diarioValido && !dados.temDrillDown && (
         <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 28, textAlign: 'center', color: '#9a9c9f', fontSize: 13 }}>
           Selecione pelo menos um mês de fechamento e um de competência acima pra ver o dia a dia.
         </div>
       )}
 
-      {!loading && !erro && dados && dados.temDrillDown && (
+      {!loading && !erro && dados && diarioValido && dados.temDrillDown && (
         <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap', gap: 10 }}>
             <span style={{ fontSize: 15, fontWeight: 700 }}>
@@ -287,11 +305,34 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
                   </table>
                 </div>
               ))}
-              <div style={{ fontSize: 12, color: '#5a5c5f' }}>
-                Subtotal {MESES_LONG[bloco.mesFechamento-1]}: {bloco.totalAnterior.qtd} → {bloco.totalAtual.qtd} ({bloco.diferenca.qtd >= 0 ? '+' : ''}{bloco.diferenca.qtd}) ·{' '}
-                {fmt(bloco.totalAnterior.valor)} → <strong>{fmt(bloco.totalAtual.valor)}</strong>{' '}
-                (<span style={{ color: bloco.diferenca.valor >= 0 ? '#3B6D11' : '#a32d2d', fontWeight: 600 }}>{bloco.diferenca.valor >= 0 ? '+' : ''}{fmt(bloco.diferenca.valor)}</span>)
-              </div>
+              <table style={{ borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'left', padding: '3px 14px 3px 0', fontSize: 9, color: '#9a9c9f', textTransform: 'uppercase' }}></th>
+                    <th style={{ textAlign: 'right', padding: '3px 14px', fontSize: 9, color: '#9a9c9f', textTransform: 'uppercase' }}>{dados.anoAnterior}</th>
+                    <th style={{ textAlign: 'right', padding: '3px 14px', fontSize: 9, color: '#9a9c9f', textTransform: 'uppercase' }}>{dados.anoAtual}</th>
+                    <th style={{ textAlign: 'right', padding: '3px 0 3px 14px', fontSize: 9, color: '#9a9c9f', textTransform: 'uppercase' }}>Diferença</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style={{ padding: '4px 14px 4px 0', fontSize: 12, fontWeight: 600 }}>Nº de negócios</td>
+                    <td style={{ textAlign: 'right', padding: '4px 14px', fontSize: 12 }}>{bloco.totalAnterior.qtd}</td>
+                    <td style={{ textAlign: 'right', padding: '4px 14px', fontSize: 12, fontWeight: 700 }}>{bloco.totalAtual.qtd}</td>
+                    <td style={{ textAlign: 'right', padding: '4px 0 4px 14px', fontSize: 12, fontWeight: 700, color: bloco.diferenca.qtd >= 0 ? '#3B6D11' : '#a32d2d' }}>
+                      {bloco.diferenca.qtd >= 0 ? '+' : ''}{bloco.diferenca.qtd}
+                    </td>
+                  </tr>
+                  <tr style={{ borderTop: '1.5px solid #0D0F14' }}>
+                    <td style={{ padding: '6px 14px 0 0', fontSize: 13, fontWeight: 700 }}>Valor total</td>
+                    <td style={{ textAlign: 'right', padding: '6px 14px 0', fontSize: 13, fontFamily: 'DM Mono, monospace' }}>{fmt(bloco.totalAnterior.valor)}</td>
+                    <td style={{ textAlign: 'right', padding: '6px 14px 0', fontSize: 13, fontWeight: 700, fontFamily: 'DM Mono, monospace' }}>{fmt(bloco.totalAtual.valor)}</td>
+                    <td style={{ textAlign: 'right', padding: '6px 0 0 14px', fontSize: 13, fontWeight: 700, fontFamily: 'DM Mono, monospace', color: bloco.diferenca.valor >= 0 ? '#3B6D11' : '#a32d2d' }}>
+                      {bloco.diferenca.valor >= 0 ? '+' : ''}{fmt(bloco.diferenca.valor)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           ))}
 
@@ -330,11 +371,16 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
       )}
 
       {/* Resumo do ano todo — matriz Fechamento × Competência */}
-      {matriz.dados && linhasMatrizComDados.length > 0 && (
+      {matrizValida && linhasMatrizComDados.length > 0 && (
         <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap', gap: 10 }}>
-            <span style={{ fontSize: 15, fontWeight: 700 }}>Resumo do ano · Fechamento × Competência · {ano}</span>
-            <button onClick={imprimirMatriz} style={botaoPill}>🖨 Imprimir</button>
+            <span style={{ fontSize: 15, fontWeight: 700 }}>Resumo do ano · Fechamento × Competência</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <select value={anoMatriz} onChange={e => setAnoMatriz(parseInt(e.target.value))} style={{ padding: '6px 10px', borderRadius: 20, border: '0.5px solid #E8E8E2', background: '#fff', fontSize: 12, fontWeight: 600, color: '#5a5c5f', cursor: 'pointer' }}>
+                {Array.from({ length: 9 }, (_, i) => hoje.getFullYear() - i).map(a => <option key={a} value={a}>{a}</option>)}
+              </select>
+              <button onClick={imprimirMatriz} style={botaoPill}>🖨 Imprimir</button>
+            </div>
           </div>
           <div style={{ fontSize: 11, color: '#9a9c9f', marginBottom: 4 }}>
             Quantos negócios fecharam em cada mês do ano, e pra qual mês de competência (evento) eles são — visão completa, mês a mês.
