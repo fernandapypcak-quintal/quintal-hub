@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useFechamentoDiarioCompetencia } from '../../useComercial'
+import { useFechamentoDiarioCompetencia, DiaFD } from '../../useComercial'
 
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
 const MESES_LONG = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
@@ -48,7 +48,7 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
     if (!dados || !dados.temDrillDown) return
     function esc(s: string) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
     const labelComp = competenciaSelecionada.map(m => MESES_LONG[m-1]).join(' e ')
-    function blocoAno(anoLabel: number, dias: typeof dados.diasAtual) {
+    function blocoAno(anoLabel: number, dias: DiaFD[]) {
       return `<div class="bloco">
         <h2>${esc(String(anoLabel))}</h2>
         <table><thead><tr><th>Dia</th>${dias.map(d => `<th>${String(d.dia).padStart(2,'0')}/${esc(MESES[mesFechamento-1].toLowerCase())}</th>`).join('')}</tr></thead>
