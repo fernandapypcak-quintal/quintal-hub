@@ -43,6 +43,8 @@ export type Deal = {
   vendedor: string; email_vendedor: string
   add_time: string; update_time: string; won_time: string
   lost_time: string; close_time: string; motivo_perda: string; sync_time: string
+  won_time_efetivo?: string; teve_aditivo?: string; data_fechamento_original?: string
+  data_aditivo?: string; valor_aditivo?: number | string
 }
 
 export type Filtros = {
