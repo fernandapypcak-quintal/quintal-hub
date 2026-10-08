@@ -75,7 +75,7 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
     const labelFech = dados.blocos.map(b => MESES_LONG[b.mesFechamento-1]).join(' + ')
     function blocoAnoHtml(anoLabel: number, mesFechamento: number, dias: DiaFD[]) {
       return `<div class="bloco">
-        <h3>${esc(MESES_LONG[mesFechamento-1])}/${esc(String(anoLabel))}</h3>
+        <h3>${esc(String(anoLabel))}</h3>
         <table><thead><tr><th>Dia</th>${dias.map(d => `<th>${String(d.dia).padStart(2,'0')}/${esc(MESES[mesFechamento-1].toLowerCase())}</th>`).join('')}</tr></thead>
         <tbody>
           <tr><td>Nº</td>${dias.map(d => `<td>${d.qtd||'—'}</td>`).join('')}</tr>
@@ -83,8 +83,23 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
         </tbody></table>
       </div>`
     }
-    function secaoAno(anoLabel: number, chave: 'diasAnterior'|'diasAtual') {
-      return `<div class="secao-ano"><h2>${esc(String(anoLabel))}</h2>${dados!.blocos.map(b => (b.mesEmCurso ? `<div class="sub" style="color:#8a7405;">Mês em curso — comparando dia 01 até ontem nos dois anos.</div>` : '') + blocoAnoHtml(anoLabel, b.mesFechamento, b[chave])).join('')}</div>`
+    // Agrupa por MÊS (não por ano) — cada mês mostra seus dois anos e o
+    // subtotal dele logo embaixo, antes de passar pro próximo mês. Mesma
+    // ordem que já aparece na tela.
+    function secaoMes(b: typeof dados.blocos[number]) {
+      return `<div class="secao-mes">
+        <h2>${esc(MESES_LONG[b.mesFechamento-1])}</h2>
+        ${b.mesEmCurso ? `<div class="sub" style="color:#8a7405;">Mês em curso — comparando dia 01 até ontem nos dois anos.</div>` : ''}
+        ${blocoAnoHtml(dados!.anoAnterior, b.mesFechamento, b.diasAnterior)}
+        ${blocoAnoHtml(dados!.anoAtual, b.mesFechamento, b.diasAtual)}
+        <table class="resumo">
+          <thead><tr><th></th><th>${esc(String(dados!.anoAnterior))}</th><th>${esc(String(dados!.anoAtual))}</th><th>Diferença</th></tr></thead>
+          <tbody>
+            <tr><td>Nº de negócios</td><td>${b.totalAnterior.qtd}</td><td>${b.totalAtual.qtd}</td><td>${b.diferenca.qtd >= 0 ? '+' : ''}${b.diferenca.qtd}</td></tr>
+            <tr class="total"><td>Valor total</td><td>${esc(fmt(b.totalAnterior.valor))}</td><td>${esc(fmt(b.totalAtual.valor))}</td><td>${b.diferenca.valor >= 0 ? '+' : ''}${esc(fmt(b.diferenca.valor))}</td></tr>
+          </tbody>
+        </table>
+      </div>`
     }
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Fechados em ${esc(labelFech)} para ${esc(labelComp)}</title>
       <style>
@@ -99,6 +114,7 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
         th, td { padding: 3px 6px; border-bottom: 1px solid #e8e8e8; text-align: right; }
         th:first-child, td:first-child { text-align: left; font-weight: 700; }
         .bloco { break-inside: avoid; }
+        .secao-mes { break-inside: avoid; margin-bottom: 16px; }
         .resumo { margin-top: 14px; width: auto; }
         .resumo th, .resumo td { text-align: right; padding: 5px 12px; }
         .resumo th:first-child, .resumo td:first-child { text-align: left; }
@@ -107,18 +123,8 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
     </head><body>
       <h1>Fechados em ${esc(labelFech)} para ${esc(labelComp)}</h1>
       <div class="sub">Comparando ${esc(String(dados.anoAnterior))} x ${esc(String(dados.anoAtual))}</div>
-      ${secaoAno(dados.anoAnterior, 'diasAnterior')}
-      ${secaoAno(dados.anoAtual, 'diasAtual')}
-      ${dados.blocos.map(b => `
-        <h2>Subtotal — ${esc(MESES_LONG[b.mesFechamento-1])}</h2>
-        <table class="resumo">
-          <thead><tr><th></th><th>${esc(String(dados!.anoAnterior))}</th><th>${esc(String(dados!.anoAtual))}</th><th>Diferença</th></tr></thead>
-          <tbody>
-            <tr><td>Nº de negócios</td><td>${b.totalAnterior.qtd}</td><td>${b.totalAtual.qtd}</td><td>${b.diferenca.qtd >= 0 ? '+' : ''}${b.diferenca.qtd}</td></tr>
-            <tr class="total"><td>Valor total</td><td>${esc(fmt(b.totalAnterior.valor))}</td><td>${esc(fmt(b.totalAtual.valor))}</td><td>${b.diferenca.valor >= 0 ? '+' : ''}${esc(fmt(b.diferenca.valor))}</td></tr>
-          </tbody>
-        </table>`).join('')}
-      <h2>Total geral</h2>
+      ${dados.blocos.map(b => secaoMes(b)).join('')}
+      <h2>Total geral (todos os meses de fechamento selecionados)</h2>
       <table class="resumo">
         <thead><tr><th></th><th>${esc(String(dados.anoAnterior))}</th><th>${esc(String(dados.anoAtual))}</th><th>Diferença</th></tr></thead>
         <tbody>
