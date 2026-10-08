@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useOnePage, useAditivos, useMatrizFechamentoCompetencia } from '../../useComercial'
+import { useOnePage, useAditivos } from '../../useComercial'
 
 function fmtBRLCompacto(v: number) {
   if (!v && v !== 0) return '—'
@@ -835,133 +835,6 @@ function AditivosDoMes({ filtros, mesFiltro }: { filtros: any; mesFiltro: string
   )
 }
 
-// Tabela cruzada Fechamento (linha) × Competência (coluna): responde
-// "fechei X leads em agosto — desses, quantos/quanto é pra novembro,
-// dezembro etc." Ano é o do FECHAMENTO (reusa o ano já selecionado nos
-// filtros do topo da página). Tem botão de imprimir próprio, igual ao
-// padrão já usado no modal de comparação.
-function PainelMatrizFechamentoCompetencia({ filtros }: { filtros: any }) {
-  const ano = filtros.ano || String(new Date().getFullYear())
-  const { dados, loading, erro } = useMatrizFechamentoCompetencia(filtros, ano)
-
-  if (loading) return (
-    <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20, textAlign: 'center', color: '#9a9c9f', fontSize: 13 }}>
-      Montando a matriz fechamento × competência...
-    </div>
-  )
-  if (erro || !dados) return null
-
-  function imprimirMatriz() {
-    function esc(s: string) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Fechamento x Competência ${esc(ano)}</title>
-      <style>
-        * { box-sizing: border-box; }
-        @page { size: landscape; margin: 10mm; }
-        body { font-family: Arial, Helvetica, sans-serif; color: #222; font-size: 11px; margin: 0; }
-        h1 { font-size: 18px; margin: 0 0 10px; }
-        table { width: 100%; border-collapse: collapse; white-space: nowrap; }
-        th, td { padding: 4px 8px; border-bottom: 1px solid #e8e8e8; text-align: right; }
-        th:first-child, td:first-child { text-align: left; }
-        thead th { color: #888; font-weight: 700; }
-        .total td, .total th { font-weight: 700; border-top: 2px solid #999; }
-        .qtd { font-weight: 700; } .valor { color: #888; display: block; font-size: 10px; }
-      </style>
-    </head><body>
-      <h1>Fechamento × Competência — ${esc(ano!)} (quantidade e valor de negócios ganhos por mês de fechamento, abertos por mês de competência do evento)</h1>
-      <table>
-        <thead><tr><th>Fechamento \\ Competência</th>${dados!.colunas.map(c => `<th>${esc(labelMesAno(c))}</th>`).join('')}<th>Total</th></tr></thead>
-        <tbody>
-          ${dados!.linhas.filter(l => l.qtdTotal > 0).map(l => `<tr>
-            <td>${esc(labelMesAno(l.mesFechamento))}</td>
-            ${l.porCompetencia.map(c => c.qtd > 0 ? `<td><span class="qtd">${c.qtd}</span><span class="valor">${esc(fmtBRLCompacto(c.valor))}</span></td>` : `<td style="color:#ccc;">—</td>`).join('')}
-            <td><span class="qtd">${l.qtdTotal}</span><span class="valor">${esc(fmtBRLCompacto(l.valorTotal))}</span></td>
-          </tr>`).join('')}
-          <tr class="total">
-            <td>Total</td>
-            ${dados!.totalPorColuna.map(c => `<td><span class="qtd">${c.qtd}</span><span class="valor">${esc(fmtBRLCompacto(c.valor))}</span></td>`).join('')}
-            <td><span class="qtd">${dados!.qtdGeral}</span><span class="valor">${esc(fmtBRLCompacto(dados!.valorGeral))}</span></td>
-          </tr>
-        </tbody>
-      </table>
-    </body></html>`
-
-    const iframe = document.createElement('iframe')
-    iframe.style.position = 'fixed'; iframe.style.right = '0'; iframe.style.bottom = '0'
-    iframe.style.width = '0'; iframe.style.height = '0'; iframe.style.border = '0'
-    document.body.appendChild(iframe)
-    const doc = iframe.contentWindow?.document
-    if (!doc) { document.body.removeChild(iframe); alert('Não consegui preparar a impressão — tenta de novo.'); return }
-    doc.open(); doc.write(html); doc.close()
-    function limpar() { if (iframe.parentNode) document.body.removeChild(iframe) }
-    iframe.onload = () => { iframe.contentWindow?.focus(); iframe.contentWindow?.print() }
-    setTimeout(limpar, 4000)
-  }
-
-  const linhasComDados = dados.linhas.filter(l => l.qtdTotal > 0)
-  if (linhasComDados.length === 0) return null
-
-  return (
-    <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap', gap: 10 }}>
-        <span style={{ fontSize: 15, fontWeight: 700 }}>Fechamento × Competência · {ano}</span>
-        <button onClick={imprimirMatriz} style={{ padding: '6px 14px', borderRadius: 20, border: '0.5px solid #E8E8E2', background: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#5a5c5f' }}>
-          🖨 Imprimir
-        </button>
-      </div>
-      <div style={{ fontSize: 11, color: '#9a9c9f', marginBottom: 14 }}>
-        Quantos negócios fecharam em cada mês, e pra qual mês de competência (evento) eles são — quantidade e valor.
-      </div>
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', whiteSpace: 'nowrap' }}>
-          <thead>
-            <tr>
-              <th style={{ textAlign: 'left', padding: '4px 10px 8px 0', fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase' }}>Fechamento \ Competência</th>
-              {dados.colunas.map(c => (
-                <th key={c} style={{ textAlign: 'right', padding: '4px 10px 8px', fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase' }}>{labelMesAno(c)}</th>
-              ))}
-              <th style={{ textAlign: 'right', padding: '4px 0 8px 10px', fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase' }}>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {linhasComDados.map(l => (
-              <tr key={l.mesFechamento} style={{ borderTop: '0.5px solid #F0F0EC' }}>
-                <td style={{ padding: '6px 10px 6px 0', fontWeight: 600, fontSize: 12 }}>{labelMesAno(l.mesFechamento)}</td>
-                {l.porCompetencia.map(c => (
-                  <td key={c.mesCompetencia} style={{ textAlign: 'right', padding: '6px 10px', fontSize: 12 }}>
-                    {c.qtd > 0 ? (
-                      <>
-                        <div style={{ fontWeight: 700 }}>{c.qtd}</div>
-                        <div style={{ fontSize: 10, color: '#9a9c9f', fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(c.valor)}</div>
-                      </>
-                    ) : <span style={{ color: '#d8d8d4' }}>—</span>}
-                  </td>
-                ))}
-                <td style={{ textAlign: 'right', padding: '6px 0 6px 10px', fontSize: 12 }}>
-                  <div style={{ fontWeight: 700 }}>{l.qtdTotal}</div>
-                  <div style={{ fontSize: 10, color: '#9a9c9f', fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(l.valorTotal)}</div>
-                </td>
-              </tr>
-            ))}
-            <tr style={{ borderTop: '2px solid #0D0F14' }}>
-              <td style={{ padding: '8px 10px 0 0', fontWeight: 700, fontSize: 12 }}>Total</td>
-              {dados.totalPorColuna.map(c => (
-                <td key={c.mesCompetencia} style={{ textAlign: 'right', padding: '8px 10px 0' }}>
-                  <div style={{ fontWeight: 700, fontSize: 12 }}>{c.qtd}</div>
-                  <div style={{ fontSize: 10, color: '#9a9c9f', fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(c.valor)}</div>
-                </td>
-              ))}
-              <td style={{ textAlign: 'right', padding: '8px 0 0 10px' }}>
-                <div style={{ fontWeight: 700, fontSize: 12 }}>{dados.qtdGeral}</div>
-                <div style={{ fontSize: 10, color: '#9a9c9f', fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(dados.valorGeral)}</div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
-
 function PainelDesempenho({ filtros, mesFiltro }: { filtros: any; mesFiltro: string }) {
   const [dados, setDados] = useState<DadosGranular | null>(null)
   const [granularidade, setGranularidade] = useState<'mensal' | 'semanal' | 'diario'>('diario')
@@ -1354,9 +1227,6 @@ export default function OnePage({ filtros }: { filtros: any }) {
         mesAtualNum={parseInt(atual.mes.split('-')[1])}
         filtros={filtros}
       />
-
-      {/* ── Fechamento × Competência (matriz pra onde foram os fechamentos) ── */}
-      <PainelMatrizFechamentoCompetencia filtros={filtros} />
 
       {/* ── Leads, conversão e ticket médio (com pacotes), granularidade ── */}
       <PainelDesempenho filtros={filtros} mesFiltro={mesFiltro} />
