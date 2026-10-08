@@ -97,19 +97,33 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
   // Hoje ainda não terminou, então não conta como dia fechado — corta em
   // dia 01 até ONTEM nos dois anos, pra comparar só dias completos.
   const diaCorte = ehMesCorrente ? hoje.getDate() : 31
+  // Competência de um mês que já passou inteiro (mesmo no ano atual, ou
+  // qualquer mês do ano anterior) já tem resultado final conhecido — não
+  // corta. Só corta quando o mês de competência ainda está em curso ou é
+  // futuro pro ano mais recente sendo comparado (anoAtual), senão a
+  // comparação fica injusta pra um mês que ainda não aconteceu de verdade.
+  const mesAtualReal = hoje.getMonth()+1
+  const precisaCorteCompetencia = !ehFechamento &&
+    (anoAtual > hoje.getFullYear() || (anoAtual === hoje.getFullYear() && mesNum >= mesAtualReal))
 
   function filtrarPorDia(deals: DealResumo[], ano: number) {
     // Fechamento: no mês corrente, compara o mesmo número de dias.
-    // Competência: considera apenas negócios que já estavam ganhos até o
-    // mesmo dia do ano em cada exercício (ex.: 28/09/26 vs 28/09/25).
+    // Competência: só corta quando o mês ainda está em curso/futuro (ver
+    // precisaCorteCompetencia acima) — considera negócios que já estavam
+    // ganhos até o mesmo dia do ano em cada exercício (ex.: 28/09/26 vs
+    // 28/09/25). Mês de competência já encerrado usa o total cheio, sem corte.
     if (!ehFechamento) {
+      if (!precisaCorteCompetencia) return deals
       const mm = String(hoje.getMonth()+1).padStart(2,'0')
       const dd = String(hoje.getDate()).padStart(2,'0')
       const corte = `${ano}-${mm}-${dd}`
-      return deals.filter(d => !!d.won_time && String(d.won_time).substring(0,10) <= corte)
+      return deals.filter(d => {
+        const fechamento = d.won_time_efetivo || d.won_time
+        return !!fechamento && String(fechamento).substring(0,10) <= corte
+      })
     }
     return deals.filter(d => {
-      const dia = parseInt(String(d.won_time||'').substring(8,10))
+      const dia = parseInt(String(d.won_time_efetivo || d.won_time||'').substring(8,10))
       return !dia || dia <= diaCorte
     })
   }
@@ -587,6 +601,21 @@ function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior, mesAtualNum,
     const hoje = new Date()
     const mmCorte = String(hoje.getMonth()+1).padStart(2,'0')
     const ddCorte = String(hoje.getDate()).padStart(2,'0')
+    // O corte só faz sentido pra competência que AINDA NÃO TERMINOU de
+    // acontecer (mês corrente do ano atual em diante) — aí sim precisa
+    // comparar "quanto já estava vendido nesta mesma data" nos dois anos,
+    // senão o ano em curso sempre pareceria menor por estar incompleto.
+    // Competência de um mês que já passou (mesmo no ano atual, ou
+    // qualquer mês do ano anterior, que é sempre inteiramente passado)
+    // já tem o resultado final conhecido — não deve ser cortada, senão
+    // mostra só uma fração do que realmente fechou pra aquele mês.
+    const mesAtualReal = hoje.getMonth()+1
+    function precisaCorte(mesIndex: number) {
+      const mes = mesIndex + 1
+      if (anos.atual.ano < hoje.getFullYear()) return false
+      if (anos.atual.ano > hoje.getFullYear()) return true
+      return mes >= mesAtualReal
+    }
     async function calcular(bloco: typeof anos.atual) {
       const meses = await Promise.all(bloco.meses.map(async (m, i) => {
         const p = new URLSearchParams({ tipo:'deals', status:'won', campo_data:'data_evento', ano:String(bloco.ano), mes:String(i+1).padStart(2,'0'), limit:'500' })
@@ -600,8 +629,14 @@ function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior, mesAtualNum,
           return fetch(`${GAS_URL}?${pp}`).then(r => r.json()).then(x => x.deals || [])
         })) : []
         const todosDeals = (resposta.deals || []).concat(...demaisPaginas)
-        const corte = `${bloco.ano}-${mmCorte}-${ddCorte}`
-        const deals = todosDeals.filter((d: DealResumo) => !!d.won_time && String(d.won_time).substring(0,10) <= corte)
+        let deals = todosDeals
+        if (precisaCorte(i)) {
+          const corte = `${bloco.ano}-${mmCorte}-${ddCorte}`
+          deals = todosDeals.filter((d: DealResumo) => {
+            const fechamento = d.won_time_efetivo || d.won_time
+            return !!fechamento && String(fechamento).substring(0,10) <= corte
+          })
+        }
         const receitaCompetencia = deals.reduce((s:number,d:DealResumo) => s + (parseFloat(String(d.valor))||0), 0)
         return { ...m, receitaCompetencia: Math.round(receitaCompetencia) }
       }))
