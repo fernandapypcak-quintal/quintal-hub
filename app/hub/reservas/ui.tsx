@@ -70,8 +70,8 @@ export function Secao({ titulo, sub, children, direita }: { titulo: string; sub?
   )
 }
 
-export function Kpi({ label, valor, detalhe, anterior, v, anoAnterior, vAno, inverso, cor }: {
-  label: string; valor: string; detalhe?: string
+export function Kpi({ label, valor, detalhe, anterior, v, anoAnterior, vAno, inverso, cor, children }: {
+  label: string; valor: string; detalhe?: string; children?: React.ReactNode
   anterior?: string; v?: number | null          // vs período anterior
   anoAnterior?: string; vAno?: number | null    // vs ano anterior
   inverso?: boolean; cor?: string
@@ -93,6 +93,7 @@ export function Kpi({ label, valor, detalhe, anterior, v, anoAnterior, vAno, inv
           <Var v={vAno ?? null} inverso={inverso} />
         </div>
       )}
+      {children}
     </div>
   )
 }
