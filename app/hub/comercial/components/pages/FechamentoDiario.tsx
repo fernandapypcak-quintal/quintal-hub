@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useFechamentoDiarioCompetencia, DiaFD } from '../../useComercial'
+import { useFechamentoDiarioCompetencia, useMatrizFechamentoCompetencia, DiaFD, BlocoFD } from '../../useComercial'
 
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
 const MESES_LONG = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
@@ -21,15 +21,34 @@ function fmtDataBR(iso: string) {
   const [a,m,d] = iso.split('-')
   return `${d}/${m}/${a}`
 }
+function labelMesAno(ym: string) {
+  if (!ym || !ym.includes('-')) return '—'
+  const [ano, mes] = ym.split('-')
+  return `${MESES[parseInt(mes,10)-1]}/${ano.slice(-2)}`
+}
 
 const botaoPill: React.CSSProperties = { padding: '6px 12px', borderRadius: 20, border: '0.5px solid #E8E8E2', background: '#fff', fontSize: 12, fontWeight: 600, color: '#5a5c5f', cursor: 'pointer' }
 const botaoPillAtivo: React.CSSProperties = { ...botaoPill, background: '#0D0F14', color: '#97A624', borderColor: '#0D0F14' }
+
+function abrirImpressao(html: string) {
+  const iframe = document.createElement('iframe')
+  iframe.style.position = 'fixed'; iframe.style.right = '0'; iframe.style.bottom = '0'
+  iframe.style.width = '0'; iframe.style.height = '0'; iframe.style.border = '0'
+  document.body.appendChild(iframe)
+  const doc = iframe.contentWindow?.document
+  if (!doc) { document.body.removeChild(iframe); alert('Não consegui preparar a impressão — tenta de novo.'); return }
+  doc.open(); doc.write(html); doc.close()
+  function limpar() { if (iframe.parentNode) document.body.removeChild(iframe) }
+  iframe.onload = () => { iframe.contentWindow?.focus(); iframe.contentWindow?.print() }
+  setTimeout(limpar, 4000)
+}
+function esc(s: string) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
 
 export default function FechamentoDiario({ filtros }: { filtros: any }) {
   const hoje = new Date()
   const anoPadrao = (filtros.ano && filtros.ano !== '') ? parseInt(filtros.ano) : hoje.getFullYear()
   const [ano, setAno] = useState(anoPadrao)
-  const [mesFechamento, setMesFechamento] = useState(hoje.getMonth() + 1)
+  const [mesesFechamentoSelecionados, setMesesFechamentoSelecionados] = useState<number[]>([hoje.getMonth() + 1])
   // Default: próximos 2 meses a partir de hoje — o caso de uso mais comum
   // (vendas feitas agora pra eventos dos próximos meses).
   const mesSeguinte1 = (hoje.getMonth() + 1) % 12 + 1
@@ -37,20 +56,24 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
   const [competenciaSelecionada, setCompetenciaSelecionada] = useState<number[]>([mesSeguinte1, mesSeguinte2].sort((a,b)=>a-b))
   const [modoNumero, setModoNumero] = useState<'compacto' | 'completo'>('compacto')
 
-  const { dados, loading, erro } = useFechamentoDiarioCompetencia(filtros, String(ano), mesFechamento, competenciaSelecionada)
+  const { dados, loading, erro } = useFechamentoDiarioCompetencia(filtros, String(ano), mesesFechamentoSelecionados, competenciaSelecionada)
+  const matriz = useMatrizFechamentoCompetencia(filtros, String(ano))
   const fmt = modoNumero === 'completo' ? fmtBRLCompleto : fmtBRLCompacto
 
+  function toggleMesFechamento(m: number) {
+    setMesesFechamentoSelecionados(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m].sort((a,b) => a-b))
+  }
   function toggleCompetencia(m: number) {
     setCompetenciaSelecionada(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m].sort((a,b) => a-b))
   }
 
-  function imprimir() {
+  function imprimirDiario() {
     if (!dados || !dados.temDrillDown) return
-    function esc(s: string) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
     const labelComp = competenciaSelecionada.map(m => MESES_LONG[m-1]).join(' e ')
-    function blocoAno(anoLabel: number, dias: DiaFD[]) {
+    const labelFech = dados.blocos.map(b => MESES_LONG[b.mesFechamento-1]).join(' + ')
+    function blocoAnoHtml(anoLabel: number, mesFechamento: number, dias: DiaFD[]) {
       return `<div class="bloco">
-        <h2>${esc(String(anoLabel))}</h2>
+        <h3>${esc(MESES_LONG[mesFechamento-1])}/${esc(String(anoLabel))}</h3>
         <table><thead><tr><th>Dia</th>${dias.map(d => `<th>${String(d.dia).padStart(2,'0')}/${esc(MESES[mesFechamento-1].toLowerCase())}</th>`).join('')}</tr></thead>
         <tbody>
           <tr><td>Nº</td>${dias.map(d => `<td>${d.qtd||'—'}</td>`).join('')}</tr>
@@ -58,15 +81,19 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
         </tbody></table>
       </div>`
     }
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Fechados em ${esc(MESES_LONG[mesFechamento-1])} para ${esc(labelComp)}</title>
+    function secaoAno(anoLabel: number, chave: 'diasAnterior'|'diasAtual') {
+      return `<div class="secao-ano"><h2>${esc(String(anoLabel))}</h2>${dados!.blocos.map(b => (b.mesEmCurso ? `<div class="sub" style="color:#8a7405;">Mês em curso — comparando dia 01 até ontem nos dois anos.</div>` : '') + blocoAnoHtml(anoLabel, b.mesFechamento, b[chave])).join('')}</div>`
+    }
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Fechados em ${esc(labelFech)} para ${esc(labelComp)}</title>
       <style>
         * { box-sizing: border-box; }
         @page { size: landscape; margin: 10mm; }
         body { font-family: Arial, Helvetica, sans-serif; color: #222; font-size: 10px; margin: 0; }
         h1 { font-size: 16px; margin: 0 0 4px; }
-        h2 { font-size: 12px; margin: 14px 0 4px; }
+        h2 { font-size: 13px; margin: 14px 0 2px; border-bottom: 1px solid #ccc; padding-bottom: 2px; }
+        h3 { font-size: 11px; margin: 10px 0 4px; color: #555; }
         .sub { font-size: 11px; color: #888; margin-bottom: 10px; }
-        table { border-collapse: collapse; white-space: nowrap; margin-bottom: 6px; }
+        table { border-collapse: collapse; white-space: nowrap; margin-bottom: 4px; }
         th, td { padding: 3px 6px; border-bottom: 1px solid #e8e8e8; text-align: right; }
         th:first-child, td:first-child { text-align: left; font-weight: 700; }
         .bloco { break-inside: avoid; }
@@ -76,34 +103,64 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
         .resumo .total td { font-weight: 700; border-top: 2px solid #999; }
       </style>
     </head><body>
-      <h1>Fechados em ${esc(MESES_LONG[mesFechamento-1])} para ${esc(labelComp)}</h1>
+      <h1>Fechados em ${esc(labelFech)} para ${esc(labelComp)}</h1>
       <div class="sub">Comparando ${esc(String(dados.anoAnterior))} x ${esc(String(dados.anoAtual))}</div>
-      ${blocoAno(dados.anoAnterior, dados.diasAnterior)}
-      ${blocoAno(dados.anoAtual, dados.diasAtual)}
+      ${secaoAno(dados.anoAnterior, 'diasAnterior')}
+      ${secaoAno(dados.anoAtual, 'diasAtual')}
       <table class="resumo">
         <thead><tr><th></th><th>${esc(String(dados.anoAnterior))}</th><th>${esc(String(dados.anoAtual))}</th><th>Diferença</th></tr></thead>
         <tbody>
-          <tr><td>Nº de negócios</td><td>${dados.totalAnterior.qtd}</td><td>${dados.totalAtual.qtd}</td><td>${dados.diferenca.qtd >= 0 ? '+' : ''}${dados.diferenca.qtd}</td></tr>
-          <tr class="total"><td>Valor total</td><td>${esc(fmt(dados.totalAnterior.valor))}</td><td>${esc(fmt(dados.totalAtual.valor))}</td><td>${dados.diferenca.valor >= 0 ? '+' : ''}${esc(fmt(dados.diferenca.valor))}</td></tr>
+          <tr><td>Nº de negócios</td><td>${dados.totalGeralAnterior.qtd}</td><td>${dados.totalGeralAtual.qtd}</td><td>${dados.diferencaGeral.qtd >= 0 ? '+' : ''}${dados.diferencaGeral.qtd}</td></tr>
+          <tr class="total"><td>Valor total</td><td>${esc(fmt(dados.totalGeralAnterior.valor))}</td><td>${esc(fmt(dados.totalGeralAtual.valor))}</td><td>${dados.diferencaGeral.valor >= 0 ? '+' : ''}${esc(fmt(dados.diferencaGeral.valor))}</td></tr>
         </tbody>
       </table>
     </body></html>`
+    abrirImpressao(html)
+  }
 
-    const iframe = document.createElement('iframe')
-    iframe.style.position = 'fixed'; iframe.style.right = '0'; iframe.style.bottom = '0'
-    iframe.style.width = '0'; iframe.style.height = '0'; iframe.style.border = '0'
-    document.body.appendChild(iframe)
-    const doc = iframe.contentWindow?.document
-    if (!doc) { document.body.removeChild(iframe); alert('Não consegui preparar a impressão — tenta de novo.'); return }
-    doc.open(); doc.write(html); doc.close()
-    function limpar() { if (iframe.parentNode) document.body.removeChild(iframe) }
-    iframe.onload = () => { iframe.contentWindow?.focus(); iframe.contentWindow?.print() }
-    setTimeout(limpar, 4000)
+  function imprimirMatriz() {
+    if (!matriz.dados) return
+    const d = matriz.dados
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Fechamento x Competência ${esc(String(ano))}</title>
+      <style>
+        * { box-sizing: border-box; }
+        @page { size: landscape; margin: 10mm; }
+        body { font-family: Arial, Helvetica, sans-serif; color: #222; font-size: 11px; margin: 0; }
+        h1 { font-size: 18px; margin: 0 0 10px; }
+        table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+        th, td { padding: 4px 8px; border-bottom: 1px solid #e8e8e8; text-align: right; }
+        th:first-child, td:first-child { text-align: left; }
+        thead th { color: #888; font-weight: 700; }
+        .total td, .total th { font-weight: 700; border-top: 2px solid #999; }
+        .qtd { font-weight: 700; } .valor { color: #888; display: block; font-size: 10px; }
+      </style>
+    </head><body>
+      <h1>Fechamento × Competência — ${esc(String(ano))} (quantidade e valor de negócios ganhos por mês de fechamento, abertos por mês de competência do evento)</h1>
+      <div style="font-size:11px;color:#888;margin-bottom:8px;">Dados até ${esc(new Date().toLocaleDateString('pt-BR'))} — o mês de fechamento em curso ainda está incompleto.</div>
+      <table>
+        <thead><tr><th>Fechamento \\ Competência</th>${d.colunas.map(c => `<th>${esc(labelMesAno(c))}</th>`).join('')}<th>Total</th></tr></thead>
+        <tbody>
+          ${d.linhas.filter(l => l.qtdTotal > 0).map(l => `<tr>
+            <td>${esc(labelMesAno(l.mesFechamento))}</td>
+            ${l.porCompetencia.map(c => c.qtd > 0 ? `<td><span class="qtd">${c.qtd}</span><span class="valor">${esc(fmt(c.valor))}</span></td>` : `<td style="color:#ccc;">—</td>`).join('')}
+            <td><span class="qtd">${l.qtdTotal}</span><span class="valor">${esc(fmt(l.valorTotal))}</span></td>
+          </tr>`).join('')}
+          <tr class="total">
+            <td>Total</td>
+            ${d.totalPorColuna.map(c => `<td><span class="qtd">${c.qtd}</span><span class="valor">${esc(fmt(c.valor))}</span></td>`).join('')}
+            <td><span class="qtd">${d.qtdGeral}</span><span class="valor">${esc(fmt(d.valorGeral))}</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </body></html>`
+    abrirImpressao(html)
   }
 
   const deltaGeral = dados && dados.geralAno.acumuladoAnterior > 0
     ? ((dados.geralAno.acumuladoAtual - dados.geralAno.acumuladoAnterior) / dados.geralAno.acumuladoAnterior) * 100
     : null
+
+  const linhasMatrizComDados = matriz.dados ? matriz.dados.linhas.filter(l => l.qtdTotal > 0) : []
 
   return (
     <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1400, margin: '0 auto' }}>
@@ -131,9 +188,9 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
         </div>
       )}
 
-      {/* Controles */}
+      {/* Controles do drill-down diário */}
       <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>Fechados em [mês] para [competência]</div>
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>Fechados em [mês(es)] para [competência]</div>
 
         <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 16 }}>
           <div>
@@ -143,18 +200,21 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
             </select>
           </div>
           <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', marginBottom: 6 }}>Mês de fechamento</div>
-            <select value={mesFechamento} onChange={e => setMesFechamento(parseInt(e.target.value))} style={{ padding: '6px 10px', borderRadius: 8, border: '0.5px solid #E8E8E2', fontSize: 13 }}>
-              {MESES.map((m, i) => <option key={m} value={i+1}>{m}</option>)}
-            </select>
-          </div>
-          <div>
             <div style={{ fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', marginBottom: 6 }}>Formato</div>
             <div style={{ display: 'flex', border: '0.5px solid #E8E8E2', borderRadius: 20, overflow: 'hidden' }}>
               <button onClick={() => setModoNumero('compacto')} style={{ padding: '6px 12px', border: 'none', background: modoNumero==='compacto'?'#0D0F14':'#fff', color: modoNumero==='compacto'?'#97A624':'#5a5c5f', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Resumido</button>
               <button onClick={() => setModoNumero('completo')} style={{ padding: '6px 12px', border: 'none', background: modoNumero==='completo'?'#0D0F14':'#fff', color: modoNumero==='completo'?'#97A624':'#5a5c5f', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Completo</button>
             </div>
           </div>
+        </div>
+
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', marginBottom: 6 }}>Mês(es) de fechamento (pode escolher mais de um)</div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+          {MESES.map((m, i) => (
+            <button key={m} onClick={() => toggleMesFechamento(i+1)} style={mesesFechamentoSelecionados.includes(i+1) ? botaoPillAtivo : botaoPill}>
+              {m}
+            </button>
+          ))}
         </div>
 
         <div style={{ fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', marginBottom: 6 }}>Meses de competência (pra onde é o evento)</div>
@@ -180,7 +240,7 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
 
       {!loading && !erro && dados && !dados.temDrillDown && (
         <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 28, textAlign: 'center', color: '#9a9c9f', fontSize: 13 }}>
-          Selecione pelo menos um mês de competência acima pra ver o dia a dia.
+          Selecione pelo menos um mês de fechamento e um de competência acima pra ver o dia a dia.
         </div>
       )}
 
@@ -188,39 +248,55 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
         <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap', gap: 10 }}>
             <span style={{ fontSize: 15, fontWeight: 700 }}>
-              Fechados em {MESES_LONG[mesFechamento-1]} para {competenciaSelecionada.map(m => MESES_LONG[m-1]).join(' e ')}
+              Fechados em {dados.blocos.map(b => MESES_LONG[b.mesFechamento-1]).join(' + ')} para {competenciaSelecionada.map(m => MESES_LONG[m-1]).join(' e ')}
             </span>
-            <button onClick={imprimir} style={botaoPill}>🖨 Imprimir</button>
+            <button onClick={imprimirDiario} style={botaoPill}>🖨 Imprimir</button>
           </div>
           <div style={{ fontSize: 11, color: '#9a9c9f', marginBottom: 18 }}>
-            Comparando {dados.anoAnterior} ({dados.competenciaAnterior.map(c => c).join(', ')}) × {dados.anoAtual} ({dados.competenciaAtual.map(c => c).join(', ')})
+            Comparando {dados.anoAnterior} × {dados.anoAtual}
           </div>
 
-          {[{ anoLabel: dados.anoAnterior, dias: dados.diasAnterior, cor: '#8a8c8f' }, { anoLabel: dados.anoAtual, dias: dados.diasAtual, cor: '#185FA5' }].map(bloco => (
-            <div key={bloco.anoLabel} style={{ marginBottom: 20, overflowX: 'auto' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: bloco.cor, marginBottom: 6 }}>{bloco.anoLabel}</div>
-              <table style={{ borderCollapse: 'collapse', whiteSpace: 'nowrap' }}>
-                <thead>
-                  <tr>
-                    <th style={{ textAlign: 'left', padding: '3px 8px 3px 0', fontSize: 10, color: '#9a9c9f' }}></th>
-                    {bloco.dias.map(d => <th key={d.dia} style={{ textAlign: 'right', padding: '3px 8px', fontSize: 10, color: '#9a9c9f' }}>{String(d.dia).padStart(2,'0')}/{MESES[mesFechamento-1].toLowerCase()}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr style={{ borderTop: '0.5px solid #F0F0EC' }}>
-                    <td style={{ padding: '4px 8px 4px 0', fontWeight: 700, fontSize: 11, color: '#9a9c9f' }}>Nº</td>
-                    {bloco.dias.map(d => <td key={d.dia} style={{ textAlign: 'right', padding: '4px 8px', fontSize: 12, fontWeight: d.qtd ? 700 : 400, color: d.qtd ? '#0D0F14' : '#d8d8d4' }}>{d.qtd || '—'}</td>)}
-                  </tr>
-                  <tr>
-                    <td style={{ padding: '2px 8px 6px 0', fontWeight: 700, fontSize: 11, color: '#9a9c9f' }}>Valor</td>
-                    {bloco.dias.map(d => <td key={d.dia} style={{ textAlign: 'right', padding: '2px 8px 6px', fontSize: 11, fontFamily: 'DM Mono, monospace', color: d.valor ? '#5a5c5f' : '#d8d8d4' }}>{d.valor ? fmt(d.valor) : '—'}</td>)}
-                  </tr>
-                </tbody>
-              </table>
+          {dados.blocos.map((bloco: BlocoFD) => (
+            <div key={bloco.mesFechamento} style={{ marginBottom: 24, paddingBottom: 18, borderBottom: '0.5px solid #F0F0EC' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: bloco.mesEmCurso ? 2 : 10 }}>{MESES_LONG[bloco.mesFechamento-1]}</div>
+              {bloco.mesEmCurso && (
+                <div style={{ fontSize: 11, color: '#8a7405', marginBottom: 10 }}>
+                  Mês em curso — comparando dia 01 até ontem nos dois anos, pra não comparar um mês cheio com um pela metade.
+                </div>
+              )}
+              {[{ anoLabel: dados.anoAnterior, dias: bloco.diasAnterior, cor: '#8a8c8f' }, { anoLabel: dados.anoAtual, dias: bloco.diasAtual, cor: '#185FA5' }].map(linha => (
+                <div key={linha.anoLabel} style={{ marginBottom: 14, overflowX: 'auto' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: linha.cor, marginBottom: 6 }}>{linha.anoLabel}</div>
+                  <table style={{ borderCollapse: 'collapse', whiteSpace: 'nowrap' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: 'left', padding: '3px 8px 3px 0', fontSize: 10, color: '#9a9c9f' }}></th>
+                        {linha.dias.map(d => <th key={d.dia} style={{ textAlign: 'right', padding: '3px 8px', fontSize: 10, color: '#9a9c9f' }}>{String(d.dia).padStart(2,'0')}/{MESES[bloco.mesFechamento-1].toLowerCase()}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr style={{ borderTop: '0.5px solid #F0F0EC' }}>
+                        <td style={{ padding: '4px 8px 4px 0', fontWeight: 700, fontSize: 11, color: '#9a9c9f' }}>Nº</td>
+                        {linha.dias.map(d => <td key={d.dia} style={{ textAlign: 'right', padding: '4px 8px', fontSize: 12, fontWeight: d.qtd ? 700 : 400, color: d.qtd ? '#0D0F14' : '#d8d8d4' }}>{d.qtd || '—'}</td>)}
+                      </tr>
+                      <tr>
+                        <td style={{ padding: '2px 8px 6px 0', fontWeight: 700, fontSize: 11, color: '#9a9c9f' }}>Valor</td>
+                        {linha.dias.map(d => <td key={d.dia} style={{ textAlign: 'right', padding: '2px 8px 6px', fontSize: 11, fontFamily: 'DM Mono, monospace', color: d.valor ? '#5a5c5f' : '#d8d8d4' }}>{d.valor ? fmt(d.valor) : '—'}</td>)}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+              <div style={{ fontSize: 12, color: '#5a5c5f' }}>
+                Subtotal {MESES_LONG[bloco.mesFechamento-1]}: {bloco.totalAnterior.qtd} → {bloco.totalAtual.qtd} ({bloco.diferenca.qtd >= 0 ? '+' : ''}{bloco.diferenca.qtd}) ·{' '}
+                {fmt(bloco.totalAnterior.valor)} → <strong>{fmt(bloco.totalAtual.valor)}</strong>{' '}
+                (<span style={{ color: bloco.diferenca.valor >= 0 ? '#3B6D11' : '#a32d2d', fontWeight: 600 }}>{bloco.diferenca.valor >= 0 ? '+' : ''}{fmt(bloco.diferenca.valor)}</span>)
+              </div>
             </div>
           ))}
 
-          <div style={{ borderTop: '0.5px solid #F0F0EC', paddingTop: 14, marginTop: 4 }}>
+          <div style={{ paddingTop: 4 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>Total geral (todos os meses de fechamento selecionados)</div>
             <table style={{ borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
@@ -233,18 +309,81 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
               <tbody>
                 <tr>
                   <td style={{ padding: '6px 16px 6px 0', fontSize: 13, fontWeight: 600 }}>Nº de negócios</td>
-                  <td style={{ textAlign: 'right', padding: '6px 16px', fontSize: 13 }}>{dados.totalAnterior.qtd}</td>
-                  <td style={{ textAlign: 'right', padding: '6px 16px', fontSize: 13, fontWeight: 700 }}>{dados.totalAtual.qtd}</td>
-                  <td style={{ textAlign: 'right', padding: '6px 0 6px 16px', fontSize: 13, fontWeight: 700, color: dados.diferenca.qtd >= 0 ? '#3B6D11' : '#a32d2d' }}>
-                    {dados.diferenca.qtd >= 0 ? '+' : ''}{dados.diferenca.qtd}
+                  <td style={{ textAlign: 'right', padding: '6px 16px', fontSize: 13 }}>{dados.totalGeralAnterior.qtd}</td>
+                  <td style={{ textAlign: 'right', padding: '6px 16px', fontSize: 13, fontWeight: 700 }}>{dados.totalGeralAtual.qtd}</td>
+                  <td style={{ textAlign: 'right', padding: '6px 0 6px 16px', fontSize: 13, fontWeight: 700, color: dados.diferencaGeral.qtd >= 0 ? '#3B6D11' : '#a32d2d' }}>
+                    {dados.diferencaGeral.qtd >= 0 ? '+' : ''}{dados.diferencaGeral.qtd}
                   </td>
                 </tr>
                 <tr style={{ borderTop: '2px solid #0D0F14' }}>
                   <td style={{ padding: '8px 16px 0 0', fontSize: 14, fontWeight: 700 }}>Valor total</td>
-                  <td style={{ textAlign: 'right', padding: '8px 16px 0', fontSize: 14, fontFamily: 'DM Mono, monospace' }}>{fmt(dados.totalAnterior.valor)}</td>
-                  <td style={{ textAlign: 'right', padding: '8px 16px 0', fontSize: 14, fontWeight: 700, fontFamily: 'DM Mono, monospace' }}>{fmt(dados.totalAtual.valor)}</td>
-                  <td style={{ textAlign: 'right', padding: '8px 0 0 16px', fontSize: 14, fontWeight: 700, fontFamily: 'DM Mono, monospace', color: dados.diferenca.valor >= 0 ? '#3B6D11' : '#a32d2d' }}>
-                    {dados.diferenca.valor >= 0 ? '+' : ''}{fmt(dados.diferenca.valor)}
+                  <td style={{ textAlign: 'right', padding: '8px 16px 0', fontSize: 14, fontFamily: 'DM Mono, monospace' }}>{fmt(dados.totalGeralAnterior.valor)}</td>
+                  <td style={{ textAlign: 'right', padding: '8px 16px 0', fontSize: 14, fontWeight: 700, fontFamily: 'DM Mono, monospace' }}>{fmt(dados.totalGeralAtual.valor)}</td>
+                  <td style={{ textAlign: 'right', padding: '8px 0 0 16px', fontSize: 14, fontWeight: 700, fontFamily: 'DM Mono, monospace', color: dados.diferencaGeral.valor >= 0 ? '#3B6D11' : '#a32d2d' }}>
+                    {dados.diferencaGeral.valor >= 0 ? '+' : ''}{fmt(dados.diferencaGeral.valor)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Resumo do ano todo — matriz Fechamento × Competência */}
+      {matriz.dados && linhasMatrizComDados.length > 0 && (
+        <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap', gap: 10 }}>
+            <span style={{ fontSize: 15, fontWeight: 700 }}>Resumo do ano · Fechamento × Competência · {ano}</span>
+            <button onClick={imprimirMatriz} style={botaoPill}>🖨 Imprimir</button>
+          </div>
+          <div style={{ fontSize: 11, color: '#9a9c9f', marginBottom: 4 }}>
+            Quantos negócios fecharam em cada mês do ano, e pra qual mês de competência (evento) eles são — visão completa, mês a mês.
+          </div>
+          <div style={{ fontSize: 11, color: '#8a7405', marginBottom: 14 }}>
+            Dados até {new Date().toLocaleDateString('pt-BR')} — o mês de fechamento em curso ainda está incompleto.
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', whiteSpace: 'nowrap' }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left', padding: '4px 10px 8px 0', fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase' }}>Fechamento \ Competência</th>
+                  {matriz.dados.colunas.map(c => (
+                    <th key={c} style={{ textAlign: 'right', padding: '4px 10px 8px', fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase' }}>{labelMesAno(c)}</th>
+                  ))}
+                  <th style={{ textAlign: 'right', padding: '4px 0 8px 10px', fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase' }}>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {linhasMatrizComDados.map(l => (
+                  <tr key={l.mesFechamento} style={{ borderTop: '0.5px solid #F0F0EC' }}>
+                    <td style={{ padding: '6px 10px 6px 0', fontWeight: 600, fontSize: 12 }}>{labelMesAno(l.mesFechamento)}</td>
+                    {l.porCompetencia.map(c => (
+                      <td key={c.mesCompetencia} style={{ textAlign: 'right', padding: '6px 10px', fontSize: 12 }}>
+                        {c.qtd > 0 ? (
+                          <>
+                            <div style={{ fontWeight: 700 }}>{c.qtd}</div>
+                            <div style={{ fontSize: 10, color: '#9a9c9f', fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap' }}>{fmt(c.valor)}</div>
+                          </>
+                        ) : <span style={{ color: '#d8d8d4' }}>—</span>}
+                      </td>
+                    ))}
+                    <td style={{ textAlign: 'right', padding: '6px 0 6px 10px', fontSize: 12 }}>
+                      <div style={{ fontWeight: 700 }}>{l.qtdTotal}</div>
+                      <div style={{ fontSize: 10, color: '#9a9c9f', fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap' }}>{fmt(l.valorTotal)}</div>
+                    </td>
+                  </tr>
+                ))}
+                <tr style={{ borderTop: '2px solid #0D0F14' }}>
+                  <td style={{ padding: '8px 10px 0 0', fontWeight: 700, fontSize: 12 }}>Total</td>
+                  {matriz.dados.totalPorColuna.map(c => (
+                    <td key={c.mesCompetencia} style={{ textAlign: 'right', padding: '8px 10px 0' }}>
+                      <div style={{ fontWeight: 700, fontSize: 12 }}>{c.qtd}</div>
+                      <div style={{ fontSize: 10, color: '#9a9c9f', fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap' }}>{fmt(c.valor)}</div>
+                    </td>
+                  ))}
+                  <td style={{ textAlign: 'right', padding: '8px 0 0 10px' }}>
+                    <div style={{ fontWeight: 700, fontSize: 12 }}>{matriz.dados.qtdGeral}</div>
+                    <div style={{ fontSize: 10, color: '#9a9c9f', fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap' }}>{fmt(matriz.dados.valorGeral)}</div>
                   </td>
                 </tr>
               </tbody>
