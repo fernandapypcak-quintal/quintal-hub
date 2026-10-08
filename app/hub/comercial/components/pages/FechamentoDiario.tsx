@@ -393,7 +393,7 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
               <thead>
                 <tr>
                   <th style={{ textAlign: 'left', padding: '4px 10px 8px 0', fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase' }}>Fechamento \ Competência</th>
-                  {matriz.dados.colunas.map(c => (
+                  {matriz.dados!.colunas.map(c => (
                     <th key={c} style={{ textAlign: 'right', padding: '4px 10px 8px', fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase' }}>{labelMesAno(c)}</th>
                   ))}
                   <th style={{ textAlign: 'right', padding: '4px 0 8px 10px', fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase' }}>Total</th>
@@ -421,15 +421,15 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
                 ))}
                 <tr style={{ borderTop: '2px solid #0D0F14' }}>
                   <td style={{ padding: '8px 10px 0 0', fontWeight: 700, fontSize: 12 }}>Total</td>
-                  {matriz.dados.totalPorColuna.map(c => (
+                  {matriz.dados!.totalPorColuna.map(c => (
                     <td key={c.mesCompetencia} style={{ textAlign: 'right', padding: '8px 10px 0' }}>
                       <div style={{ fontWeight: 700, fontSize: 12 }}>{c.qtd}</div>
                       <div style={{ fontSize: 10, color: '#9a9c9f', fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap' }}>{fmt(c.valor)}</div>
                     </td>
                   ))}
                   <td style={{ textAlign: 'right', padding: '8px 0 0 10px' }}>
-                    <div style={{ fontWeight: 700, fontSize: 12 }}>{matriz.dados.qtdGeral}</div>
-                    <div style={{ fontSize: 10, color: '#9a9c9f', fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap' }}>{fmt(matriz.dados.valorGeral)}</div>
+                    <div style={{ fontWeight: 700, fontSize: 12 }}>{matriz.dados!.qtdGeral}</div>
+                    <div style={{ fontSize: 10, color: '#9a9c9f', fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap' }}>{fmt(matriz.dados!.valorGeral)}</div>
                   </td>
                 </tr>
               </tbody>
