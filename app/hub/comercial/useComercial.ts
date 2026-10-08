@@ -367,26 +367,33 @@ export type MatrizFechamentoCompetenciaData = {
 }
 
 export type DiaFD = { dia: number; qtd: number; valor: number }
-export type FechamentoDiarioData = {
-  anoAtual: number; anoAnterior: number; mesFechamento: number; temDrillDown: boolean
+export type BlocoFD = {
+  mesFechamento: number
   competenciaAtual: string[]; competenciaAnterior: string[]
   diasAtual: DiaFD[]; diasAnterior: DiaFD[]
   totalAtual: { qtd: number; valor: number }; totalAnterior: { qtd: number; valor: number }
   diferenca: { qtd: number; valor: number }
+}
+export type FechamentoDiarioData = {
+  anoAtual: number; anoAnterior: number; temDrillDown: boolean
+  blocos: BlocoFD[]
+  totalGeralAtual: { qtd: number; valor: number }; totalGeralAnterior: { qtd: number; valor: number }
+  diferencaGeral: { qtd: number; valor: number }
   geralAno: { corteData: string; acumuladoAtual: number; acumuladoAnterior: number; diferenca: number }
 }
 
 export function useFechamentoDiarioCompetencia(
-  filtros: Pick<Filtros, 'unidade' | 'vendedor'>, ano: string, mesFechamento: number, competenciaMeses: number[]
+  filtros: Pick<Filtros, 'unidade' | 'vendedor'>, ano: string, mesesFechamento: number[], competenciaMeses: number[]
 ) {
   const [dados, setDados] = useState<FechamentoDiarioData | null>(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
+  const mesesKey = mesesFechamento.join(',')
   const competenciaKey = competenciaMeses.join(',')
 
   useEffect(() => {
     setLoading(true); setErro(null)
-    const p = new URLSearchParams({ tipo: 'fechamento_diario_competencia', ano, mes_fechamento: String(mesFechamento) })
+    const p = new URLSearchParams({ tipo: 'fechamento_diario_competencia', ano, meses_fechamento: mesesKey || '1' })
     if (competenciaKey) p.set('competencia_meses', competenciaKey)
     if (filtros.unidade)  p.set('unidade',  filtros.unidade)
     if (filtros.vendedor) p.set('vendedor', filtros.vendedor)
@@ -396,7 +403,7 @@ export function useFechamentoDiarioCompetencia(
       .catch(e => setErro(e.message))
       .finally(() => setLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtros.unidade, filtros.vendedor, ano, mesFechamento, competenciaKey])
+  }, [filtros.unidade, filtros.vendedor, ano, mesesKey, competenciaKey])
 
   return { dados, loading, erro }
 }
