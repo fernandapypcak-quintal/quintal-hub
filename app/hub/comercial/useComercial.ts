@@ -366,6 +366,41 @@ export type MatrizFechamentoCompetenciaData = {
   linhas: LinhaMatriz[]; qtdGeral: number; valorGeral: number
 }
 
+export type DiaFD = { dia: number; qtd: number; valor: number }
+export type FechamentoDiarioData = {
+  anoAtual: number; anoAnterior: number; mesFechamento: number; temDrillDown: boolean
+  competenciaAtual: string[]; competenciaAnterior: string[]
+  diasAtual: DiaFD[]; diasAnterior: DiaFD[]
+  totalAtual: { qtd: number; valor: number }; totalAnterior: { qtd: number; valor: number }
+  diferenca: { qtd: number; valor: number }
+  geralAno: { corteData: string; acumuladoAtual: number; acumuladoAnterior: number; diferenca: number }
+}
+
+export function useFechamentoDiarioCompetencia(
+  filtros: Pick<Filtros, 'unidade' | 'vendedor'>, ano: string, mesFechamento: number, competenciaMeses: number[]
+) {
+  const [dados, setDados] = useState<FechamentoDiarioData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [erro, setErro] = useState<string | null>(null)
+  const competenciaKey = competenciaMeses.join(',')
+
+  useEffect(() => {
+    setLoading(true); setErro(null)
+    const p = new URLSearchParams({ tipo: 'fechamento_diario_competencia', ano, mes_fechamento: String(mesFechamento) })
+    if (competenciaKey) p.set('competencia_meses', competenciaKey)
+    if (filtros.unidade)  p.set('unidade',  filtros.unidade)
+    if (filtros.vendedor) p.set('vendedor', filtros.vendedor)
+    fetch(`${GAS_URL}?${p}`)
+      .then(r => r.json())
+      .then(data => { if (data.erro) throw new Error(data.erro); setDados(data) })
+      .catch(e => setErro(e.message))
+      .finally(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtros.unidade, filtros.vendedor, ano, mesFechamento, competenciaKey])
+
+  return { dados, loading, erro }
+}
+
 export function useMatrizFechamentoCompetencia(filtros: Pick<Filtros, 'unidade' | 'vendedor'>, ano: string) {
   const [dados, setDados] = useState<MatrizFechamentoCompetenciaData | null>(null)
   const [loading, setLoading] = useState(true)
