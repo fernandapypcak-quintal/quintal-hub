@@ -368,7 +368,7 @@ export type MatrizFechamentoCompetenciaData = {
 
 export type DiaFD = { dia: number; qtd: number; valor: number }
 export type BlocoFD = {
-  mesFechamento: number
+  mesFechamento: number; mesEmCurso: boolean
   competenciaAtual: string[]; competenciaAnterior: string[]
   diasAtual: DiaFD[]; diasAnterior: DiaFD[]
   totalAtual: { qtd: number; valor: number }; totalAnterior: { qtd: number; valor: number }
