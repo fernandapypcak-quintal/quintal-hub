@@ -128,12 +128,17 @@ const PERIODOS = [
 
 // Exporta Excel via SheetJS-like via CSV com BOM
 function exportarExcel(deals: Deal[], inicio: string, fim: string) {
-  const headers = ['Empresa','Contato','Unidade','Data Evento','Data Fechamento','Pax','Valor','Cardápio','Vendedor','Forma Pgto']
-  const rows = deals.map(d => [
-    d.empresa||d.titulo, d.contato, d.unidade_nome, fmtDate(d.data_evento),
-    fmtDate(d.won_time), String(d.qtd_pessoas||''), String(d.valor||''),
-    d.cardapio_nome, d.vendedor, d.forma_pgto_nome,
-  ])
+  const headers = ['Empresa','Contato','Unidade','Data Evento','Data Fechamento','Teve Aditivo','Diferença do Aditivo','Pax','Valor','Cardápio','Vendedor','Forma Pgto']
+  const rows = deals.map(d => {
+    const teveAditivo = d.teve_aditivo === 'SIM'
+    return [
+      d.empresa||d.titulo, d.contato, d.unidade_nome, fmtDate(d.data_evento),
+      fmtDate(d.won_time_efetivo || d.won_time),
+      teveAditivo ? 'Sim' : 'Não', teveAditivo ? String(parseFloat(String(d.valor_aditivo))||0) : '0',
+      String(d.qtd_pessoas||''), String(d.valor||''),
+      d.cardapio_nome, d.vendedor, d.forma_pgto_nome,
+    ]
+  })
   const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n')
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
   const url  = URL.createObjectURL(blob)
@@ -190,9 +195,10 @@ export default function Conversoes({ filtros }: { filtros: any }) {
       .catch(() => {})
   }
 
-  // Agrupa por won_time
+  // Agrupa por won_time_efetivo (fechamento REAL — corrigido quando teve
+  // aditivo; senão é igual ao won_time normal)
   const porDia: Record<string, Deal[]> = {}
-  deals.forEach(d => { const dia=String(d.won_time||'').substring(0,10); if(!dia)return; if(!porDia[dia])porDia[dia]=[]; porDia[dia].push(d) })
+  deals.forEach(d => { const dia=String(d.won_time_efetivo||d.won_time||'').substring(0,10); if(!dia)return; if(!porDia[dia])porDia[dia]=[]; porDia[dia].push(d) })
   const dias = Object.keys(porDia).sort((a,b)=>b.localeCompare(a))
 
   const receitaTotal = deals.reduce((s,d)=>s+(parseFloat(String(d.valor||0))||0),0)
@@ -241,7 +247,7 @@ export default function Conversoes({ filtros }: { filtros: any }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 }}>
             {[
               { label: 'Conversões', value: String(deals.length), sub: `${dias.length} dias`, color: '#3B6D11' },
-              { label: 'Receita (fechamento)', value: fmtBRL(receitaTotal), sub: 'won_time no período', color: '#185FA5' },
+              { label: 'Receita (fechamento)', value: fmtBRL(receitaTotal), sub: 'fechamento real no período (sem aditivo)', color: '#185FA5' },
               { label: 'Receita (competência)', value: receitaCompetencia === null ? '...' : fmtBRL(receitaCompetencia), sub: 'mês(es) cheio(s) do período', color: '#97A624' },
               { label: 'Ticket médio', value: fmtBRL(deals.length ? receitaTotal/deals.length : 0), color: '#c9855a' },
               { label: 'Total pax', value: paxTotal.toLocaleString('pt-BR'), sub: 'pessoas', color: '#D9B504' },
