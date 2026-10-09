@@ -195,6 +195,9 @@ function ResumoCasa({ casa, mes, linhas, hoje, filtros }: { casa: string; mes: s
           anoAnterior={anoTxt(ha ? taxa(ha.noshow, ha.base) : null, x => pct(x))} inverso />
         <Kpi label="Canceladas" valor={pct(taxa(at.canceladas, at.reservas))} anterior={pct(taxa(an.canceladas, an.reservas))} />
         <Kpi label="B2B" valor={n0(at.b2b)} detalhe={`${n0(at.b2bPessoas)} pessoas`} cor={C.b2b} />
+        <Kpi label="👶 Com criança" valor={pct(taxa(at.comCrianca, at.criancaInformada))}
+          detalhe={`${n0(at.comCrianca)} de ${n0(at.criancaInformada)} reservas com a informação`}
+          anterior={pct(taxa(an.comCrianca, an.criancaInformada))} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
@@ -241,7 +244,7 @@ function ResumoCasa({ casa, mes, linhas, hoje, filtros }: { casa: string; mes: s
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr>
                 <th style={th}>Data</th><th style={thNum}>Reservas</th><th style={thNum}>Pessoas</th>
-                <th style={thNum}>B2B</th><th style={thNum}>B2B pess.</th><th style={thNum}>Pendentes</th>
+                <th style={thNum}>B2B</th><th style={thNum}>B2B pess.</th><th style={thNum}>👶 c/ criança</th><th style={thNum}>Pendentes</th>
               </tr></thead>
               <tbody>
                 {diasProx.map(d => {
@@ -254,6 +257,7 @@ function ResumoCasa({ casa, mes, linhas, hoje, filtros }: { casa: string; mes: s
                       <td style={tdNum}>{r.pessoas ? n0(r.pessoas) : ''}</td>
                       <td style={{ ...tdNum, color: r.b2b ? C.b2b : C.muito }}>{r.b2b ? n0(r.b2b) : ''}</td>
                       <td style={{ ...tdNum, color: C.b2b }}>{r.b2bPessoas ? n0(r.b2bPessoas) : ''}</td>
+                      <td style={tdNum}>{r.comCrianca ? n0(r.comCrianca) : ''}</td>
                       <td style={{ ...tdNum, color: '#8A6D00' }}>{r.pendentes ? n0(r.pendentes) : ''}</td>
                     </tr>
                   )
