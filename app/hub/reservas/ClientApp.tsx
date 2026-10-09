@@ -19,12 +19,15 @@ import Operadores from './abas/Operadores'
 import OcasioesStatus from './abas/OcasioesStatus'
 import Calendario from './abas/Calendario'
 import PorCasa from './abas/PorCasa'
+import Bonus from './abas/Bonus'
 
-type Aba = 'resumo' | 'operadores' | 'ocasioes' | 'calendario' | 'casas'
-const ABAS: { id: Aba; icon: string; label: string; curto: string; base: 'criacao' | 'reserva' }[] = [
+type Aba = 'resumo' | 'operadores' | 'bonus' | 'ocasioes' | 'calendario' | 'casas'
+type Base = 'criacao' | 'semana' | 'reserva'
+const ABAS: { id: Aba; icon: string; label: string; curto: string; base: Base }[] = [
   { id: 'resumo', icon: '🏠', label: 'Resumo', curto: 'Resumo', base: 'criacao' },
   { id: 'operadores', icon: '🧑‍💼', label: 'Operadores', curto: 'Operad.', base: 'criacao' },
   { id: 'ocasioes', icon: '🎉', label: 'Ocasiões e status', curto: 'Ocasiões', base: 'criacao' },
+  { id: 'bonus', icon: '🏆', label: 'Bônus semanal', curto: 'Bônus', base: 'semana' },
   { id: 'calendario', icon: '📅', label: 'Calendário', curto: 'Agenda', base: 'reserva' },
   { id: 'casas', icon: '🏪', label: 'Por casa', curto: 'Casas', base: 'reserva' },
 ]
@@ -59,8 +62,11 @@ function Sidebar({ aba, onAba }: { aba: Aba; onAba: (a: Aba) => void }) {
       <nav style={{ padding: '12px 8px', flex: 1 }}>
         {ABAS.map((p, i) => (
           <div key={p.id}>
-            {i === 3 && <div style={{ fontSize: 10, color: '#9a9c9f', padding: '12px 14px 4px', textTransform: 'uppercase', letterSpacing: 0.5 }}>Por data da reserva</div>}
-            {i === 0 && <div style={{ fontSize: 10, color: '#9a9c9f', padding: '0 14px 4px', textTransform: 'uppercase', letterSpacing: 0.5 }}>Por data de criação</div>}
+            {(i === 0 || p.base === 'reserva' && ABAS[i - 1].base !== 'reserva') && (
+              <div style={{ fontSize: 10, color: '#9a9c9f', padding: i === 0 ? '0 14px 4px' : '12px 14px 4px', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                {i === 0 ? 'Por data de criação' : 'Por data da reserva'}
+              </div>
+            )}
             <button onClick={() => onAba(p.id)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 9,
@@ -125,6 +131,7 @@ export default function ReservasClientApp() {
       {aba === 'ocasioes' && <OcasioesStatus config={config} filtros={filtros} periodo={periodo} />}
       {aba === 'calendario' && <Calendario config={config} filtros={filtros} hoje={hoje} />}
       {aba === 'casas' && <PorCasa config={config} filtros={filtros} hoje={hoje} />}
+      {aba === 'bonus' && <Bonus config={config} hoje={hoje} />}
       <div style={{ fontSize: 11.5, color: '#888', lineHeight: 1.6 }}>
         As reservas se dividem em 3 origens que somam o total: <b>Time de reservas</b> (operadores da aba OPERADORES, contam na meta) ·{' '}
         <b>Online</b> (app, link e Google) · <b>Corporativo / outros</b> (demais operadores: eventos e não cadastrados). <b>B2B</b> = origem Pipe ou ocasião corporativa.{' '}
@@ -156,7 +163,7 @@ export default function ReservasClientApp() {
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>Reservas · {abaAtual.label}</div>
               <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)' }}>
-                Quintal do Espeto · Get In · {abaAtual.base === 'criacao' ? 'por data de criação' : 'por data da reserva'}
+                Quintal do Espeto · Get In · {abaAtual.base === 'criacao' ? 'por data de criação' : abaAtual.base === 'semana' ? 'por semana (seg a dom), data de criação' : 'por data da reserva'}
                 {at ? ` · atualizado ${dataCurta(at.slice(0, 10))} às ${at.slice(11, 16)}` : ''}
               </div>
             </div>
@@ -176,13 +183,17 @@ export default function ReservasClientApp() {
                 )}
               </>
             )}
-            <select value={origem} onChange={e => setOrigem(e.target.value)} style={selectStyle}>
-              {ORIGENS.map(o => <option key={o.id} value={o.id} style={opt}>{o.label}</option>)}
-            </select>
-            <select value={unidade} onChange={e => setUnidade(e.target.value)} style={selectStyle}>
-              {(!config || !config.restrito || config.unidades.length > 1) && <option value="" style={opt}>Todas as unidades</option>}
-              {(config?.unidades || []).map(u => <option key={u} value={u} style={opt}>{u}</option>)}
-            </select>
+            {abaAtual.base !== 'semana' && (
+              <>
+                <select value={origem} onChange={e => setOrigem(e.target.value)} style={selectStyle}>
+                  {ORIGENS.map(o => <option key={o.id} value={o.id} style={opt}>{o.label}</option>)}
+                </select>
+                <select value={unidade} onChange={e => setUnidade(e.target.value)} style={selectStyle}>
+                  {(!config || !config.restrito || config.unidades.length > 1) && <option value="" style={opt}>Todas as unidades</option>}
+                  {(config?.unidades || []).map(u => <option key={u} value={u} style={opt}>{u}</option>)}
+                </select>
+              </>
+            )}
             <button onClick={atualizar} title="Recarregar dados" style={{ ...selectStyle, padding: '5px 9px' }}>↻</button>
           </div>
         </div>
