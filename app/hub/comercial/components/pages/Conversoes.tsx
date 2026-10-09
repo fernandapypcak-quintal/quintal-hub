@@ -204,6 +204,19 @@ export default function Conversoes({ filtros }: { filtros: any }) {
   const receitaTotal = deals.reduce((s,d)=>s+(parseFloat(String(d.valor||0))||0),0)
   const paxTotal     = deals.reduce((s,d)=>s+(parseInt(String(d.qtd_pessoas||'0').replace(/[^0-9]/g,''))||0),0)
 
+  // Pra onde foi a competência: dos negócios fechados nesse período, pra
+  // qual mês (do evento) eles são — não importa o período de fechamento
+  // filtrado, isso sempre mostra a distribuição real dos data_evento.
+  const porCompetencia: Record<string, { qtd: number; valor: number }> = {}
+  deals.forEach(d => {
+    const mesComp = String(d.data_evento||'').substring(0,7)
+    if (!mesComp) return
+    if (!porCompetencia[mesComp]) porCompetencia[mesComp] = { qtd: 0, valor: 0 }
+    porCompetencia[mesComp].qtd++
+    porCompetencia[mesComp].valor += parseFloat(String(d.valor||0))||0
+  })
+  const mesesCompetencia = Object.keys(porCompetencia).sort()
+
   return (
     <div style={{ padding: '20px' }}>
       {selected && <DealModal deal={selected} onClose={() => setSelected(null)} />}
@@ -259,6 +272,24 @@ export default function Conversoes({ filtros }: { filtros: any }) {
               </div>
             ))}
           </div>
+
+          {mesesCompetencia.length > 0 && (
+            <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: '16px 20px', marginBottom: 20 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>Pra onde foi a competência</div>
+              <div style={{ fontSize: 11, color: '#9a9c9f', marginBottom: 12 }}>
+                Dos {deals.length} negócios fechados nesse período, pra qual mês (evento) eles são.
+              </div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {mesesCompetencia.map(mes => (
+                  <div key={mes} style={{ background: '#F5F5F2', borderRadius: 10, padding: '8px 14px', minWidth: 100 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', marginBottom: 4 }}>{labelMes(mes)}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700 }}>{porCompetencia[mes].qtd}</div>
+                    <div style={{ fontSize: 11, color: '#3B6D11', fontFamily: 'DM Mono, monospace', fontWeight: 600 }}>{fmtBRL(porCompetencia[mes].valor)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {dias.map(dia => (
