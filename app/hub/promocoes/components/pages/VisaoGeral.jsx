@@ -3,9 +3,10 @@
 
 import { useMemo } from 'react'
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
-import { total, derivar, fatTotalPeriodo, mesAnterior, corCmv } from '../../data/modelo'
+import { unificar, totalUnificado, fatTotalPeriodo, mesAnterior, corCmv } from '../../data/modelo'
 import { Card, Kpi, Aviso, brl, brlK, pct, pp, num, varPct, mesLabel } from '../ui'
-import DetalheSeparado from '../DetalheSeparado'
+import TabelaPromocoes from '../TabelaPromocoes'
+import { linhaDeTotal } from './Promocoes'
 
 export default function VisaoGeral({ dados, filtros }) {
   const { pacotes, consumoMes, fatTotal, meses, unidades, ultimoFechado, resumo = {} } = dados
@@ -13,11 +14,16 @@ export default function VisaoGeral({ dados, filtros }) {
   const mes = filtros.mes
   const parcial = (m) => m === ultimoFechado.slice(0, 7)
 
-  // KPIs: mês escolhido e anterior (dados completos carregados)
-  const atual = useMemo(() => derivar(total(pacotes, consumoMes, { units, mes }), fatTotalPeriodo(fatTotal, units, { mes })),
-    [pacotes, consumoMes, fatTotal, mes, units.join(',')])
-  const ant = useMemo(() => (parcial(mes) ? null : derivar(total(pacotes, consumoMes, { units, mes: mesAnterior(mes) }), fatTotalPeriodo(fatTotal, units, { mes: mesAnterior(mes) }))),
-    [pacotes, consumoMes, fatTotal, mes, units.join(',')])
+  // KPIs: visão unificada (promoções + pacotes, sem contar nada duas vezes)
+  const calc = (m) => {
+    const ft = fatTotalPeriodo(fatTotal, units, { mes: m })
+    const linhas = [...unificar({ ...dados, consumo: consumoMes }, { units, mes: m }).values()].map((l) => ({ ...l, peso: ft ? l.receita / ft : null }))
+    const t = totalUnificado(linhas, ft)
+    return { linhas, t: { ...t, fat: t.receita, fatTotal: ft, margemPessoa: t.pessoas ? t.margem / t.pessoas : null } }
+  }
+  const atualCalc = useMemo(() => calc(mes), [dados, consumoMes, fatTotal, mes, units.join(',')])
+  const atual = atualCalc.t
+  const ant = useMemo(() => (parcial(mes) ? null : calc(mesAnterior(mes)).t), [dados, consumoMes, fatTotal, mes, units.join(',')])
 
   // Gráfico: todos os meses, pelo resumo mensal gerado pelo Apps Script
   const serie = useMemo(() => meses.map((m) => {
@@ -53,9 +59,9 @@ export default function VisaoGeral({ dados, filtros }) {
           sub={atual.fatTotal != null ? `de ${brlK(atual.fatTotal)}${ant?.peso != null && atual.peso != null ? ` · ${pp(atual.peso - ant.peso)}` : ''}` : 'sem faturamento total'} />
         <Kpi label="Pessoas" valor={num(atual.pessoas)} sub={ant?.pessoas ? `mês ant. ${num(ant.pessoas)}` : null} />
         <Kpi label="Ticket médio" valor={brl(atual.ticket)} sub={ant?.ticket ? `mês ant. ${brl(ant.ticket)}` : null} />
-        <Kpi label="Margem bruta" valor={brlK(atual.usos ? atual.margem : null)}
-          sub={atual.margemPessoa != null && atual.usos ? `${brl(atual.margemPessoa)} por pessoa` : null}
-          corValor={atual.usos && atual.margem < 0 ? '#8C1414' : undefined} />
+        <Kpi label="Margem bruta" valor={brlK(atual.custo > 0 ? atual.margem : null)}
+          sub={atual.margemPessoa != null && atual.custo > 0 ? `${brl(atual.margemPessoa)} por pessoa` : null}
+          corValor={atual.custo > 0 && atual.margem < 0 ? '#8C1414' : undefined} />
       </div>
 
       <Card titulo="Evolução mensal — faturamento (barras), peso e CMV (linhas)">
@@ -77,13 +83,15 @@ export default function VisaoGeral({ dados, filtros }) {
         {serie.some((s) => s.mes.endsWith('*')) && <p className="text-[10.5px] text-zinc-400 mt-1">* mês em andamento</p>}
       </Card>
 
-      <Card titulo={`Pacotes e promoções — ${mesLabel(mes)}`}>
-        <DetalheSeparado dados={dados} filtro={{ units, mes }} />
+      <Card titulo={`Promoções e pacotes — ${mesLabel(mes)}`} className="overflow-hidden">
+        <div className="-mx-4">
+          <TabelaPromocoes linhas={atualCalc.linhas} linhaTotal={linhaDeTotal(atual)} />
+        </div>
       </Card>
 
       <p className="text-[11px] text-zinc-400">
-        Receita e pessoas: relatório de Pacotes da ZIG (Faturamento + Emissão de NF). Custo: itens consumidos nas promoções (Promoções Utilizadas) × ficha técnica.
-        CMV = custo de todas as promoções ÷ receita de todos os pacotes (+ o que o cliente pagou nas promoções de desconto). Peso: receita ÷ faturamento total da casa (canal CASA).
+        Faturamento: reservas (valor do pacote + produtos pagos + NF por fora, sem gorjeta) + o que o cliente pagou nas promoções de desconto. Custo: tudo que as reservas consumiram
+        + o consumo das promoções fora de reserva, × ficha técnica. Peso: faturamento ÷ faturamento total da casa (canal CASA). O gráfico usa o resumo mensal.
       </p>
     </div>
   )
