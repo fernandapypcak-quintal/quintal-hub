@@ -7,8 +7,9 @@ import {
 } from '../utils'
 import { Aviso, C, Drawer, Secao, Spinner, Var, botao, card, td, tdNum, th, thNum } from '../ui'
 import TabelaReservas from './TabelaReservas'
+import MetaSemanal from './MetaSemanal'
 
-export default function Operadores({ config, filtros, periodo }: { config: Config; filtros: Filtros; periodo: Periodo }) {
+export default function Operadores({ config, filtros, periodo, hoje }: { config: Config; filtros: Filtros; periodo: Periodo; hoje: string }) {
   const dados = useLinhas('criacao', periodo.antInicio, periodo.fim)
   const temAno = temHistoricoDesde(config, periodo.anoInicio)
   const ano = useLinhas('criacao', temAno ? periodo.anoInicio : '', temAno ? periodo.anoFim : '')
@@ -34,13 +35,16 @@ export default function Operadores({ config, filtros, periodo }: { config: Confi
     return { atual, linhas, total: atual.length, porGrupo }
   }, [dados.linhas, filtros, periodo])
 
-  if (dados.erro) return <Aviso>{dados.erro}</Aviso>
-  if (!calc) return <div style={card}><Spinner /></div>
+  const semanal = <MetaSemanal config={config} hoje={hoje} modo="operadores" />
+  if (dados.erro) return <>{semanal}<Aviso>{dados.erro}</Aviso></>
+  if (!calc) return <>{semanal}<div style={card}><Spinner /></div></>
 
   const sel = aberto ? calc.linhas.find(l => l.o === aberto) : null
 
   return (
     <>
+      {semanal}
+      <div style={{ fontSize: 13, fontWeight: 600, marginTop: 8 }}>Todos os operadores · {periodo.label}</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
         {calc.porGrupo.map(g => (
           <div key={g.id} style={{ ...card, padding: '12px 16px', borderTop: `3px solid ${g.cor}` }}>
