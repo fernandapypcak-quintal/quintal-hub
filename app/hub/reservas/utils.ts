@@ -17,9 +17,10 @@ export type Linha = {
   oc: string; cd: string; cr: string; s: string; b: boolean; g: Grupo; gh: GrupoHist
 }
 export type Meta = { mes: string; faixas: number[]; desafio: number | null }
+export type MetaSemanal = { inicio: string; operador: string; base: number; pcts: number[] }
 export type Config = {
   restrito: boolean; atualizado: string; hoje: string
-  metas: Meta[]; meses: string[]; mesesDr: string[]; unidades: string[]
+  metas: Meta[]; metasSemanais: MetaSemanal[]; meses: string[]; mesesDr: string[]; unidades: string[]
 }
 export type Filtros = { grupos: Grupo[]; unidades: string[] }
 
@@ -181,6 +182,22 @@ export function projetarMes(linhas: Linha[], hoje: string, peso: (r: Linha) => n
   let projecao = realizado + Math.max(0, media[diaSemana(hoje)] - (porData[hoje] || 0))
   for (let d = addDias(hoje, 1); d <= fimMes; d = addDias(d, 1)) projecao += media[diaSemana(d)]
   return { realizado, projecao: Math.round(projecao), ritmo: media.reduce((a, b) => a + b, 0) / 7, diasRestantes: diffDias(hoje, fimMes) + 1 }
+}
+
+// ─── Meta semanal (bônus) ─────────────────────────────────────────────────
+const normNome = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase()
+
+// Meta da semana (segunda) para a operadora: a linha mais recente com início até aquela semana;
+// meta própria da operadora tem prioridade sobre a geral (operador vazio).
+export function metaSemanalDe(metas: MetaSemanal[], operador: string, semana: string) {
+  const validas = (metas || []).filter(m => segunda(m.inicio) <= semana).sort((a, b) => a.inicio.localeCompare(b.inicio))
+  const alvo = normNome(operador)
+  const propria = validas.filter(m => m.operador && normNome(m.operador) === alvo).pop()
+  const geral = validas.filter(m => !m.operador).pop()
+  const m = propria || geral
+  if (!m) return null
+  const pcts = m.pcts.length ? m.pcts : [100, 120, 140]
+  return { base: m.base, pcts, faixas: pcts.map(p => Math.floor((m.base * p) / 100)), propria: !!propria }
 }
 
 // ─── Agregações ─────────────────────────────────────────────────────────
