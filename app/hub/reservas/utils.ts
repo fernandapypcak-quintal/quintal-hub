@@ -228,14 +228,32 @@ export function aplicarFiltrosHist(l: Linha[], f: Filtros) {
   return l.filter(r => hs.includes(r.gh) && (!f.unidades.length || f.unidades.includes(r.u)))
 }
 
+// Criança na reserva (campo "POSSUI CRIANÇAS ?" da Get In — só a central preenche)
+export type Crianca = 'sim' | 'nao' | 'ni'
+export function criancaDe(r: Linha): Crianca {
+  const v = String(r.cr || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase()
+  if (!v || v.startsWith('NAO INFORM')) return 'ni'
+  if (/^\d+/.test(v)) return Number(v.match(/^\d+/)![0]) > 0 ? 'sim' : 'nao'
+  if (v.startsWith('SIM') || v.startsWith('S ') || v === 'S') return 'sim'
+  if (v.startsWith('NAO') || v === 'N') return 'nao'
+  return 'ni'
+}
+export const CRIANCA_LABEL: Record<Crianca, string> = { sim: 'Com criança', nao: 'Sem criança', ni: 'Não informado' }
+
 export type Resumo = {
   reservas: number; pessoas: number; tam: number; b2b: number; b2bPessoas: number
   sentadas: number; confirmadas: number; pendentes: number; noshow: number; canceladas: number
+  comCrianca: number; semCrianca: number; criancaInformada: number
 }
 export function resumir(l: Linha[]): Resumo {
-  const r: Resumo = { reservas: l.length, pessoas: 0, tam: 0, b2b: 0, b2bPessoas: 0, sentadas: 0, confirmadas: 0, pendentes: 0, noshow: 0, canceladas: 0 }
+  const r: Resumo = {
+    reservas: l.length, pessoas: 0, tam: 0, b2b: 0, b2bPessoas: 0, sentadas: 0, confirmadas: 0, pendentes: 0, noshow: 0, canceladas: 0,
+    comCrianca: 0, semCrianca: 0, criancaInformada: 0,
+  }
   for (const x of l) {
     r.pessoas += x.p
+    const c = criancaDe(x)
+    if (c === 'sim') { r.comCrianca++; r.criancaInformada++ } else if (c === 'nao') { r.semCrianca++; r.criancaInformada++ }
     if (x.b) { r.b2b++; r.b2bPessoas += x.p }
     if (x.s === 'seated') r.sentadas++
     else if (x.s === 'confirmed') r.confirmadas++
