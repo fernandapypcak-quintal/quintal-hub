@@ -31,6 +31,7 @@ type GasHistorico = GasResp & {
 type GasConfig = GasResp & {
   atualizado?: string; hoje?: string; meses?: string[]; mesesDr?: string[]; unidades?: string[]
   metas?: { mes: string; faixas: number[]; desafio: number | null }[]
+  metasSemanais?: { inicio: string; operador: string; base: number; pcts: number[] }[]
 }
 
 async function gas<T extends GasResp>(params: Record<string, string>): Promise<T> {
@@ -103,7 +104,7 @@ export async function GET(req: NextRequest) {
       }
       return NextResponse.json({
         ok: true, restrito, atualizado: c.atualizado || '', hoje: c.hoje || '',
-        metas: c.metas || [], meses: c.meses || [], mesesDr: c.mesesDr || [], unidades,
+        metas: c.metas || [], metasSemanais: c.metasSemanais || [], meses: c.meses || [], mesesDr: c.mesesDr || [], unidades,
       })
     }
 
