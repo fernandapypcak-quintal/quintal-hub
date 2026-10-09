@@ -152,7 +152,6 @@ export default function Conversoes({ filtros }: { filtros: any }) {
   const [customInicio, setCustomInicio] = useState(toDateStr(firstOfMonth))
   const [customFim, setCustomFim]       = useState(toDateStr(today))
   const [deals, setDeals]             = useState<Deal[]>([])
-  const [receitaCompetencia, setReceitaCompetencia] = useState<number | null>(null)
   const [loading, setLoading]         = useState(false)
   const [erro, setErro]               = useState<string | null>(null)
   const [fetched, setFetched]         = useState(false)
@@ -164,7 +163,7 @@ export default function Conversoes({ filtros }: { filtros: any }) {
 
   function buscar() {
     if (!inicio || !fim) return
-    setLoading(true); setErro(null); setFetched(false); setReceitaCompetencia(null)
+    setLoading(true); setErro(null); setFetched(false)
     const p = new URLSearchParams({ tipo: 'conversoes', dataInicio: inicio, dataFim: fim, limit: '1000' })
     if (filtros.unidade)  p.set('unidade',  filtros.unidade)
     if (filtros.vendedor) p.set('vendedor', filtros.vendedor)
@@ -173,26 +172,6 @@ export default function Conversoes({ filtros }: { filtros: any }) {
       .then(data => { if (data.erro) throw new Error(data.erro); setDeals(data.deals||[]); setFetched(true) })
       .catch(e => setErro(e.message))
       .finally(() => setLoading(false))
-
-    // Segunda busca: competência (data_evento) — usa o(s) MÊS(ES) CHEIO(S)
-    // cobertos pela janela de fechamento selecionada, não os mesmos dias
-    // exatos. Assim "Este mês" mostra a competência do mês inteiro, batendo
-    // com o card de Competência do Resumo (que também é sempre mês cheio).
-    const mesInicioCompetencia = inicio.substring(0,7) + '-01'
-    const [anoFimComp, mesFimComp] = fim.substring(0,7).split('-').map(Number)
-    const ultimoDiaFim = new Date(anoFimComp, mesFimComp, 0).getDate()
-    const fimCompetencia = fim.substring(0,7) + '-' + String(ultimoDiaFim).padStart(2,'0')
-    const pComp = new URLSearchParams({ tipo: 'agenda', dataInicio: mesInicioCompetencia, dataFim: fimCompetencia, status_evento: 'won', limit: '2000' })
-    if (filtros.unidade)  pComp.set('unidade',  filtros.unidade)
-    if (filtros.vendedor) pComp.set('vendedor', filtros.vendedor)
-    fetch(`${GAS_URL}?${pComp}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.erro) return
-        const total = (data.deals || []).reduce((s: number, d: Deal) => s + (parseFloat(String(d.valor||0))||0), 0)
-        setReceitaCompetencia(total)
-      })
-      .catch(() => {})
   }
 
   // Agrupa por won_time_efetivo (fechamento REAL — corrigido quando teve
@@ -247,7 +226,6 @@ export default function Conversoes({ filtros }: { filtros: any }) {
       <div class="sub">${deals.length} negócios fechados no período</div>
       <div class="kpis">
         <div><div class="kpi-label">Receita (fechamento)</div><div class="kpi-valor">${esc(fmtBRL(receitaTotal))}</div></div>
-        <div><div class="kpi-label">Receita (competência)</div><div class="kpi-valor">${receitaCompetencia===null ? '—' : esc(fmtBRL(receitaCompetencia))}</div></div>
         <div><div class="kpi-label">Ticket médio</div><div class="kpi-valor">${esc(fmtBRL(deals.length ? receitaTotal/deals.length : 0))}</div></div>
         <div><div class="kpi-label">Total pax</div><div class="kpi-valor">${paxTotal.toLocaleString('pt-BR')}</div></div>
       </div>
@@ -347,7 +325,6 @@ export default function Conversoes({ filtros }: { filtros: any }) {
             {[
               { label: 'Conversões', value: String(deals.length), sub: `${dias.length} dias`, color: '#3B6D11' },
               { label: 'Receita (fechamento)', value: fmtBRL(receitaTotal), sub: 'fechamento real no período (sem aditivo)', color: '#185FA5' },
-              { label: 'Receita (competência)', value: receitaCompetencia === null ? '...' : fmtBRL(receitaCompetencia), sub: 'mês(es) cheio(s) do período', color: '#97A624' },
               { label: 'Ticket médio', value: fmtBRL(deals.length ? receitaTotal/deals.length : 0), color: '#c9855a' },
               { label: 'Total pax', value: paxTotal.toLocaleString('pt-BR'), sub: 'pessoas', color: '#D9B504' },
             ].map(k => (
