@@ -1,20 +1,20 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { type Linha, dataCurta, grupoLabel, n0, statusLabel, CANCELADAS } from '../utils'
+import { type Linha, dataCurta, grupoLabel, n0, statusLabel, CANCELADAS, criancaDe } from '../utils'
 import { C, MONO, Tag, td, tdNum, th, thNum } from '../ui'
 
-type Coluna = 'u' | 'dr' | 'dc' | 'p' | 'o' | 'oc' | 's' | 'g'
+type Coluna = 'u' | 'dr' | 'dc' | 'p' | 'o' | 'oc' | 's' | 'g' | 'cr'
 const ROTULOS: Record<Coluna, string> = {
-  u: 'Unidade', dr: 'Data reserva', dc: 'Criada em', p: 'Pessoas', o: 'Operador', oc: 'Ocasião', s: 'Status', g: 'Grupo',
+  u: 'Unidade', dr: 'Data reserva', dc: 'Criada em', p: 'Pessoas', o: 'Operador', oc: 'Ocasião', s: 'Status', g: 'Origem', cr: 'Criança',
 }
 
-export default function TabelaReservas({ linhas, colunas = ['u', 'dr', 'p', 'g', 'o', 'oc', 's', 'dc'], limite = 500 }: {
+export default function TabelaReservas({ linhas, colunas = ['u', 'dr', 'p', 'g', 'o', 'oc', 'cr', 's', 'dc'], limite = 500 }: {
   linhas: Linha[]; colunas?: Coluna[]; limite?: number
 }) {
   const [ord, setOrd] = useState<{ col: Coluna; desc: boolean }>({ col: 'dr', desc: false })
   const ordenadas = useMemo(() => {
-    const val = (r: Linha, c: Coluna): string | number => (c === 'p' ? r.p : c === 'dc' ? r.dc + r.h : String(r[c]))
+    const val = (r: Linha, c: Coluna): string | number => (c === 'p' ? r.p : c === 'dc' ? r.dc + r.h : c === 'cr' ? criancaDe(r) : String(r[c]))
     return [...linhas].sort((a, b) => {
       const x = val(a, ord.col), y = val(b, ord.col)
       const cmp = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y))
@@ -43,6 +43,10 @@ export default function TabelaReservas({ linhas, colunas = ['u', 'dr', 'p', 'g',
                 if (c === 'u') return <td key={c} style={td}>{r.u}{r.b && <Tag>B2B</Tag>}</td>
                 if (c === 'g') return <td key={c} style={{ ...td, color: C.suave }}>{grupoLabel(r.g)}</td>
                 if (c === 's') return <td key={c} style={td}>{statusLabel(r.s)}</td>
+                if (c === 'cr') {
+                  const k = criancaDe(r)
+                  return <td key={c} style={{ ...td, color: k === 'sim' ? C.texto : C.muito, fontWeight: k === 'sim' ? 600 : 400 }}>{k === 'sim' ? '👶 Sim' : k === 'nao' ? 'Não' : '—'}</td>
+                }
                 if (c === 'oc') return <td key={c} style={{ ...td, color: r.oc === 'Não Informado' ? C.muito : C.texto }}>{r.oc}</td>
                 return <td key={c} style={td}>{r[c]}</td>
               })}
