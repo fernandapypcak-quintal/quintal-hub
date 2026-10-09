@@ -9,6 +9,7 @@ import {
   rotuloGrao, temHistoricoDesde, useHistorico, useLinhas, variacao,
 } from '../utils'
 import { Aviso, BarraH, C, Kpi, MONO, Secao, Spinner, Var, botao, card, pill, td, tdNum, th, thNum } from '../ui'
+import MetaSemanal from './MetaSemanal'
 
 // ─── Meta do time (sempre o mês corrente, todas as casas liberadas) ─────────
 function BlocoMeta({ base, config, hoje, hist }: { base: Linha[]; config: Config; hoje: string; hist: Historico | null }) {
@@ -344,6 +345,7 @@ export default function Resumo({ config, filtros, periodo, grao, setGrao, hoje }
     <>
       {erro && <Aviso>{erro}</Aviso>}
       {base.linhas ? <BlocoMeta base={base.linhas} config={config} hoje={hoje} hist={hist} /> : <div style={card}><Spinner texto="Calculando a meta..." /></div>}
+      <MetaSemanal config={config} hoje={hoje} modo="resumo" />
       {base.linhas && <BlocoHoje base={base.linhas} paraHoje={paraHoje.linhas} filtros={filtros} hoje={hoje} />}
 
       {!calc ? <div style={card}><Spinner /></div> : (
