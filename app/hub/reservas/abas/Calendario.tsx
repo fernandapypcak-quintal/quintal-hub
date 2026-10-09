@@ -84,6 +84,7 @@ export default function Calendario({ config, filtros, hoje }: { config: Config; 
                         <div style={{ ...MONO, fontSize: 18, color: C.texto, marginTop: 4 }}>{n0(r.reservas)} <span style={{ fontSize: 11, color: '#555' }}>res.</span></div>
                         <div style={{ fontSize: 11.5, color: '#555' }}>{n0(r.pessoas)} pessoas</div>
                         {r.b2b > 0 && <div style={{ fontSize: 11, color: C.b2b, fontWeight: 600 }}>{n0(r.b2b)} B2B · {n0(r.b2bPessoas)} pess.</div>}
+                        {r.comCrianca > 0 && <div style={{ fontSize: 11, color: '#555' }}>👶 {n0(r.comCrianca)} c/ criança</div>}
                       </>
                     )}
                   </button>
@@ -111,14 +112,14 @@ function DetalheDia({ dia, linhas, onFechar }: { dia: string; linhas: Linha[]; o
 
   return (
     <Drawer titulo={`${DIA_LONGO[diaSemana(dia)]}, ${dataLonga(dia)}`}
-      sub={`${n0(tot.reservas)} reservas · ${n0(tot.pessoas)} pessoas · ${n0(tot.b2b)} B2B (${n0(tot.b2bPessoas)} pess.) · ${n0(linhas.length - ativas.length)} canceladas`}
+      sub={`${n0(tot.reservas)} reservas · ${n0(tot.pessoas)} pessoas · ${n0(tot.b2b)} B2B (${n0(tot.b2bPessoas)} pess.) · ${n0(tot.comCrianca)} com criança · ${n0(linhas.length - ativas.length)} canceladas`}
       onFechar={onFechar}
       acoes={<button style={botao} onClick={() => exportarExcel(`reservas_${dia}`, linhas)}>Exportar</button>}>
       <div style={{ ...card, marginBottom: 16, overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead><tr>
             <th style={th}>Casa</th><th style={thNum}>Reservas</th><th style={thNum}>Pessoas</th><th style={thNum}>B2B</th>
-            <th style={thNum}>B2B pess.</th><th style={thNum}>Não B2B pess.</th><th style={thNum}>Pendentes</th><th style={thNum}>Canceladas</th>
+            <th style={thNum}>B2B pess.</th><th style={thNum}>Não B2B pess.</th><th style={thNum}>👶 c/ criança</th><th style={thNum}>Pendentes</th><th style={thNum}>Canceladas</th>
           </tr></thead>
           <tbody>
             {casas.map(c => (
@@ -129,6 +130,7 @@ function DetalheDia({ dia, linhas, onFechar }: { dia: string; linhas: Linha[]; o
                 <td style={{ ...tdNum, color: c.b2b ? C.b2b : C.muito }}>{n0(c.b2b)}</td>
                 <td style={{ ...tdNum, color: c.b2bPessoas ? C.b2b : C.muito }}>{n0(c.b2bPessoas)}</td>
                 <td style={tdNum}>{n0(c.pessoas - c.b2bPessoas)}</td>
+                <td style={{ ...tdNum, color: c.comCrianca ? C.texto : C.muito }}>{n0(c.comCrianca)}</td>
                 <td style={{ ...tdNum, color: c.pendentes ? '#8A6D00' : C.muito }}>{n0(c.pendentes)}</td>
                 <td style={{ ...tdNum, color: C.muito }}>{n0(c.canc)}</td>
               </tr>
@@ -139,7 +141,7 @@ function DetalheDia({ dia, linhas, onFechar }: { dia: string; linhas: Linha[]; o
       <div style={{ fontSize: 12, color: C.suave, marginBottom: 8 }}>
         Reservas do dia <Tag>B2B</Tag> = origem Pipe ou ocasião corporativa · canceladas aparecem esmaecidas
       </div>
-      <TabelaReservas linhas={[...linhas].sort((a, b) => Number(CANCELADAS.has(a.s)) - Number(CANCELADAS.has(b.s)))} colunas={['u', 'p', 'g', 'o', 'oc', 's', 'dc']} />
+      <TabelaReservas linhas={[...linhas].sort((a, b) => Number(CANCELADAS.has(a.s)) - Number(CANCELADAS.has(b.s)))} colunas={['u', 'p', 'g', 'o', 'oc', 'cr', 's', 'dc']} />
     </Drawer>
   )
 }
