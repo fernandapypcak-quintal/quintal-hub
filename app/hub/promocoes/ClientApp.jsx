@@ -6,8 +6,7 @@ import Sidebar from './components/layout/Sidebar'
 import BottomNav from './components/layout/BottomNav'
 import VisaoGeral from './components/pages/VisaoGeral'
 import PorCasa from './components/pages/PorCasa'
-import Pacotes from './components/pages/Pacotes'
-import PorPromocao from './components/pages/PorPromocao'
+import Promocoes from './components/pages/Promocoes'
 import AnaliseDiaria from './components/pages/AnaliseDiaria'
 import Conferencia from './components/pages/Conferencia'
 import SimuladorPromocoesClientApp from '../simulador-promocoes/ClientApp'
@@ -17,8 +16,7 @@ import { Carregando, Aviso, mesLabel } from './components/ui'
 const PAGES = {
   visao: VisaoGeral,
   casas: PorCasa,
-  pacotes: Pacotes,
-  promocoes: PorPromocao,
+  promocoes: Promocoes,
   diaria: AnaliseDiaria,
   conferencia: Conferencia,
 }
