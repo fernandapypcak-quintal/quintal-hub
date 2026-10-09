@@ -217,6 +217,86 @@ export default function Conversoes({ filtros }: { filtros: any }) {
   })
   const mesesCompetencia = Object.keys(porCompetencia).sort()
 
+  function esc(s: string) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
+
+  // Impressão via iframe escondido — mesmo padrão já usado no resto do
+  // dashboard. Traz: período + KPIs, pra onde foi a competência, e a
+  // listagem dia a dia dos negócios fechados (igual a tela mostra).
+  function imprimir() {
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Conversões — ${esc(fmtDate(inicio))} a ${esc(fmtDate(fim))}</title>
+      <style>
+        * { box-sizing: border-box; }
+        @page { size: landscape; margin: 10mm; }
+        body { font-family: Arial, Helvetica, sans-serif; color: #222; font-size: 11px; margin: 0; }
+        h1 { font-size: 17px; margin: 0 0 4px; }
+        h2 { font-size: 13px; margin: 16px 0 6px; border-bottom: 1px solid #ccc; padding-bottom: 2px; }
+        .sub { font-size: 11px; color: #888; margin-bottom: 12px; }
+        .kpis { display: flex; gap: 28px; margin-bottom: 6px; flex-wrap: wrap; }
+        .kpi-label { font-size: 9px; color: #888; text-transform: uppercase; }
+        .kpi-valor { font-size: 15px; font-weight: 700; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
+        th, td { padding: 4px 8px; border-bottom: 1px solid #e8e8e8; text-align: left; }
+        th { color: #888; font-weight: 700; font-size: 10px; text-transform: uppercase; }
+        .num { text-align: right; }
+        .dia-header { display: flex; justify-content: space-between; background: #f5f5f2; padding: 5px 8px; font-weight: 700; margin-top: 10px; }
+        .dia-bloco { break-inside: avoid; }
+        .comp-pill { display: inline-block; background: #f5f5f2; border-radius: 8px; padding: 6px 12px; margin: 0 8px 8px 0; }
+      </style>
+    </head><body>
+      <h1>Conversões — ${esc(fmtDate(inicio))} a ${esc(fmtDate(fim))}</h1>
+      <div class="sub">${deals.length} negócios fechados no período</div>
+      <div class="kpis">
+        <div><div class="kpi-label">Receita (fechamento)</div><div class="kpi-valor">${esc(fmtBRL(receitaTotal))}</div></div>
+        <div><div class="kpi-label">Receita (competência)</div><div class="kpi-valor">${receitaCompetencia===null ? '—' : esc(fmtBRL(receitaCompetencia))}</div></div>
+        <div><div class="kpi-label">Ticket médio</div><div class="kpi-valor">${esc(fmtBRL(deals.length ? receitaTotal/deals.length : 0))}</div></div>
+        <div><div class="kpi-label">Total pax</div><div class="kpi-valor">${paxTotal.toLocaleString('pt-BR')}</div></div>
+      </div>
+
+      <h2>Pra onde foi a competência</h2>
+      <div>
+        ${mesesCompetencia.map(mes => `<span class="comp-pill"><strong>${esc(labelMes(mes))}</strong> — ${porCompetencia[mes].qtd} · ${esc(fmtBRL(porCompetencia[mes].valor))}</span>`).join('')}
+      </div>
+
+      <h2>Negócios fechados, dia a dia</h2>
+      ${dias.map(dia => `
+        <div class="dia-bloco">
+          <div class="dia-header">
+            <span>${esc(fmtDate(dia))} — ${new Date(dia+'T12:00:00').toLocaleDateString('pt-BR',{weekday:'long'})}</span>
+            <span>${porDia[dia].length} fechados — ${esc(fmtBRL(porDia[dia].reduce((s,d)=>s+(parseFloat(String(d.valor||0))||0),0)))}</span>
+          </div>
+          <table>
+            <thead><tr><th>Empresa</th><th>Unidade</th><th>Evento</th><th class="num">Pax</th><th class="num">Valor</th><th>Cardápio</th><th>Vendedor</th></tr></thead>
+            <tbody>
+              ${porDia[dia].map(d => {
+                const pax = parseInt(String(d.qtd_pessoas||'0').replace(/[^0-9]/g,''))||0
+                return `<tr>
+                  <td>${esc(d.empresa||d.titulo)}</td>
+                  <td>${esc((d.unidade_nome||'').split(',')[0]||'—')}</td>
+                  <td>${esc(fmtDate(d.data_evento))}</td>
+                  <td class="num">${pax || '—'}</td>
+                  <td class="num">${esc(fmtBRL(d.valor))}</td>
+                  <td>${esc(d.cardapio_nome||'—')}</td>
+                  <td>${esc(d.vendedor||'—')}</td>
+                </tr>`
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `).join('')}
+    </body></html>`
+
+    const iframe = document.createElement('iframe')
+    iframe.style.position = 'fixed'; iframe.style.right = '0'; iframe.style.bottom = '0'
+    iframe.style.width = '0'; iframe.style.height = '0'; iframe.style.border = '0'
+    document.body.appendChild(iframe)
+    const doc = iframe.contentWindow?.document
+    if (!doc) { document.body.removeChild(iframe); alert('Não consegui preparar a impressão — tenta de novo.'); return }
+    doc.open(); doc.write(html); doc.close()
+    function limpar() { if (iframe.parentNode) document.body.removeChild(iframe) }
+    iframe.onload = () => { iframe.contentWindow?.focus(); iframe.contentWindow?.print() }
+    setTimeout(limpar, 4000)
+  }
+
   return (
     <div style={{ padding: '20px' }}>
       {selected && <DealModal deal={selected} onClose={() => setSelected(null)} />}
@@ -246,10 +326,16 @@ export default function Conversoes({ filtros }: { filtros: any }) {
           {loading ? 'Buscando...' : 'Buscar'}
         </button>
         {fetched && deals.length > 0 && (
-          <button onClick={() => exportarExcel(deals, inicio, fim)}
-            style={{ padding: '6px 14px', borderRadius: 20, border: '0.5px solid #E8E8E2', background: '#fff', fontSize: 12, cursor: 'pointer', color: '#5a5c5f' }}>
-            ↓ Exportar CSV
-          </button>
+          <>
+            <button onClick={() => exportarExcel(deals, inicio, fim)}
+              style={{ padding: '6px 14px', borderRadius: 20, border: '0.5px solid #E8E8E2', background: '#fff', fontSize: 12, cursor: 'pointer', color: '#5a5c5f' }}>
+              ↓ Exportar CSV
+            </button>
+            <button onClick={imprimir}
+              style={{ padding: '6px 14px', borderRadius: 20, border: '0.5px solid #E8E8E2', background: '#fff', fontSize: 12, cursor: 'pointer', color: '#5a5c5f' }}>
+              🖨 Imprimir
+            </button>
+          </>
         )}
       </div>
 
