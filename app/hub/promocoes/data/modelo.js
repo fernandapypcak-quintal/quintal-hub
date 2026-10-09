@@ -312,3 +312,117 @@ export const SEM_DETALHE = '__sem_detalhe__'
 export function chavePacoteUsado(p) {
   return p.detalhe && p.promocaoPacote ? chavePromo(p.promocaoPacote) : SEM_DETALHE
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// VISÃO UNIFICADA — uma linha por promoção/pacote (nome na ZIG)
+//
+// Junta os dois relatórios SEM contar nada duas vezes:
+//  • Reservas com detalhe ("Mais detalhes"): entram na linha do PACOTE USADO
+//    (ex.: PACOTE 03) com pessoas, receita e o custo de TUDO que consumiram.
+//  • Promoções Utilizadas: o consumo da promoção que NÃO aconteceu dentro
+//    dessas reservas ("fora de reserva") soma custo na linha da promoção;
+//    nas promoções de desconto, o que o cliente pagou soma receita.
+//  • Reservas ainda sem detalhe: linha à parte, só com receita/pessoas (o
+//    consumo delas já está no relatório de promoções).
+// ═══════════════════════════════════════════════════════════════════════
+function linhaVazia(k, nome) {
+  return {
+    k, nome, tipo: 'Pacote', semDetalhe: k === SEM_DETALHE,
+    n: 0, pessoas: 0, receitaRes: 0, custoRes: 0,
+    usosRel: 0, custoRel: 0, pagoRel: 0, cardapioRel: 0, usosSemCusto: 0,
+    usosDentro: 0, custoDentro: 0,
+    reservas: [], itensRel: [], casas: new Set(), dias: new Set(),
+  }
+}
+
+export function unificar({ pacotes, consumo, nomes }, filtro) {
+  const f = normFiltro(filtro)
+  const linhas = new Map()
+  const get = (k, nome) => { if (!linhas.has(k)) linhas.set(k, linhaVazia(k, nome)); return linhas.get(k) }
+  const dentro = new Map() // consumo de cada promoção que aconteceu dentro de reservas com detalhe
+
+  // Promoções do relatório no período (pra ligar reservas sem detalhe pelo nome)
+  const usoPorChave = new Map()
+  for (const c of consumo) if (passa(c, f)) usoPorChave.set(c.chave, (usoPorChave.get(c.chave) || 0) + c.usos)
+  const familiaDe = (nome) => { const c = categorizarPromocao(nome); return c && c !== 'Pacotes' ? c : null }
+  const melhorDaFamilia = new Map()
+  for (const [k, u] of usoPorChave) {
+    const fam = familiaDe(nomes.get(k) || k)
+    if (fam && (!melhorDaFamilia.has(fam) || u > usoPorChave.get(melhorDaFamilia.get(fam)))) melhorDaFamilia.set(fam, k)
+  }
+  const chaveProvisoria = (p) => {
+    if (usoPorChave.has(p.chave)) return p.chave
+    const fam = familiaDe(p.nome)
+    return fam ? melhorDaFamilia.get(fam) || null : null
+  }
+
+  for (const c of consumo) {
+    if (!passa(c, f)) continue
+    const r = get(c.chave, nomes.get(c.chave) || c.nome)
+    r.usosRel += c.usos; r.custoRel += c.custo; r.pagoRel += c.fatItens || 0; r.cardapioRel += c.cardapio || 0
+    if (!c.temCusto) r.usosSemCusto += c.usos
+    if (c.categoria === 'Desconto') r.tipo = 'Desconto'
+    r.itensRel.push(c); r.casas.add(c.unit); if (c.data) r.dias.add(c.data)
+  }
+
+  for (const p of pacotes) {
+    if (!passa(p, f)) continue
+    const temDet = p.detalhe && p.promocaoPacote
+    // Sem detalhe ainda: liga pelo nome (igual, ou mesma família: C&C, All Inclusive, Rodízio)
+    const kProv = !temDet ? chaveProvisoria(p) : null
+    const r = temDet ? get(chavePromo(p.promocaoPacote), p.promocaoPacote)
+      : kProv ? get(kProv, nomes.get(kProv) || kProv)
+      : get(SEM_DETALHE, 'Reservas ainda sem detalhe')
+    if (kProv) r.provisorias = (r.provisorias || 0) + 1
+    r.n++; r.pessoas += p.pessoas; r.receitaRes += p.fat; r.reservas.push(p); r.casas.add(p.unit); r.dias.add(p.data)
+    if (temDet) {
+      r.custoRes += p.custoExato || 0
+      for (const it of p.itens || []) {
+        if (!it.promocao) continue
+        const kk = chavePromo(it.promocao)
+        const d = dentro.get(kk) || { qtd: 0, custo: 0 }
+        d.qtd += it.qtd; d.custo += it.custo
+        dentro.set(kk, d)
+      }
+    }
+  }
+
+  for (const r of linhas.values()) {
+    const d = dentro.get(r.k) || { qtd: 0, custo: 0 }
+    r.usosDentro = d.qtd
+    r.custoDentro = d.custo
+    r.usosFora = Math.max(0, r.usosRel - d.qtd)
+    r.custoFora = Math.max(0, r.custoRel - d.custo)
+    r.receita = r.receitaRes + r.pagoRel
+    r.custo = r.semDetalhe ? null : r.custoRes + r.custoFora
+    r.temCusto = !r.semDetalhe && (r.custoRes > 0 || r.usosRel > 0)
+    r.cmv = r.temCusto && r.receita > 0 ? r.custo / r.receita : null
+    r.margem = r.temCusto ? r.receita - r.custo : null
+    r.ticket = r.pessoas ? r.receitaRes / r.pessoas : null
+    r.margemPessoa = r.margem != null && r.pessoas ? r.margem / r.pessoas : null
+    // campos que o StatusTag entende
+    r.fat = r.receita; r.usos = r.temCusto ? 1 : 0
+    r.nCasas = r.casas.size; r.nDias = r.dias.size
+  }
+  return linhas
+}
+
+// Soma de várias linhas unificadas (total do período / casa / dia)
+export function totalUnificado(linhas, fatTotal = null) {
+  const t = { n: 0, pessoas: 0, receita: 0, receitaRes: 0, custo: 0, custoConhecido: 0, receitaComCusto: 0, semDetalheReceita: 0, usosSemCusto: 0, usosRel: 0 }
+  for (const r of linhas.values ? linhas.values() : linhas) {
+    t.n += r.n; t.pessoas += r.pessoas; t.receita += r.receita; t.receitaRes += r.receitaRes
+    t.usosSemCusto += r.usosSemCusto; t.usosRel += r.usosRel
+    if (r.semDetalhe) t.semDetalheReceita += r.receita
+    else { t.custo += r.custo || 0; t.receitaComCusto += r.receita }
+  }
+  // CMV do período: custo de tudo ÷ receita de tudo (inclusive das reservas sem
+  // detalhe — o consumo delas já está no custo "fora de reserva")
+  t.cmv = t.receita > 0 && t.custo > 0 ? t.custo / t.receita : null
+  t.margem = t.receita - t.custo
+  t.ticket = t.pessoas ? t.receitaRes / t.pessoas : null
+  t.peso = fatTotal ? t.receita / fatTotal : null
+  t.cobertura = t.usosRel ? 1 - t.usosSemCusto / t.usosRel : null
+  t.fat = t.receita; t.usos = t.custo > 0 ? 1 : 0
+  return t
+}
