@@ -174,8 +174,49 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
     abrirImpressao(html)
   }
 
+  function imprimirGeral() {
+    if (!dados || !dados.geralAno) return
+    const g = dados.geralAno
+    const delta = g.acumuladoAnterior > 0 ? ((g.acumuladoAtual - g.acumuladoAnterior) / g.acumuladoAnterior) * 100 : null
+    const deltaQtd = g.qtdAnterior > 0 ? ((g.qtdAtual - g.qtdAnterior) / g.qtdAnterior) * 100 : null
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Geral do ano — Fechamento</title>
+      <style>
+        * { box-sizing: border-box; }
+        @page { margin: 15mm; }
+        body { font-family: Arial, Helvetica, sans-serif; color: #222; margin: 0; }
+        h1 { font-size: 18px; margin: 0 0 6px; }
+        h2 { font-size: 11px; color: #888; margin: 18px 0 6px; text-transform: uppercase; }
+        .sub { font-size: 12px; color: #888; margin-bottom: 20px; }
+        .anos { display: flex; gap: 40px; align-items: baseline; }
+        .ano-label { font-size: 12px; color: #888; }
+        .ano-valor { font-size: 26px; font-weight: 700; margin-top: 2px; }
+        .ano-valor.qtd { font-size: 18px; }
+        .delta { font-size: 13px; font-weight: 700; padding: 5px 14px; border-radius: 20px; margin-left: 10px; }
+      </style>
+    </head><body>
+      <h1>Geral do ano · Fechamento</h1>
+      <div class="sub">Acumulado de 01/jan até ${esc(fmtDataBR(g.corteData))} (ontem), nos dois anos — comparação de ritmo, dia equivalente.</div>
+      <div class="anos">
+        <div><div class="ano-label">${esc(String(dados.anoAnterior))}</div><div class="ano-valor" style="color:#8a8c8f;">${esc(fmt(g.acumuladoAnterior))}</div></div>
+        <div><div class="ano-label">${esc(String(dados.anoAtual))}</div><div class="ano-valor" style="color:#185FA5;">${esc(fmt(g.acumuladoAtual))}</div></div>
+        ${delta !== null ? `<span class="delta" style="background:${delta>=0?'#eaf3de':'#fdeaea'};color:${delta>=0?'#3B6D11':'#a32d2d'};">${delta>=0?'↑':'↓'} ${Math.abs(delta).toFixed(1)}%</span>` : ''}
+      </div>
+      <h2>Nº de negócios</h2>
+      <div class="anos">
+        <div><div class="ano-label">${esc(String(dados.anoAnterior))}</div><div class="ano-valor qtd" style="color:#8a8c8f;">${g.qtdAnterior}</div></div>
+        <div><div class="ano-label">${esc(String(dados.anoAtual))}</div><div class="ano-valor qtd" style="color:#185FA5;">${g.qtdAtual}</div></div>
+        ${deltaQtd !== null ? `<span class="delta" style="background:${deltaQtd>=0?'#eaf3de':'#fdeaea'};color:${deltaQtd>=0?'#3B6D11':'#a32d2d'};">${deltaQtd>=0?'↑':'↓'} ${Math.abs(deltaQtd).toFixed(1)}%</span>` : ''}
+        <span style="font-size:12px;color:#888;align-self:center;">(${g.diferencaQtd>=0?'+':''}${g.diferencaQtd} negócios)</span>
+      </div>
+    </body></html>`
+    abrirImpressao(html)
+  }
+
   const deltaGeral = dados && dados.geralAno && dados.geralAno.acumuladoAnterior > 0
     ? ((dados.geralAno.acumuladoAtual - dados.geralAno.acumuladoAnterior) / dados.geralAno.acumuladoAnterior) * 100
+    : null
+  const deltaGeralQtd = dados && dados.geralAno && dados.geralAno.qtdAnterior > 0
+    ? ((dados.geralAno.qtdAtual - dados.geralAno.qtdAnterior) / dados.geralAno.qtdAnterior) * 100
     : null
 
   // Checa a forma da resposta antes de usar — se o backend ainda estiver
@@ -192,9 +233,12 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
       {/* Geral do ano */}
       {dados && dados.geralAno && (
         <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>Geral do ano · Fechamento</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap', gap: 10 }}>
+            <span style={{ fontSize: 15, fontWeight: 700 }}>Geral do ano · Fechamento</span>
+            <button onClick={imprimirGeral} style={botaoPill}>🖨 Imprimir</button>
+          </div>
           <div style={{ fontSize: 11, color: '#9a9c9f', marginBottom: 14 }}>Acumulado de 01/jan até {fmtDataBR(dados.geralAno.corteData)} (ontem), nos dois anos — comparação de ritmo, dia equivalente.</div>
-          <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'baseline' }}>
+          <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'baseline', marginBottom: 16 }}>
             <div>
               <div style={{ fontSize: 11, color: '#9a9c9f' }}>{dados.anoAnterior}</div>
               <div style={{ fontSize: 20, fontWeight: 700, fontFamily: 'DM Mono, monospace', color: '#8a8c8f' }}>{fmt(dados.geralAno.acumuladoAnterior)}</div>
@@ -208,6 +252,24 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
                 {deltaGeral >= 0 ? '↑' : '↓'} {Math.abs(deltaGeral).toFixed(1)}%
               </span>
             )}
+          </div>
+          <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'baseline', paddingTop: 14, borderTop: '0.5px solid #F0F0EC' }}>
+            <div>
+              <div style={{ fontSize: 11, color: '#9a9c9f' }}>{dados.anoAnterior} · Nº de negócios</div>
+              <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'DM Mono, monospace', color: '#8a8c8f' }}>{dados.geralAno.qtdAnterior}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: '#9a9c9f' }}>{dados.anoAtual} · Nº de negócios</div>
+              <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'DM Mono, monospace', color: '#185FA5' }}>{dados.geralAno.qtdAtual}</div>
+            </div>
+            {deltaGeralQtd !== null && (
+              <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 20, background: deltaGeralQtd >= 0 ? '#eaf3de' : '#fdeaea', color: deltaGeralQtd >= 0 ? '#3B6D11' : '#a32d2d' }}>
+                {deltaGeralQtd >= 0 ? '↑' : '↓'} {Math.abs(deltaGeralQtd).toFixed(1)}%
+              </span>
+            )}
+            <span style={{ fontSize: 12, color: '#9a9c9f' }}>
+              ({dados.geralAno.diferencaQtd >= 0 ? '+' : ''}{dados.geralAno.diferencaQtd} negócios)
+            </span>
           </div>
         </div>
       )}
