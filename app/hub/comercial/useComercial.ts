@@ -379,7 +379,10 @@ export type FechamentoDiarioData = {
   blocos: BlocoFD[]
   totalGeralAtual: { qtd: number; valor: number }; totalGeralAnterior: { qtd: number; valor: number }
   diferencaGeral: { qtd: number; valor: number }
-  geralAno: { corteData: string; acumuladoAtual: number; acumuladoAnterior: number; diferenca: number }
+  geralAno: {
+    corteData: string; acumuladoAtual: number; acumuladoAnterior: number; diferenca: number
+    qtdAtual: number; qtdAnterior: number; diferencaQtd: number
+  }
 }
 
 export function useFechamentoDiarioCompetencia(
