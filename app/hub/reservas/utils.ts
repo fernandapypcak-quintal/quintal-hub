@@ -187,17 +187,35 @@ export function projetarMes(linhas: Linha[], hoje: string, peso: (r: Linha) => n
 // ─── Meta semanal (bônus) ─────────────────────────────────────────────────
 const normNome = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase()
 
-// Meta da semana (segunda) para a operadora: a linha mais recente com início até aquela semana;
+// Semanas do bônus: blocos de 7 dias dentro do mês (1–7, 8–14, 15–21, 22–28, 29–fim).
+export function semanaDoMes(iso: string) {
+  const mes = iso.slice(0, 7)
+  const bloco = Math.floor((Number(iso.slice(8, 10)) - 1) / 7)
+  const ini = `${mes}-${String(bloco * 7 + 1).padStart(2, '0')}`
+  const fimBloco = addDias(ini, 6)
+  const fim = fimBloco > ultimoDia(mes) ? ultimoDia(mes) : fimBloco
+  return { ini, fim, dias: diffDias(ini, fim) + 1, numero: bloco + 1 }
+}
+export const semanaAnterior = (ini: string) => semanaDoMes(addDias(ini, -1))
+export const semanaSeguinte = (ini: string) => semanaDoMes(addDias(semanaDoMes(ini).fim, 1))
+
+// Meta de uma semana do mês para a operadora: a linha mais recente que já valia até o fim da semana;
 // meta própria da operadora tem prioridade sobre a geral (operador vazio).
-export function metaSemanalDe(metas: MetaSemanal[], operador: string, semana: string) {
-  const validas = (metas || []).filter(m => segunda(m.inicio) <= semana).sort((a, b) => a.inicio.localeCompare(b.inicio))
+// Semana curta (29–fim do mês): faixas proporcionais aos dias (× dias/7). Sempre arredondado para baixo.
+export function metaSemanalDe(metas: MetaSemanal[], operador: string, ini: string) {
+  const sem = semanaDoMes(ini)
+  const validas = (metas || []).filter(m => m.inicio <= sem.fim).sort((a, b) => a.inicio.localeCompare(b.inicio))
   const alvo = normNome(operador)
   const propria = validas.filter(m => m.operador && normNome(m.operador) === alvo).pop()
   const geral = validas.filter(m => !m.operador).pop()
   const m = propria || geral
   if (!m) return null
   const pcts = m.pcts.length ? m.pcts : [100, 120, 140]
-  return { base: m.base, pcts, faixas: pcts.map(p => Math.floor((m.base * p) / 100)), propria: !!propria }
+  const fator = sem.dias / 7
+  return {
+    base: m.base, pcts, propria: !!propria, curta: sem.dias < 7, dias: sem.dias,
+    faixas: pcts.map(p => Math.floor((m.base * p * fator) / 100)),
+  }
 }
 
 // ─── Agregações ─────────────────────────────────────────────────────────
