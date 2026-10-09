@@ -19,15 +19,13 @@ import Operadores from './abas/Operadores'
 import OcasioesStatus from './abas/OcasioesStatus'
 import Calendario from './abas/Calendario'
 import PorCasa from './abas/PorCasa'
-import Bonus from './abas/Bonus'
 
-type Aba = 'resumo' | 'operadores' | 'bonus' | 'ocasioes' | 'calendario' | 'casas'
+type Aba = 'resumo' | 'operadores' | 'ocasioes' | 'calendario' | 'casas'
 type Base = 'criacao' | 'semana' | 'reserva'
 const ABAS: { id: Aba; icon: string; label: string; curto: string; base: Base }[] = [
   { id: 'resumo', icon: '🏠', label: 'Resumo', curto: 'Resumo', base: 'criacao' },
   { id: 'operadores', icon: '🧑‍💼', label: 'Operadores', curto: 'Operad.', base: 'criacao' },
   { id: 'ocasioes', icon: '🎉', label: 'Ocasiões e status', curto: 'Ocasiões', base: 'criacao' },
-  { id: 'bonus', icon: '🏆', label: 'Bônus semanal', curto: 'Bônus', base: 'semana' },
   { id: 'calendario', icon: '📅', label: 'Calendário', curto: 'Agenda', base: 'reserva' },
   { id: 'casas', icon: '🏪', label: 'Por casa', curto: 'Casas', base: 'reserva' },
 ]
@@ -127,11 +125,10 @@ export default function ReservasClientApp() {
     <div key={versao} style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 1440, margin: '0 auto' }}>
       {erro && <Aviso>{erro}</Aviso>}
       {aba === 'resumo' && <Resumo config={config} filtros={filtros} periodo={periodo} grao={grao} setGrao={setGrao} hoje={hoje} />}
-      {aba === 'operadores' && <Operadores config={config} filtros={filtros} periodo={periodo} />}
+      {aba === 'operadores' && <Operadores config={config} filtros={filtros} periodo={periodo} hoje={hoje} />}
       {aba === 'ocasioes' && <OcasioesStatus config={config} filtros={filtros} periodo={periodo} />}
       {aba === 'calendario' && <Calendario config={config} filtros={filtros} hoje={hoje} />}
       {aba === 'casas' && <PorCasa config={config} filtros={filtros} hoje={hoje} />}
-      {aba === 'bonus' && <Bonus config={config} hoje={hoje} />}
       <div style={{ fontSize: 11.5, color: '#888', lineHeight: 1.6 }}>
         As reservas se dividem em 3 origens que somam o total: <b>Time de reservas</b> (operadores da aba OPERADORES, contam na meta) ·{' '}
         <b>Online</b> (app, link e Google) · <b>Corporativo / outros</b> (demais operadores: eventos e não cadastrados). <b>B2B</b> = origem Pipe ou ocasião corporativa.{' '}
