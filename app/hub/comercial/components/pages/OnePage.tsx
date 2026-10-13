@@ -870,17 +870,23 @@ function PainelDesempenho({ filtros, mesFiltro }: { filtros: any; mesFiltro: str
 
   // Pacotes: base competência (mesmo critério do painel geral de pacotes —
   // "o que vendemos pra acontecer nesse período", não "o que foi criado nesse período")
-  const pacotesMap: Record<string, { pacote: string; qtd: number; receita: number; clientes: DealGranular[] }> = {}
+  const pacotesMap: Record<string, { pacote: string; qtd: number; receita: number; pax: number; clientes: DealGranular[] }> = {}
   ;(linhaAtiva?.competencia?.deals || []).forEach(d => {
     const nome = String(d.cardapio_nome || 'Não informado').trim()
-    if (!pacotesMap[nome]) pacotesMap[nome] = { pacote: nome, qtd: 0, receita: 0, clientes: [] }
+    if (!pacotesMap[nome]) pacotesMap[nome] = { pacote: nome, qtd: 0, receita: 0, pax: 0, clientes: [] }
     pacotesMap[nome].qtd++
     pacotesMap[nome].receita += parseFloat(String(d.valor)) || 0
+    pacotesMap[nome].pax += parseInt(String(d.qtd_pessoas||'0').replace(/[^0-9]/g,'')) || 0
     pacotesMap[nome].clientes.push(d)
   })
   const receitaTotalPacotes = Object.values(pacotesMap).reduce((s,p) => s+p.receita, 0) || 1
   const pacotesAtivos = Object.values(pacotesMap)
-    .map(p => ({ ...p, ticketMedio: p.qtd ? Math.round(p.receita/p.qtd) : 0, pctFaturamento: parseFloat(((p.receita/receitaTotalPacotes)*100).toFixed(1)) }))
+    .map(p => ({
+      ...p,
+      ticketMedio: p.qtd ? Math.round(p.receita/p.qtd) : 0,
+      ticketMedioPax: p.pax ? Math.round(p.receita/p.pax) : 0,
+      pctFaturamento: parseFloat(((p.receita/receitaTotalPacotes)*100).toFixed(1)),
+    }))
     .sort((a,b) => b.receita - a.receita)
   const maxPacoteReceita = Math.max(...pacotesAtivos.map(p => p.receita), 1)
 
@@ -963,16 +969,16 @@ function PainelDesempenho({ filtros, mesFiltro }: { filtros: any; mesFiltro: str
           </div>
         </div>
         <div style={{ fontSize: 11, color: '#9a9c9f', marginBottom: 14 }}>Clique num par de barras pra ver os pacotes vendidos (competência) naquele período.</div>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: 200, overflowX: 'auto', paddingBottom: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 18, height: 200, overflowX: 'auto', paddingBottom: 8 }}>
           {linhas.map(l => {
             const valFech = metricaTicket === 'pax' ? (l.fechamento?.ticketMedioPax||0) : (l.fechamento?.ticketMedio||0)
             const valComp = metricaTicket === 'pax' ? (l.competencia?.ticketMedioPax||0) : (l.competencia?.ticketMedio||0)
             return (
             <div key={l.periodo} onClick={() => setSelecionado(l.periodo)}
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 68, flex: '1 0 68px', cursor: 'pointer' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 160 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end' }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: '#185FA5', fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(valFech)}</span>
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 112, flex: '1 0 112px', cursor: 'pointer' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 160 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', minWidth: 52 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#185FA5', fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap' }}>{fmtBRLCompacto(valFech)}</span>
                   <div style={{
                     width: 22, height: `${Math.max((valFech/maxTicket)*130,3)}px`,
                     background: l.periodo === periodoAtivo ? '#0d3b66' : '#185FA5',
@@ -980,8 +986,8 @@ function PainelDesempenho({ filtros, mesFiltro }: { filtros: any; mesFiltro: str
                     borderRadius: '4px 4px 0 0',
                   }} />
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end' }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: '#3B6D11', fontFamily: 'DM Mono, monospace' }}>{fmtBRLCompacto(valComp)}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', minWidth: 52 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#3B6D11', fontFamily: 'DM Mono, monospace', whiteSpace: 'nowrap' }}>{fmtBRLCompacto(valComp)}</span>
                   <div style={{
                     width: 22, height: `${Math.max((valComp/maxTicket)*130,3)}px`,
                     background: l.periodo === periodoAtivo ? '#254d0a' : '#97A624',
@@ -997,8 +1003,20 @@ function PainelDesempenho({ filtros, mesFiltro }: { filtros: any; mesFiltro: str
 
         {/* Pacotes do período selecionado */}
         <div style={{ marginTop: 20, paddingTop: 16, borderTop: '0.5px solid #E8E8E2' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Pacotes vendidos (competência) {linhaAtiva ? `· ${linhaAtiva.label}` : ''} <span style={{ fontWeight: 400, color: '#9a9c9f', fontSize: 11 }}>(barra = peso no faturamento do período · clique pra ver os clientes)</span></div>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>Pacotes vendidos (competência) {linhaAtiva ? `· ${linhaAtiva.label}` : ''}</div>
+          <div style={{ fontSize: 11, color: '#9a9c9f', marginBottom: 12 }}>Barra = peso no faturamento do período · clique pra ver os clientes. Ticket médio abaixo segue o toggle "Por evento / Por pessoa" acima.</div>
           {pacotesAtivos.length === 0 && <div style={{ fontSize: 13, color: '#9a9c9f' }}>Nenhum pacote vendido nesse período.</div>}
+          {pacotesAtivos.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, padding: '0 0 4px' }}>
+              <span style={{ width: 12, flexShrink: 0 }} />
+              <div style={{ width: 150, flexShrink: 0 }} />
+              <div style={{ flex: 1 }} />
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', width: 55, textAlign: 'right', flexShrink: 0 }}>Qtd</div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', width: 50, textAlign: 'right', flexShrink: 0 }}>Pax</div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', width: 90, textAlign: 'right', flexShrink: 0 }}>Receita</div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', width: 90, textAlign: 'right', flexShrink: 0 }}>Tkt méd. {metricaTicket === 'pax' ? '/pessoa' : '/evento'}</div>
+            </div>
+          )}
           {pacotesAtivos.map(p => (
             <div key={p.pacote} style={{ marginBottom: 8 }}>
               <div onClick={() => setPacoteAberto(pacoteAberto === p.pacote ? null : p.pacote)}
@@ -1009,8 +1027,11 @@ function PainelDesempenho({ filtros, mesFiltro }: { filtros: any; mesFiltro: str
                   <div style={{ height: '100%', width: `${Math.max((p.receita/maxPacoteReceita)*100,5)}%`, background: '#7d5ac9', borderRadius: 5, display: 'flex', alignItems: 'center', paddingLeft: 8, fontSize: 11, fontWeight: 700, color: '#fff', fontFamily: 'DM Mono, monospace' }}>{p.pctFaturamento}%</div>
                 </div>
                 <div style={{ fontSize: 12, fontFamily: 'DM Mono, monospace', color: '#5a5c5f', width: 55, textAlign: 'right', flexShrink: 0 }}>{p.qtd}x</div>
+                <div style={{ fontSize: 12, fontFamily: 'DM Mono, monospace', color: '#5a5c5f', width: 50, textAlign: 'right', flexShrink: 0 }}>{p.pax || '—'}</div>
                 <div style={{ fontSize: 12, fontFamily: 'DM Mono, monospace', color: '#5a5c5f', width: 90, textAlign: 'right', flexShrink: 0 }}>{fmtBRLCompacto(p.receita)}</div>
-                <div style={{ fontSize: 11, fontFamily: 'DM Mono, monospace', color: '#9a9c9f', width: 80, textAlign: 'right', flexShrink: 0 }}>tkt {fmtBRLCompacto(p.ticketMedio)}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, fontFamily: 'DM Mono, monospace', color: '#3a3c3f', width: 90, textAlign: 'right', flexShrink: 0 }}>
+                  {fmtBRLCompacto(metricaTicket === 'pax' ? p.ticketMedioPax : p.ticketMedio)}
+                </div>
               </div>
               {pacoteAberto === p.pacote && (
                 <div style={{ marginLeft: 22, marginTop: 6, marginBottom: 4, background: '#FAFAF8', border: '0.5px solid #E8E8E2', borderRadius: 8, padding: '8px 12px' }}>
