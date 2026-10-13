@@ -24,6 +24,7 @@ export const DASHBOARDS: Dashboard[] = [
   { id: 'gorjeta', name: 'Gorjeta', description: 'Distribuição de gorjeta por unidade — Adiantamento e Mensal', url: '', internalPath: '/hub/gorjeta', color: '#97A624', icon: '💰' },
   { id: 'reservas', name: 'Reservas', description: 'Meta do time de reservas, reservas por dia, operadoras e agenda das casas', url: '', internalPath: '/hub/reservas', color: '#0F766E', icon: '📅' },
   { id: 'caixa-forecast', name: 'Painel de Caixa & Forecast', description: 'Fluxo de caixa realizado e projetado 2026 por casa, Holding, orçamento e caixa diário', url: '', internalPath: '/hub/caixa-forecast', color: '#2A3E10', icon: '📊' },
+  { id: 'fluxo-pagamentos', name: 'Fluxo de Pagamentos', description: 'Pagamentos operacionais por dia — o que já foi pago e o que está projetado pra pagar', url: '', internalPath: '/hub/fluxo-pagamentos', color: '#B45309', icon: '💸' },
 ]
 
 // Sub-permissões: não são dashboards próprios (não aparecem como card no
