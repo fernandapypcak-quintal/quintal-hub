@@ -23,6 +23,7 @@ export const DASHBOARDS: Dashboard[] = [
   { id: 'vendas', name: 'Vendas por Produto', description: 'Vendas diárias ZIG por produto, SKU, loja e canal', url: '', internalPath: '/hub/vendas', color: '#15803D', icon: '🍢' },
   { id: 'gorjeta', name: 'Gorjeta', description: 'Distribuição de gorjeta por unidade — Adiantamento e Mensal', url: '', internalPath: '/hub/gorjeta', color: '#97A624', icon: '💰' },
   { id: 'reservas', name: 'Reservas', description: 'Meta do time de reservas, reservas por dia, operadoras e agenda das casas', url: '', internalPath: '/hub/reservas', color: '#0F766E', icon: '📅' },
+  { id: 'caixa-forecast', name: 'Painel de Caixa & Forecast', description: 'Fluxo de caixa realizado e projetado 2026 por casa, Holding, orçamento e caixa diário', url: '', internalPath: '/hub/caixa-forecast', color: '#2A3E10', icon: '📊' },
 ]
 
 // Sub-permissões: não são dashboards próprios (não aparecem como card no
