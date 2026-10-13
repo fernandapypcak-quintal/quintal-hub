@@ -2,14 +2,15 @@
 // Serve o Painel de Caixa & Forecast já com os dados.
 // - checa login + permissão do dashboard 'caixa-forecast' (o HTML tem números de todas as casas,
 //   então NÃO fica em /public)
-// - lê o template lib/caixa-forecast/painel.html (HTML original, só com os JSON trocados por
+// - usa o template lib/caixa-forecast/painel.ts (HTML original, só com os JSON trocados por
 //   __CF_DATA__["NOME"]) e injeta os dados numa <script> no <head>
+// - template e snapshot entram no bundle via import (nada é lido do disco em tempo de execução)
 // - dados: lib/caixa-forecast/dados.json (snapshot). Se CAIXA_FORECAST_GAS_URL estiver configurada,
 //   as chaves que o Apps Script devolver substituem as do snapshot (dá pra migrar bloco a bloco).
 
-import { readFile } from 'node:fs/promises'
-import path from 'node:path'
 import { getUserAccess, hasDashboardAccess } from '@/lib/permissions'
+import PAINEL_HTML from '@/lib/caixa-forecast/painel'
+import SNAPSHOT from '@/lib/caixa-forecast/dados.json'
 
 // Opcional (Vercel > Settings > Environment Variables):
 //   CAIXA_FORECAST_GAS_URL -> URL /exec do Web App que devolve { ok: true, dados: { DATA: ..., PROJ: ... } }
@@ -19,18 +20,6 @@ const GAS_KEY = process.env.CAIXA_FORECAST_GAS_KEY || ''
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
-
-const DIR = path.join(process.cwd(), 'lib', 'caixa-forecast')
-let templateCache: string | null = null
-let snapshotCache: Record<string, unknown> | null = null
-
-async function carregarBase(): Promise<{ template: string; snapshot: Record<string, unknown> }> {
-  const template = templateCache ?? await readFile(path.join(DIR, 'painel.html'), 'utf8')
-  const snapshot = snapshotCache ?? JSON.parse(await readFile(path.join(DIR, 'dados.json'), 'utf8'))
-  templateCache = template
-  snapshotCache = snapshot
-  return { template, snapshot }
-}
 
 async function dadosDoGas(): Promise<Record<string, unknown> | null> {
   if (!GAS_URL) return null
@@ -58,7 +47,8 @@ export async function GET() {
   if (!hasDashboardAccess(access, 'caixa-forecast')) return pagina('Sem acesso', 'Você não tem acesso a este painel.', 403)
 
   try {
-    const { template, snapshot } = await carregarBase()
+    const template = PAINEL_HTML
+    const snapshot = SNAPSHOT as Record<string, unknown>
     const doGas = await dadosDoGas()
     const dados = doGas ? { ...snapshot, ...doGas } : snapshot
 
