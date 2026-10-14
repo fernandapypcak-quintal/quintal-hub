@@ -60,17 +60,23 @@ function PainelProjecaoConversao({ filtros }: { filtros: any }) {
 
       {historico.length > 0 && (
         <div style={{ borderTop: '0.5px solid #F0F0EC', paddingTop: 12 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 90px 90px', gap: 8, fontSize: 10, fontWeight: 600, color: '#9a9c9f', textTransform: 'uppercase', marginBottom: 6 }}>
-            <span>Mês</span><span>Leads</span><span>Atual</span><span>Projetada</span>
+          <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 90px 90px 120px', gap: 8, fontSize: 10, fontWeight: 600, color: '#9a9c9f', textTransform: 'uppercase', marginBottom: 6 }}>
+            <span>Mês</span><span>Leads</span><span>Atual</span><span>Projetada</span><span>Como terminou</span>
           </div>
           {historico.map(s => (
-            <div key={s.mes} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 90px 90px', gap: 8, fontSize: 12, padding: '4px 0' }}>
+            <div key={s.mes} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 90px 90px 120px', gap: 8, fontSize: 12, padding: '4px 0' }}>
               <span style={{ fontWeight: 500 }}>{labelMes(s.mes)}</span>
               <span style={{ color: '#9a9c9f' }}>{s.leadsCriados}{!s.amostraSuficiente && <span style={{ color: '#c9855a' }}> (amostra pequena)</span>}</span>
               <span style={{ fontFamily: 'DM Mono, monospace' }}>{fmtPct(s.conversaoAtual)}</span>
               <span style={{ fontFamily: 'DM Mono, monospace', color: '#3B6D11', fontWeight: 600 }}>{s.conversaoProjetada !== null ? fmtPct(s.conversaoProjetada) : '—'}</span>
+              <span style={{ fontFamily: 'DM Mono, monospace', color: '#5a5c5f' }} title={`${s.ganhosNoMesmoMes} ganhos dentro do próprio mês`}>
+                {fmtPct(s.conversaoFimDoMes)}
+              </span>
             </div>
           ))}
+          <div style={{ fontSize: 10, color: '#c9c9c4', fontStyle: 'italic', marginTop: 6 }}>
+            "Como terminou" conta só os leads que fecharam dentro do próprio mês em que entraram — um número fixo, que não muda mais. "Atual" continua subindo com o tempo, conforme leads antigos ainda fecham (mesmo fora do mês original).
+          </div>
         </div>
       )}
 
