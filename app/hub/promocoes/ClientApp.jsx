@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Component, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import Sidebar from './components/layout/Sidebar'
 import BottomNav from './components/layout/BottomNav'
@@ -12,6 +12,26 @@ import Conferencia from './components/pages/Conferencia'
 import SimuladorPromocoesClientApp from '../simulador-promocoes/ClientApp'
 import { usePromocoesData } from './data/usePromocoesData'
 import { Carregando, Aviso, mesLabel } from './components/ui'
+
+// Se uma aba quebrar, mostra o erro na tela em vez de deixar a página em branco
+class LimiteDeErro extends Component {
+  constructor(p) { super(p); this.state = { erro: null } }
+  static getDerivedStateFromError(erro) { return { erro } }
+  componentDidCatch(erro, info) { console.error('[promocoes] erro na aba:', erro, info?.componentStack) }
+  componentDidUpdate(prev) { if (prev.chave !== this.props.chave && this.state.erro) this.setState({ erro: null }) }
+  render() {
+    if (this.state.erro) {
+      return (
+        <div className="p-6">
+          <div className="border border-red-100 bg-red-50 text-red-800 text-[12.5px] rounded-lg px-3 py-2">
+            Essa aba deu erro: <b>{String(this.state.erro?.message || this.state.erro)}</b>. Me manda um print disso.
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 const PAGES = {
   visao: VisaoGeral,
@@ -51,6 +71,10 @@ export default function PromocoesClientApp({ allowedLojas = '*' }) {
   }, [dados])
 
   const Page = PAGES[activePage]
+  // Ao trocar de aba ou de mês, volta pro topo (senão a rolagem da aba anterior
+  // pode deixar a nova aba "fora da tela", parecendo em branco)
+  const mainRef = useRef(null)
+  useEffect(() => { mainRef.current?.scrollTo?.(0, 0) }, [activePage, filtros.mes, filtros.unidade])
   const semFiltros = activePage === 'simulador'
 
   return (
@@ -96,9 +120,9 @@ export default function PromocoesClientApp({ allowedLojas = '*' }) {
           )}
         </div>
 
-        <main className="flex-1 overflow-y-auto pb-20 lg:pb-0">
+        <main ref={mainRef} className="flex-1 overflow-y-auto pb-20 lg:pb-0">
           {semFiltros ? (
-            <SimuladorPromocoesClientApp dados={dados} mostrarBarraVoltar={false} />
+            <LimiteDeErro chave="simulador"><SimuladorPromocoesClientApp dados={dados} mostrarBarraVoltar={false} /></LimiteDeErro>
           ) : loading || (dados && filtros.mes && dados.mesCarregado !== filtros.mes) ? (
             <Carregando />
           ) : erro ? (
@@ -108,9 +132,13 @@ export default function PromocoesClientApp({ allowedLojas = '*' }) {
           ) : filtros.mes ? (
             <>
               {avisoFaturamento && <div className="px-4 lg:px-6 pt-4"><Aviso>{avisoFaturamento}</Aviso></div>}
-              <Page dados={dados} filtros={filtros} />
+              <LimiteDeErro chave={activePage + filtros.mes + filtros.unidade}>
+                {Page ? <Page dados={dados} filtros={filtros} /> : null}
+              </LimiteDeErro>
             </>
-          ) : null}
+          ) : (
+            <Carregando />
+          )}
         </main>
       </div>
 
