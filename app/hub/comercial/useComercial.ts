@@ -319,6 +319,7 @@ export type SafraProjecao = {
   idadeMeses: number; madura: boolean
   conversaoAtual: number; conversaoProjetada: number | null
   amostraSuficiente: boolean
+  conversaoFimDoMes: number; ganhosNoMesmoMes: number
 }
 export type ProjecaoConversaoData = {
   curvaMaturacao: PontoCurvaMaturacao[]
