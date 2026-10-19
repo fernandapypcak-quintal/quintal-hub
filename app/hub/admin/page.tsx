@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { DASHBOARDS, SUB_PERMISSIONS } from '@/lib/dashboards'
 import { UNITS } from '@/lib/units'
+import { AREAS_CUSTOS } from '@/lib/bus'
 
 // ── Types ─────────────────────────────────────────────────────
 type User = {
@@ -13,6 +14,7 @@ type User = {
   last_sign_in: string | null
   permissao: string[] | '*'
   lojas: string[] | '*'
+  bus: string[] | '*'
   isAdmin: boolean
 }
 
@@ -70,6 +72,18 @@ function LojasBadge({ lojas }: { lojas: string[] | '*' }) {
           </span>
         )
       })}
+    </div>
+  )
+}
+
+function BusBadge({ bus }: { bus: string[] | '*' }) {
+  if (!bus || bus === '*') return null
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+      <span style={{ fontSize: 11, color: '#6e7a1a', fontWeight: 600, padding: '2px 0' }}>Custos, gestor de:</span>
+      {bus.map(b => (
+        <span key={b} style={{ background: '#f0f4e0', color: '#6e7a1a', fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20, border: '1px solid #d4dcae' }}>{b}</span>
+      ))}
     </div>
   )
 }
@@ -216,9 +230,18 @@ function ModalNovoUsuario({ onClose, onSave }: { onClose: () => void; onSave: (e
 }
 
 // ── Modal Editar Permissões ───────────────────────────────────
-function ModalEditarPermissoes({ user, onClose, onSave }: { user: User; onClose: () => void; onSave: (email: string, perm: string[] | '*', isAdmin: boolean, lojas: string[] | '*') => Promise<void> }) {
+function ModalEditarPermissoes({ user, onClose, onSave }: { user: User; onClose: () => void; onSave: (email: string, perm: string[] | '*', isAdmin: boolean, lojas: string[] | '*', bus: string[] | '*') => Promise<void> }) {
   const [perm,        setPerm]       = useState<string[] | '*'>(user.permissao)
   const [lojas,       setLojas]      = useState<string[] | '*'>(user.lojas)
+  const [bus,         setBus]        = useState<string[] | '*'>(user.bus ?? '*')
+  const toggleBu = (b: string) => {
+    if (bus === '*') return
+    setBus(prev => {
+      const arr = prev as string[]
+      return arr.includes(b) ? arr.filter(x => x !== b) : [...arr, b]
+    })
+  }
+  const temCustos = perm === '*' || (perm as string[]).includes('custos')
   const [isAdminUser, setIsAdminUser] = useState(user.isAdmin)
   const [loading,     setLoading]    = useState(false)
   const [erro,        setErro]       = useState('')
@@ -241,7 +264,8 @@ function ModalEditarPermissoes({ user, onClose, onSave }: { user: User; onClose:
 
   const handleSave = async () => {
     setLoading(true); setErro('')
-    try { await onSave(user.email, perm, isAdminUser, lojas); onClose() }
+    if (bus !== '*' && bus.length === 0) { setErro('Escolha pelo menos uma área ou marque "Dashboard de custos completo".'); setLoading(false); return }
+    try { await onSave(user.email, perm, isAdminUser, lojas, bus); onClose() }
     catch (e: any) { setErro(e.message) }
     finally { setLoading(false) }
   }
@@ -325,6 +349,34 @@ function ModalEditarPermissoes({ user, onClose, onSave }: { user: User; onClose:
           )}
         </div>
 
+        {/* Áreas do dashboard de custos */}
+        {temCustos && (
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 4 }}>Dashboard de custos</label>
+            <p style={{ fontSize: 11, color: '#888', margin: '0 0 8px', lineHeight: 1.5 }}>
+              Gestor de área vê só a página "Minha área" (notas, contas pagas, fixo e variável) das áreas marcadas.
+            </p>
+            <button onClick={() => setBus(bus === '*' ? [] : '*')}
+              style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: `2px solid ${bus === '*' ? '#97A624' : '#E0E0DA'}`, background: bus === '*' ? '#F5F8E8' : '#fff', marginBottom: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: bus === '*' ? '#4F6B14' : '#888', textAlign: 'left' }}>
+              {bus === '*' ? '★' : '☆'} Dashboard de custos completo
+            </button>
+            {bus !== '*' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                {AREAS_CUSTOS.map(b => {
+                  const sel = (bus as string[]).includes(b)
+                  return (
+                    <button key={b} onClick={() => toggleBu(b)}
+                      style={{ padding: '7px 10px', borderRadius: 8, border: `2px solid ${sel ? '#97A624' : '#E0E0DA'}`, background: sel ? '#F5F8E8' : '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: sel ? '#4F6B14' : '#888', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: sel ? '#97A624' : '#CCC', flexShrink: 0 }} />
+                      Gestor de {b}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {erro && <p style={{ fontSize: 12, color: '#C62828', marginBottom: 12 }}>{erro}</p>}
 
         <div style={{ display: 'flex', gap: 8 }}>
@@ -384,6 +436,7 @@ export default function AdminPage() {
         ...u,
         permissao: dataPerms.permissions?.[u.email] ?? [],
         lojas: dataPerms.lojasPermissions?.[u.email] ?? '*',
+        bus: dataPerms.busPermissions?.[u.email] ?? '*',
       }))
       setUsers(merged.sort((a, b) => a.email.localeCompare(b.email)))
     } catch (e: any) {
@@ -446,16 +499,16 @@ export default function AdminPage() {
   }
 
   // Salvar permissões no Supabase
-  const salvarPermissoes = async (email: string, perm: string[] | '*', isAdminUser?: boolean, lojas?: string[] | '*') => {
+  const salvarPermissoes = async (email: string, perm: string[] | '*', isAdminUser?: boolean, lojas?: string[] | '*', bus?: string[] | '*') => {
     const res = await fetch('/api/admin/permissions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, permissao: perm, isAdmin: isAdminUser ?? false, lojas: lojas ?? '*' }),
+      body: JSON.stringify({ email, permissao: perm, isAdmin: isAdminUser ?? false, lojas: lojas ?? '*', bus: bus ?? '*' }),
     })
     const data = await res.json()
     if (data.erro) throw new Error(data.erro)
     // Atualiza localmente
-    setUsers(prev => prev.map(u => u.email === email ? { ...u, permissao: perm, lojas: lojas ?? '*' } : u))
+    setUsers(prev => prev.map(u => u.email === email ? { ...u, permissao: perm, lojas: lojas ?? '*', bus: bus ?? '*' } : u))
     showToast(`✅ Permissões de ${email} salvas!`)
   }
 
@@ -523,6 +576,7 @@ export default function AdminPage() {
                   </div>
                   <div style={{ marginTop: 4 }}><PermBadge perm={u.permissao} /></div>
                   <div style={{ marginTop: 4 }}><LojasBadge lojas={u.lojas} /></div>
+                  {u.bus && u.bus !== '*' && <div style={{ marginTop: 4 }}><BusBadge bus={u.bus} /></div>}
                 </div>
 
                 {/* Último acesso */}
