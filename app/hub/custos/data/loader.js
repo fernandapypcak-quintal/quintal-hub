@@ -154,7 +154,10 @@ export async function loadTudo() {
       loadHistoricoUnificado(), loadHistoricoCatUnificado(),
       loadHistoricoDetalheTodos(), loadHistoricoBUUnificado(),
     ])
-    return { contas: parseContas(contasRows), historicoRaw: h, historicoCatRaw: hc, historicoDetRaw: hd, historicoBURaw: hbu }
+    const nfObj = await fetchObjeto('nf_resumo')
+    const busRows = await fetchTipo('bus')
+    return { contas: parseContas(contasRows), historicoRaw: h, historicoCatRaw: hc, historicoDetRaw: hd, historicoBURaw: hbu,
+             nfResumo: parseNFResumo(nfObj), bus: busRows }
   }
   return {
     contas:          parseContas(contasRows),
@@ -162,6 +165,72 @@ export async function loadTudo() {
     historicoCatRaw: parseHistoricoCatUnificado(raw.historico_cat_unificado),
     historicoDetRaw: parseHistoricoDetalheTodos(raw.historico_detalhe_todos),
     historicoBURaw:  parseHistoricoBUUnificado(raw.historico_bu_unificado),
+    // v27 — NFs (vem no mesmo "tudo", já cacheado no Apps Script)
+    nfResumo:        parseNFResumo(raw.nf_resumo),
+    bus:             Array.isArray(raw.bus) ? raw.bus : [],
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// v27 — NFs de entrada (MTR090) × pagamentos
+// ══════════════════════════════════════════════════════════════
+function parseNFResumo(r) {
+  if (!r || typeof r !== 'object' || r.erro) return null
+  const arr = x => Array.isArray(x) ? x : []
+  const num = x => Number(x || 0)
+  return {
+    meses:        arr(r.meses),
+    entrou:       arr(r.entrou).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
+    pago:         arr(r.pago).map(e => ({ ...e, valor: num(e.valor), valor_com_nf: num(e.valor_com_nf), qtd: num(e.qtd) })),
+    aberto:       arr(r.aberto).map(e => ({ ...e, valor: num(e.valor), vencido: num(e.vencido), qtd: num(e.qtd), qtd_vencido: num(e.qtd_vencido) })),
+    agenda:       arr(r.agenda).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
+    pago_sem_nf:  arr(r.pago_sem_nf).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
+    fornecedores: arr(r.fornecedores).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
+    prazos:       arr(r.prazos),
+    sem_baixa:    num(r.sem_baixa),
+    qtd_sem_baixa: num(r.qtd_sem_baixa),
+    baixas_ate:   r.baixas_ate || '',
+    atualizado_em: r.atualizado_em || '',
+  }
+}
+
+async function fetchComParametros(params, timeoutMs = 30000) {
+  const url = `${APPS_SCRIPT_URL}?${new URLSearchParams(params).toString()}`
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const res = await fetch(url, { method:'GET', signal:controller.signal, redirect:'follow' })
+    clearTimeout(timer)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    if (data && data.erro) throw new Error(data.erro)
+    return data
+  } catch (e) {
+    clearTimeout(timer)
+    throw new Error(e.name === 'AbortError' ? 'O Apps Script demorou demais pra responder. Tenta de novo.' : e.message)
+  }
+}
+
+// Lista de notas. filtros: { mes: '2026-09', bu, status: 'aberto'|'Paga'|'Vencida'..., fornecedor }
+export async function loadNFLista(filtros = {}) {
+  const p = { tipo: 'nf_lista' }
+  Object.entries(filtros).forEach(([k, v]) => { if (v && v !== 'Todas') p[k] = v })
+  const data = await fetchComParametros(p)
+  return Array.isArray(data) ? data : []
+}
+
+// Tela de conciliação. mes: '2026-09' (vazio = tudo)
+export async function loadConciliacao(mes) {
+  const p = { tipo: 'conciliacao' }
+  if (mes) p.mes = mes
+  const data = await fetchComParametros(p, 45000)
+  const arr = x => Array.isArray(x) ? x : []
+  return {
+    nf_vencidas:  arr(data && data.nf_vencidas),
+    nf_sem_baixa: arr(data && data.nf_sem_baixa),
+    divergencias: arr(data && data.divergencias),
+    conflitos_bu: arr(data && data.conflitos_bu),
+    pago_sem_nf:  arr(data && data.pago_sem_nf),
   }
 }
 
@@ -177,6 +246,7 @@ const parseDetalheLancamentosBU = rows => (!rows||!Array.isArray(rows)) ? [] : r
   valor:        Number(r.valor || 0),
   vencto:       r.vencto       || '',
   dt_baixa:     r.dt_baixa     || '',
+  com_nf:       r.com_nf ? 1 : 0,
 }))
 
 // Registra a divergência de BU reportada pelo gestor (ex: "esse fornecedor
