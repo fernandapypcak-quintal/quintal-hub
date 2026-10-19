@@ -5,7 +5,7 @@ import { paginasVisiveis } from './navegacao.js'
 export default function BottomNav({ activePage, onPageChange, podeVerNF = false }) {
   const paginas = paginasVisiveis(podeVerNF).filter(p => !p.soDesktop)
   return (
-    <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '0.5px solid #E8E8E2', display: 'flex', zIndex: 50, paddingBottom: 'env(safe-area-inset-bottom)' }}>
+    <nav className="no-print" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '0.5px solid #E8E8E2', display: 'flex', zIndex: 50, paddingBottom: 'env(safe-area-inset-bottom)' }}>
       {paginas.map(p => (
         <button key={p.id} onClick={() => onPageChange(p.id)}
           aria-current={activePage === p.id ? 'page' : undefined}

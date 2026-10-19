@@ -1,16 +1,25 @@
-// v27 — páginas do dashboard de custos (Sidebar, BottomNav e ClientApp leem daqui)
-// grupo: 'nf' = notas + pagamentos por BU (visão do grupo, sem filtro de loja)
-//        'casa' = custos por loja (pagamentos)
+// v27.2 — páginas do dashboard de custos (Sidebar, BottomNav e ClientApp leem daqui)
+// grupo: 'gestao'     = report do CEO e páginas por área (cada página tem os próprios filtros)
+//        'casa'       = custos por loja (pagamentos)
+//        'bastidores' = detalhe das notas, prazos e pendências (manutenção do dado)
 // restrita: só aparece pra quem vê todas as lojas
+export const GRUPOS = [
+  { id: 'gestao',     label: 'Gestão' },
+  { id: 'casa',       label: 'Por casa' },
+  { id: 'bastidores', label: 'Bastidores' },
+]
+
 export const PAGINAS = [
-  { id: 'home',         icon: '🏠', label: 'Visão geral',    curto: 'Geral',    grupo: 'casa', titulo: 'Visão geral',          sub: 'Resumo do mês' },
-  { id: 'porbu',        icon: '🧩', label: 'Por BU',         curto: 'Por BU',   grupo: 'nf',   titulo: 'Custos por BU',        sub: 'Notas que entraram, o que foi pago e o que falta pagar', restrita: true },
-  { id: 'apagar',       icon: '📆', label: 'A pagar',        curto: 'A pagar',  grupo: 'nf',   titulo: 'A pagar',              sub: 'Notas em aberto e quando devem sair do caixa', restrita: true },
-  { id: 'fornecedores', icon: '🚚', label: 'Fornecedores',   curto: 'Fornec.',  grupo: 'nf',   titulo: 'Fornecedores',         sub: 'Prazo real de pagamento e volume de notas', restrita: true },
-  { id: 'conciliacao',  icon: '🔗', label: 'Conciliação',    curto: 'Concil.',  grupo: 'nf',   titulo: 'Conciliação',          sub: 'Notas sem pagamento, pagamentos sem nota e divergências', restrita: true, soDesktop: true },
-  { id: 'custos',       icon: '📌', label: 'Custo fixo',     curto: 'Fixo',     grupo: 'casa', titulo: 'Custo fixo',           sub: 'Por casa' },
-  { id: 'variavel',     icon: '🔄', label: 'Custo variável', curto: 'Variável', grupo: 'casa', titulo: 'Custo variável',       sub: 'Por casa' },
-  { id: 'evolucao',     icon: '📈', label: 'Evolução',       curto: 'Evolução', grupo: 'casa', titulo: 'Evolução histórica',   sub: 'Por casa' },
+  { id: 'home',         icon: '🏠', label: 'Visão geral',          curto: 'Geral',    grupo: 'inicio',     titulo: 'Visão geral',             sub: 'Resumo do mês' },
+  { id: 'report',       icon: '📊', label: 'Report do mês',        curto: 'Report',   grupo: 'gestao',     titulo: 'Report do mês',           sub: 'Custos do grupo por área, pro CEO', restrita: true },
+  { id: 'area',         icon: '🧩', label: 'Por área',             curto: 'Áreas',    grupo: 'gestao',     titulo: 'Por área',                sub: 'O que cada gestor vê na página dele', restrita: true },
+  { id: 'custos',       icon: '📌', label: 'Custo fixo',           curto: 'Fixo',     grupo: 'casa',       titulo: 'Custo fixo',              sub: 'Por casa' },
+  { id: 'variavel',     icon: '🔄', label: 'Custo variável',       curto: 'Variável', grupo: 'casa',       titulo: 'Custo variável',          sub: 'Por casa' },
+  { id: 'evolucao',     icon: '📈', label: 'Evolução',             curto: 'Evolução', grupo: 'casa',       titulo: 'Evolução histórica',      sub: 'Por casa' },
+  { id: 'porbu',        icon: '🗂️', label: 'Todas as áreas',       curto: 'Áreas+',   grupo: 'bastidores', titulo: 'Todas as áreas',          sub: 'Notas, pagamentos e aberto por área', restrita: true, soDesktop: true },
+  { id: 'apagar',       icon: '📆', label: 'A pagar',              curto: 'A pagar',  grupo: 'bastidores', titulo: 'A pagar',                 sub: 'Notas em aberto e quando devem sair do caixa', restrita: true, soDesktop: true },
+  { id: 'fornecedores', icon: '🚚', label: 'Fornecedores',         curto: 'Fornec.',  grupo: 'bastidores', titulo: 'Fornecedores',            sub: 'Prazo real de pagamento e volume de notas', restrita: true, soDesktop: true },
+  { id: 'conciliacao',  icon: '🔗', label: 'Pendências',           curto: 'Pend.',    grupo: 'bastidores', titulo: 'Pendências',              sub: 'Notas sem pagamento, pagamentos sem nota e divergências', restrita: true, soDesktop: true },
 ]
 
 export function paginasVisiveis(podeVerNF) {
