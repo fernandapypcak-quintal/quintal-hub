@@ -16,6 +16,9 @@ export type UserAccess = {
   email: string
   dashboards: string[] | '*'
   lojas: UnitId[] | '*'
+  // Áreas (BUs) do dashboard de custos. '*' = dashboard completo;
+  // lista = gestor de área, vê só a página "Minha área" dessas áreas.
+  bus: string[] | '*'
   isAdmin: boolean
 }
 
@@ -46,13 +49,23 @@ export async function getUserAccess(): Promise<UserAccess | null> {
 
   let dashboards: string[] | '*' = []
   let lojas: UnitId[] | '*' = '*' // sem linha configurada ainda = mantém comportamento anterior (todas as unidades)
+  let bus: string[] | '*' = '*'
 
   try {
-    const { data } = await getAdminClient()
+    // Tenta ler a coluna "bus"; se ela ainda não existir (migration não
+    // rodada), lê sem ela pra não derrubar o acesso de ninguém.
+    let { data, error } = await getAdminClient()
       .from('user_permissions')
-      .select('dashboards, lojas')
+      .select('dashboards, lojas, bus')
       .eq('email', email)
       .single()
+    if (error && /bus/i.test(error.message || '')) {
+      ;({ data } = await getAdminClient()
+        .from('user_permissions')
+        .select('dashboards, lojas')
+        .eq('email', email)
+        .single() as any)
+    }
 
     if (data?.dashboards?.includes('*')) dashboards = '*'
     else if (data?.dashboards?.length) dashboards = data.dashboards
@@ -65,9 +78,14 @@ export async function getUserAccess(): Promise<UserAccess | null> {
     } else if (Array.isArray(data.lojas)) {
       lojas = data.lojas.filter((id: string) => (ALL_UNIT_IDS as string[]).includes(id)) as UnitId[]
     }
+
+    const rawBus = (data as any)?.bus
+    if (Array.isArray(rawBus) && !rawBus.includes('*') && rawBus.length) {
+      bus = rawBus.map((b: any) => String(b))
+    }
   } catch {}
 
-  return { email, dashboards, lojas, isAdmin: ADMIN_USERS.includes(email) }
+  return { email, dashboards, lojas, bus, isAdmin: ADMIN_USERS.includes(email) }
 }
 
 export function hasDashboardAccess(access: UserAccess, dashboardId: string): boolean {
