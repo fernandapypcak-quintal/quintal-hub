@@ -125,7 +125,7 @@ function ModalNovoUsuario({ onClose, onSave }: { onClose: () => void; onSave: (e
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div style={{ background: '#fff', borderRadius: 16, padding: 28, width: '100%', maxWidth: 480, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+      <div style={{ background: '#fff', borderRadius: 16, padding: 28, paddingBottom: 0, width: '100%', maxWidth: 480, maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
         <h2 style={{ fontSize: 17, fontWeight: 700, color: '#0D0D0D', margin: '0 0 20px', letterSpacing: '-0.3px' }}>Novo usuário</h2>
 
         {/* Email */}
@@ -215,7 +215,7 @@ function ModalNovoUsuario({ onClose, onSave }: { onClose: () => void; onSave: (e
 
         {erro && <p style={{ fontSize: 12, color: '#C62828', marginBottom: 12 }}>{erro}</p>}
 
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, position: 'sticky', bottom: 0, background: '#fff', padding: '14px 0 28px', marginTop: 4, borderTop: '1px solid #F0F0EC' }}>
           <button onClick={onClose} style={{ flex: 1, padding: '10px', borderRadius: 8, border: '1px solid #E0E0DA', background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#888' }}>
             Cancelar
           </button>
@@ -272,7 +272,7 @@ function ModalEditarPermissoes({ user, onClose, onSave }: { user: User; onClose:
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div style={{ background: '#fff', borderRadius: 16, padding: 28, width: '100%', maxWidth: 480, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+      <div style={{ background: '#fff', borderRadius: 16, padding: 28, paddingBottom: 0, width: '100%', maxWidth: 480, maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
         <h2 style={{ fontSize: 17, fontWeight: 700, color: '#0D0D0D', margin: '0 0 4px', letterSpacing: '-0.3px' }}>Editar permissões</h2>
         <p style={{ fontSize: 13, color: '#888', margin: '0 0 20px' }}>{user.email}</p>
 
@@ -379,7 +379,7 @@ function ModalEditarPermissoes({ user, onClose, onSave }: { user: User; onClose:
 
         {erro && <p style={{ fontSize: 12, color: '#C62828', marginBottom: 12 }}>{erro}</p>}
 
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, position: 'sticky', bottom: 0, background: '#fff', padding: '14px 0 28px', marginTop: 4, borderTop: '1px solid #F0F0EC' }}>
           <button onClick={onClose} style={{ flex: 1, padding: '10px', borderRadius: 8, border: '1px solid #E0E0DA', background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#888' }}>
             Cancelar
           </button>
