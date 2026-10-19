@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react'
 import { useFinanceiro, sortMesLabel } from '../../hooks/useFinanceiro.jsx'
 import Header from '../layout/Header.jsx'
+import ResumoNF from '../ui/ResumoNF.jsx'
 import StatusBadge from '../ui/StatusBadge.jsx'
 import { fmt, fmtPct, diasAteVencimento } from '../../utils.js'
 import Semaforos from '../ui/Semaforos.jsx'
@@ -48,7 +49,7 @@ function AlertaItem({ conta }) {
   )
 }
 
-export default function Home() {
+export default function Home({ irPara, podeVerNF = false }) {
   const {
     contasFiltradas, lojaFiltro,
     historicoFiltrado, historicoVariavelFiltrado,
@@ -149,6 +150,7 @@ export default function Home() {
     <div style={{ background:'#fff', minHeight:'100vh' }}>
       <Header title="Visão Geral" subtitle={hoje}/>
       <div style={{ padding:'16px', display:'flex', flexDirection:'column', gap:20 }}>
+        {podeVerNF && <ResumoNF irPara={irPara} />}
 
         {/* KPIs */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:14 }}>
