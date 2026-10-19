@@ -22,7 +22,12 @@ const BRLk = v => v >= 1e6 ? 'R$\u00a0'+(v/1e6).toFixed(1).replace('.',',')+'M'
                 : v >= 1e3 ? 'R$\u00a0'+(v/1e3).toFixed(0)+'k'
                 : 'R$\u00a0'+v.toFixed(0);
 
-const DOW_LABELS = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
+// Índice = getDay() do JS (0=Dom … 6=Sáb), mesmo padrão do Dia_Semana_Num do Apps Script
+const DOW_LABELS = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+const dowDe = (r) => {
+  const [a, m, d] = String(r.Data || '').split('-').map(Number);
+  return a && m && d ? new Date(a, m - 1, d).getDay() : Number(r.Dia_Semana_Num);
+};
 
 export default function Stores() {
   const { rawData, filters } = useFilters();
@@ -143,7 +148,7 @@ export default function Stores() {
       const fatPorM2Salao = areaM2 > 0 ? casa      / areaM2 : null;
 
       const dowStats = DOW_LABELS.map((label, dowIdx) => {
-        const recs = recsCur.filter(r => r.Dia_Semana_Num === dowIdx);
+        const recs = recsCur.filter(r => dowDe(r) === dowIdx);
         const dias = [...new Set(recs.map(r => r.Data))].length;
         return { label: label.slice(0, 3), media: dias > 0 ? sum(recs) / dias : 0 };
       }).filter(d => d.media > 0);
