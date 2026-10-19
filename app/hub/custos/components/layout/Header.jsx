@@ -1,9 +1,8 @@
 import React from 'react'
 import { useFinanceiro, GRUPOS_CATEGORIA } from '../../hooks/useFinanceiro.jsx'
-import { LOJAS } from '../../data/config.js'
 import { ChevronDown, X } from 'lucide-react'
 
-const TIPO_OPCOES = [
+export const TIPO_OPCOES = [
   { value:'operacional', label:'Operacional', desc:'Fixo + Variável' },
   { value:'comCapex',    label:'+ CAPEX',     desc:'Inclui Investimentos' },
   { value:'tudo',        label:'Tudo',        desc:'Inclui Fora do escopo' },
@@ -49,50 +48,15 @@ export default function Header({ title, subtitle }) {
     transition:'all 0.1s',
   })
 
+  // v27: título, tipo, loja e BU subiram pro cabeçalho verde do dashboard
+  // (ClientApp). Aqui ficam só os filtros de período e grupo de categoria.
   return (
     <header style={{
       background:'#fff', borderBottom:'1px solid #F0F0F0',
-      padding:'12px 28px',
+      padding:'10px 20px',
       position:'sticky', top:0, zIndex:20,
       display:'flex', flexDirection:'column', gap:10,
     }}>
-      {/* Linha 1: título + filtros principais */}
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:16 }}>
-        <div>
-          <h1 style={{ fontSize:19, fontWeight:700, color:'#1a1a1a', margin:0, lineHeight:1.2 }}>{title}</h1>
-          {subtitle && <div style={{ fontSize:12, color:'#999', marginTop:2 }}>{subtitle}</div>}
-        </div>
-
-        <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', justifyContent:'flex-end' }}>
-          {/* Tipo */}
-          <div style={{ display:'flex', alignItems:'center', gap:2, background:'#F7F7F7', borderRadius:99, padding:'3px 3px' }}>
-            {TIPO_OPCOES.map(op => (
-              <button key={op.value} onClick={() => setTipoFiltro(op.value)} title={op.desc} style={pill(tipoFiltro===op.value)}>
-                {op.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Loja */}
-          <div style={{ position:'relative' }}>
-            <select value={lojaFiltro} onChange={e => setLojaFiltro(e.target.value)} style={sel(lojaFiltro!=='Todas')}>
-              {LOJAS.map(l => <option key={l} value={l}>{l==='Todas'?'Todas as lojas':l}</option>)}
-            </select>
-            <ChevronDown size={12} color="#999" style={{ position:'absolute', right:9, top:'50%', transform:'translateY(-50%)', pointerEvents:'none' }}/>
-          </div>
-
-          {/* BU (Centro de Custo) */}
-          {busDisponiveis && busDisponiveis.length > 1 && (
-            <div style={{ position:'relative' }}>
-              <select value={buFiltro} onChange={e => setBuFiltro(e.target.value)} style={sel(buFiltro!=='Todas')}>
-                {busDisponiveis.map(b => <option key={b} value={b}>{b==='Todas'?'Todas as BUs':b}</option>)}
-              </select>
-              <ChevronDown size={12} color="#999" style={{ position:'absolute', right:9, top:'50%', transform:'translateY(-50%)', pointerEvents:'none' }}/>
-            </div>
-          )}
-        </div>
-      </div>
-
       {/* Linha 2: filtros secundários */}
       <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
 
