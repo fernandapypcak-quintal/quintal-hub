@@ -7,5 +7,5 @@ export default async function CustosPage() {
   if (!access) redirect('/login')
   if (!hasDashboardAccess(access, 'custos')) redirect('/hub')
 
-  return <CustosClientApp allowedLojas={access.lojas} />
+  return <CustosClientApp allowedLojas={access.lojas} allowedBus={access.bus} />
 }

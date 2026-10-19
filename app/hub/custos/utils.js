@@ -62,3 +62,15 @@ export function fmtPctBR(pct) {
   const sinal = pct > 0 ? '+' : ''
   return `${sinal}${pct.toFixed(1).replace('.', ',')}%`
 }
+
+const MESES_NOME = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro']
+// '2026-09' → 'setembro'
+export function mesNome(mes) {
+  if (!mes || mes.length < 7) return ''
+  return MESES_NOME[parseInt(mes.substring(5, 7)) - 1] || ''
+}
+// '2026-09' → 'Setembro/26'
+export function mesNomeCurto(mes) {
+  const n = mesNome(mes)
+  return n ? `${n[0].toUpperCase()}${n.slice(1)}/${mes.substring(2, 4)}` : mes
+}

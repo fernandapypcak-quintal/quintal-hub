@@ -15,12 +15,16 @@ import PorBUNF from './components/pages/PorBUNF'
 import APagar from './components/pages/APagar'
 import Fornecedores from './components/pages/Fornecedores'
 import Conciliacao from './components/pages/Conciliacao'
+import GestorArea from './components/pages/GestorArea'
+import ReportCEO from './components/pages/ReportCEO'
 import { mesISOLabel, fmtData } from './utils.js'
 
 // v27 — layout no padrão do HUB (igual ao Comercial): topbar preta,
 // cabeçalho verde com os filtros em selects, sidebar e bottom nav.
 const PAGES: Record<string, React.ComponentType<any>> = {
   home: Home,
+  report: ReportCEO,
+  area: GestorArea,
   porbu: PorBUNF,
   apagar: APagar,
   fornecedores: Fornecedores,
@@ -68,7 +72,8 @@ function AppInner({ podeVerNF }: { podeVerNF: boolean }) {
 
   const info = PAGINAS.find(p => p.id === page) || PAGINAS[0]
   const PageComponent = PAGES[page] || Home
-  const ehNF = info.grupo === 'nf'
+  const ehNF = info.grupo === 'bastidores'
+  const semFiltros = info.grupo === 'gestao'   // report e por área têm os próprios filtros
 
   const mesesNF: { mes: string; mes_label: string }[] = (f.nfResumo?.meses || []).slice().sort((a: any, b: any) => b.mes.localeCompare(a.mes))
   const lojas: string[] = f.lojasDisponiveis || ['Todas']
@@ -76,13 +81,13 @@ function AppInner({ podeVerNF }: { podeVerNF: boolean }) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-surface-base">
-      <div className="hidden lg:flex">
+      <div className="hidden lg:flex no-print">
         <Sidebar page={page} setPage={setPage} podeVerNF={podeVerNF} />
       </div>
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         {/* Topbar HUB */}
-        <div className="flex items-center gap-3 px-4 py-2 bg-brand-black border-b border-zinc-800">
+        <div className="no-print flex items-center gap-3 px-4 py-2 bg-brand-black border-b border-zinc-800">
           <Link href="/hub" className="flex items-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-white transition-colors">
             ← Voltar ao HUB
           </Link>
@@ -91,7 +96,7 @@ function AppInner({ podeVerNF }: { podeVerNF: boolean }) {
         </div>
 
         {/* Header verde */}
-        <div style={{ background: 'linear-gradient(135deg, #4F6B14 0%, #97A624 100%)', borderBottom: '1px solid #3d5210', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, flexWrap: 'wrap', gap: 10 }}>
+        <div className="no-print" style={{ background: 'linear-gradient(135deg, #4F6B14 0%, #97A624 100%)', borderBottom: '1px solid #3d5210', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, flexWrap: 'wrap', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ width: 36, height: 36, borderRadius: 9, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }} aria-hidden="true">{info.icon}</div>
             <div>
@@ -103,7 +108,7 @@ function AppInner({ podeVerNF }: { podeVerNF: boolean }) {
             </div>
           </div>
 
-          {!loading && !error && (
+          {!loading && !error && !semFiltros && (
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {ehNF ? (
                 <>
@@ -139,17 +144,44 @@ function AppInner({ podeVerNF }: { podeVerNF: boolean }) {
         </main>
       </div>
 
-      <div className="lg:hidden">
+      <div className="lg:hidden no-print">
         <BottomNav activePage={page} onPageChange={setPage} podeVerNF={podeVerNF} />
       </div>
     </div>
   )
 }
 
-export default function CustosClientApp({ allowedLojas = '*' }: { allowedLojas?: string[] | '*' }) {
-  // Notas, A pagar, Fornecedores e Conciliação mostram o grupo inteiro
-  // (a visão de NF é só por BU, não por casa) — por isso só pra quem vê
-  // todas as lojas.
+// v27.2 — gestor de área: só a página "Minha área", das áreas dele.
+// Não carrega o dashboard completo (o proxy /api/custos também bloqueia).
+function GestorShell({ areas }: { areas: string[] }) {
+  return (
+    <div className="flex flex-col h-screen overflow-hidden bg-surface-base">
+      <div className="flex items-center gap-3 px-4 py-2 bg-brand-black border-b border-zinc-800">
+        <Link href="/hub" className="flex items-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-white transition-colors">
+          ← Voltar ao HUB
+        </Link>
+        <span className="text-zinc-700 text-xs">|</span>
+        <span className="text-xs text-zinc-500">Custos</span>
+      </div>
+      <div style={{ background: 'linear-gradient(135deg, #4F6B14 0%, #97A624 100%)', borderBottom: '1px solid #3d5210', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+        <div style={{ width: 36, height: 36, borderRadius: 9, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }} aria-hidden="true">🧩</div>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{areas.length === 1 ? `Minha área: ${areas[0]}` : 'Minhas áreas'}</div>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)' }}>Notas, contas pagas, custo fixo e variável</div>
+        </div>
+      </div>
+      <main className="flex-1 overflow-y-auto" style={{ display: 'flex', flexDirection: 'column' }}>
+        <GestorArea areas={areas} />
+      </main>
+    </div>
+  )
+}
+
+export default function CustosClientApp({ allowedLojas = '*', allowedBus = '*' }: { allowedLojas?: string[] | '*'; allowedBus?: string[] | '*' }) {
+  if (allowedBus !== '*') return <GestorShell areas={allowedBus} />
+
+  // Report, Por área e Bastidores mostram o grupo inteiro (a visão de NF é
+  // por área, não por casa) — por isso só pra quem vê todas as lojas.
   const podeVerNF = allowedLojas === '*'
   return (
     <FinanceiroProvider allowedLojas={allowedLojas as any}>
