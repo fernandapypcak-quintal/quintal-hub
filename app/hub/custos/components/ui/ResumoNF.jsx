@@ -31,8 +31,8 @@ export default function ResumoNF({ irPara }) {
         Notas e pagamentos do grupo
         <div style={{ fontSize: 12, color: COR.suave, fontWeight: 400 }}>{mesISOLabel(mesNF)}, todas as BUs</div>
       </div>
-      {item('Entrou em nota', r.entrou, 'porbu')}
-      {item('Pago', r.pago, 'porbu')}
+      {item('Entrou em nota', r.entrou, 'report')}
+      {item('Pago', r.pago, 'report')}
       {item('A pagar', r.aberto, 'apagar')}
       {item('Previsão vencida', r.vencido, 'conciliacao', true)}
     </div>
