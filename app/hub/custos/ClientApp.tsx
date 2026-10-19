@@ -1,32 +1,47 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import Link from 'next/link'
 import { FinanceiroProvider, useFinanceiro } from './hooks/useFinanceiro'
 import Sidebar from './components/layout/Sidebar'
 import BottomNav from './components/layout/BottomNav'
+import { PAGINAS, paginasVisiveis } from './components/layout/navegacao.js'
+import { TIPO_OPCOES } from './components/layout/Header.jsx'
 import Home from './components/pages/Home'
-import ContasPagar from './components/pages/ContasPagar'
 import CustoFixo from './components/pages/CustoFixo'
 import CustoVariavel from './components/pages/CustoVariavel'
-import PorBU from './components/pages/PorBU'
 import Evolucao from './components/pages/Evolucao'
-import Link from 'next/link'
+import PorBUNF from './components/pages/PorBUNF'
+import APagar from './components/pages/APagar'
+import Fornecedores from './components/pages/Fornecedores'
+import Conciliacao from './components/pages/Conciliacao'
+import { mesISOLabel, fmtData } from './utils.js'
 
+// v27 — layout no padrão do HUB (igual ao Comercial): topbar preta,
+// cabeçalho verde com os filtros em selects, sidebar e bottom nav.
 const PAGES: Record<string, React.ComponentType<any>> = {
   home: Home,
-  contas: ContasPagar,
+  porbu: PorBUNF,
+  apagar: APagar,
+  fornecedores: Fornecedores,
+  conciliacao: Conciliacao,
   custos: CustoFixo,
   variavel: CustoVariavel,
-  porbu: PorBU,
   evolucao: Evolucao,
 }
 
-function LoadingScreen() {
+const selectStyle = {
+  padding: '5px 10px', borderRadius: 8, border: 'none',
+  fontSize: 12, background: 'rgba(255,255,255,0.15)',
+  color: '#fff', cursor: 'pointer', fontFamily: 'inherit',
+}
+const opt = { color: '#0D0F14' }
 
+function LoadingScreen() {
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
-      <div style={{ width: 28, height: 28, border: '2px solid #E8E8E8', borderTopColor: '#1a1a1a', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
-      <div style={{ fontSize: 13, color: '#999' }}>Carregando dados...</div>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, padding: 60 }}>
+      <div style={{ width: 28, height: 28, border: '2px solid #E8E8E8', borderTopColor: '#97A624', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+      <div style={{ fontSize: 13, color: '#5a5c5f' }}>Carregando custos…</div>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
@@ -35,52 +50,110 @@ function LoadingScreen() {
 function ErrorScreen({ error }: { error: string }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 40 }}>
-      <div style={{ fontSize: 28 }}>⚠️</div>
-      <div style={{ fontSize: 15, fontWeight: 600 }}>Erro ao carregar dados</div>
-      <div style={{ fontSize: 13, color: '#dc2626', background: '#FEF2F2', padding: '10px 16px', borderRadius: 8, maxWidth: 480, textAlign: 'center' }}>{error}</div>
+      <div style={{ fontSize: 15, fontWeight: 600 }}>Não deu pra carregar os custos</div>
+      <div style={{ fontSize: 13, color: '#8C1414', background: '#FEF2F2', padding: '10px 16px', borderRadius: 8, maxWidth: 480, textAlign: 'center' }}>{error}</div>
+      <div style={{ fontSize: 12, color: '#5a5c5f' }}>Recarregue a página. Se continuar, confira se o Apps Script está publicado.</div>
     </div>
   )
 }
 
-function AppInner() {
-  const [page, setPage] = useState('home')
-  const [collapsed, setCollapsed] = useState(false)
-  const { loading, error } = useFinanceiro()
-  const PageComponent = PAGES[page] || PAGES.home
+function AppInner({ podeVerNF }: { podeVerNF: boolean }) {
+  const [pageRaw, setPageRaw] = useState('home')
+  const f: any = useFinanceiro()
+  const { loading, error } = f
+
+  const visiveis = paginasVisiveis(podeVerNF)
+  const page = visiveis.some(p => p.id === pageRaw) ? pageRaw : 'home'
+  function setPage(p: string) { if (visiveis.some(v => v.id === p)) setPageRaw(p) }
+
+  const info = PAGINAS.find(p => p.id === page) || PAGINAS[0]
+  const PageComponent = PAGES[page] || Home
+  const ehNF = info.grupo === 'nf'
+
+  const mesesNF: { mes: string; mes_label: string }[] = (f.nfResumo?.meses || []).slice().sort((a: any, b: any) => b.mes.localeCompare(a.mes))
+  const lojas: string[] = f.lojasDisponiveis || ['Todas']
+  const umaLoja = Array.isArray(f.lojasPermitidas) && f.lojasPermitidas.length === 1
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#fff', flexDirection: 'column' }}>
-      {/* Back to hub bar */}
-      <div className="flex items-center gap-3 px-4 py-2 bg-brand-black border-b border-zinc-800">
-        <Link href="/hub" className="flex items-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-white transition-colors">
-          ← Voltar ao HUB
-        </Link>
-        <span className="text-zinc-700 text-xs">|</span>
-        <span className="text-xs text-zinc-500">Custos</span>
+    <div className="flex h-screen overflow-hidden bg-surface-base">
+      <div className="hidden lg:flex">
+        <Sidebar page={page} setPage={setPage} podeVerNF={podeVerNF} />
       </div>
 
-      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-        {/* Sidebar — hidden on mobile */}
-        <div className="hidden lg:flex">
-          <Sidebar page={page} setPage={setPage} collapsed={collapsed} setCollapsed={setCollapsed} />
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+        {/* Topbar HUB */}
+        <div className="flex items-center gap-3 px-4 py-2 bg-brand-black border-b border-zinc-800">
+          <Link href="/hub" className="flex items-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-white transition-colors">
+            ← Voltar ao HUB
+          </Link>
+          <span className="text-zinc-700 text-xs">|</span>
+          <span className="text-xs text-zinc-500">Custos</span>
         </div>
-        <main style={{ flex: 1, minWidth: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', paddingBottom: 60 }} className="lg:pb-0">
-          {loading ? <LoadingScreen /> : error ? <ErrorScreen error={error} /> : <PageComponent />}
+
+        {/* Header verde */}
+        <div style={{ background: 'linear-gradient(135deg, #4F6B14 0%, #97A624 100%)', borderBottom: '1px solid #3d5210', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 9, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }} aria-hidden="true">{info.icon}</div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{info.titulo}</div>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)' }}>
+                {info.sub}
+                {ehNF && f.nfResumo?.baixas_ate ? ` — pagamentos arquivados até ${fmtData(f.nfResumo.baixas_ate)}` : ''}
+              </div>
+            </div>
+          </div>
+
+          {!loading && !error && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {ehNF ? (
+                <>
+                  {page !== 'apagar' && (
+                    <select aria-label="Mês" value={f.mesNF} onChange={e => f.setMesNF(e.target.value)} style={selectStyle}>
+                      {page === 'conciliacao' && <option value="" style={opt}>Todos os meses</option>}
+                      {mesesNF.map(m => <option key={m.mes} value={m.mes} style={opt}>{m.mes_label || mesISOLabel(m.mes)}</option>)}
+                    </select>
+                  )}
+                  <select aria-label="BU" value={f.buFiltro} onChange={e => f.setBuFiltro(e.target.value)} style={selectStyle}>
+                    {f.busDisponiveis.map((b: string) => <option key={b} value={b} style={opt}>{b === 'Todas' ? 'Todas as BUs' : b}</option>)}
+                  </select>
+                </>
+              ) : (
+                <>
+                  <select aria-label="Escopo" value={f.tipoFiltro} onChange={e => f.setTipoFiltro(e.target.value)} style={selectStyle}>
+                    {TIPO_OPCOES.map((o: any) => <option key={o.value} value={o.value} style={opt}>{o.label} ({o.desc})</option>)}
+                  </select>
+                  <select aria-label="Loja" value={f.lojaFiltro} onChange={e => f.setLojaFiltro(e.target.value)} style={selectStyle}>
+                    {lojas.filter(l => !(umaLoja && l === 'Todas')).map(l => <option key={l} value={l} style={opt}>{l === 'Todas' ? 'Todas as lojas' : l}</option>)}
+                  </select>
+                  <select aria-label="BU" value={f.buFiltro} onChange={e => f.setBuFiltro(e.target.value)} style={selectStyle}>
+                    {f.busDisponiveis.map((b: string) => <option key={b} value={b} style={opt}>{b === 'Todas' ? 'Todas as BUs' : b}</option>)}
+                  </select>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        <main className="flex-1 overflow-y-auto pb-20 lg:pb-0" style={{ display: 'flex', flexDirection: 'column' }}>
+          {loading ? <LoadingScreen /> : error ? <ErrorScreen error={error} /> : <PageComponent irPara={setPage} podeVerNF={podeVerNF} />}
         </main>
       </div>
 
-      {/* Bottom nav — mobile only */}
       <div className="lg:hidden">
-        <BottomNav activePage={page} onPageChange={setPage} />
+        <BottomNav activePage={page} onPageChange={setPage} podeVerNF={podeVerNF} />
       </div>
     </div>
   )
 }
 
 export default function CustosClientApp({ allowedLojas = '*' }: { allowedLojas?: string[] | '*' }) {
+  // Notas, A pagar, Fornecedores e Conciliação mostram o grupo inteiro
+  // (a visão de NF é só por BU, não por casa) — por isso só pra quem vê
+  // todas as lojas.
+  const podeVerNF = allowedLojas === '*'
   return (
     <FinanceiroProvider allowedLojas={allowedLojas as any}>
-      <AppInner />
+      <AppInner podeVerNF={podeVerNF} />
     </FinanceiroProvider>
   )
 }
