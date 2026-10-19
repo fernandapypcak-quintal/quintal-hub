@@ -48,6 +48,7 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
   const hoje = new Date()
   const anoPadrao = (filtros.ano && filtros.ano !== '') ? parseInt(filtros.ano) : hoje.getFullYear()
   const [ano, setAno] = useState(anoPadrao)
+  const [mostrarDetalhe, setMostrarDetalhe] = useState(false)
   const [mesesFechamentoSelecionados, setMesesFechamentoSelecionados] = useState<number[]>([hoje.getMonth() + 1])
   // Default: próximos 2 meses a partir de hoje — o caso de uso mais comum
   // (vendas feitas agora pra eventos dos próximos meses).
@@ -273,6 +274,17 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
           </div>
         </div>
       )}
+
+      {/* Essa página mistura um resumo rápido (acima) com uma ferramenta de
+          investigação detalhada (abaixo) — recolhida por padrão, pra quem só
+          quer bater o olho não esbarrar em multi-seleção de mês, tabela de
+          31 dias e matriz de 12x15 logo de cara. */}
+      <button onClick={() => setMostrarDetalhe(v => !v)}
+        style={{ ...botaoPill, alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6 }}>
+        {mostrarDetalhe ? '▾' : '▸'} Ver análise detalhada (dia a dia, por mês de competência)
+      </button>
+
+      {mostrarDetalhe && (<>
 
       {/* Controles do drill-down diário */}
       <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
@@ -505,6 +517,8 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
           </div>
         </div>
       )}
+
+      </>)}
     </div>
   )
 }
