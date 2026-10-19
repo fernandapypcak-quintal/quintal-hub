@@ -182,6 +182,8 @@ function parseNFResumo(r) {
     meses:        arr(r.meses),
     entrou:       arr(r.entrou).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
     pago:         arr(r.pago).map(e => ({ ...e, valor: num(e.valor), valor_com_nf: num(e.valor_com_nf), qtd: num(e.qtd) })),
+    pago_tipo:    arr(r.pago_tipo).map(e => ({ ...e, valor: num(e.valor) })),
+    pago_cat:     arr(r.pago_cat).map(e => ({ ...e, valor: num(e.valor) })),
     aberto:       arr(r.aberto).map(e => ({ ...e, valor: num(e.valor), vencido: num(e.vencido), qtd: num(e.qtd), qtd_vencido: num(e.qtd_vencido) })),
     agenda:       arr(r.agenda).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
     pago_sem_nf:  arr(r.pago_sem_nf).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
@@ -219,6 +221,28 @@ export async function loadNFLista(filtros = {}) {
   return Array.isArray(data) ? data : []
 }
 
+// v27.2 — página "Minha área": tudo da BU (leve)
+export async function loadGestor(bu) {
+  const d = await fetchComParametros({ tipo: 'gestor', bu })
+  const arr = x => Array.isArray(x) ? x : []
+  const num = x => Number(x || 0)
+  return {
+    bu: d.bu || bu, info: d.info || null,
+    meses: arr(d.meses), baixas_ate: d.baixas_ate || '', atualizado_em: d.atualizado_em || '',
+    entrou: arr(d.entrou).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
+    pago: arr(d.pago).map(e => ({ ...e, valor: num(e.valor), valor_com_nf: num(e.valor_com_nf), qtd: num(e.qtd) })),
+    pago_tipo: arr(d.pago_tipo).map(e => ({ ...e, valor: num(e.valor) })),
+    pago_cat: arr(d.pago_cat).map(e => ({ ...e, valor: num(e.valor) })),
+    revisar_cat: arr(d.revisar_cat).map(e => ({ ...e, valor: num(e.valor) })),
+  }
+}
+
+// v27.2 — contas pagas de uma BU no mês (data do pagamento). mes: '2026-09'
+export async function loadPagamentosBU({ bu, mes }) {
+  const d = await fetchComParametros({ tipo: 'pagamentos_bu', bu, mes })
+  return Array.isArray(d) ? d.map(r => ({ ...r, valor: Number(r.valor || 0) })) : []
+}
+
 // Tela de conciliação. mes: '2026-09' (vazio = tudo)
 export async function loadConciliacao(mes) {
   const p = { tipo: 'conciliacao' }
@@ -252,8 +276,10 @@ const parseDetalheLancamentosBU = rows => (!rows||!Array.isArray(rows)) ? [] : r
 // Registra a divergência de BU reportada pelo gestor (ex: "esse fornecedor
 // não é da minha BU, acho que é de tal BU"). Fica pendente de revisão numa
 // aba separada da planilha — não reclassifica nada sozinho.
-export async function reportarDivergenciaBU({ fornecedor, descricao, buAtual, buSugerido, mes, loja, valor, observacao } = {}) {
+export async function reportarDivergenciaBU({ fornecedor, descricao, buAtual, buSugerido, mes, loja, valor, observacao, origem, codFor } = {}) {
   const params = new URLSearchParams({ tipo: 'registrar_divergencia_bu' })
+  if (origem)      params.set('origem', origem)        // 'nota' | 'pagamento'
+  if (codFor)      params.set('cod_for', codFor)
   if (fornecedor)  params.set('fornecedor', fornecedor)
   if (descricao)   params.set('descricao', descricao)
   if (buAtual)      params.set('bu_atual', buAtual)
