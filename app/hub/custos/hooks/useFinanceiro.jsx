@@ -57,6 +57,8 @@ export function FinanceiroProvider({ children, allowedLojas = '*' }) {
   const [historicoCatRaw, setHistoricoCatRaw] = useState([])
   const [historicoDetRaw, setHistoricoDetRaw] = useState([])
   const [historicoBURaw,  setHistoricoBURaw]  = useState([])
+  const [nfResumo,        setNfResumo]        = useState(null)
+  const [busConfig,       setBusConfig]       = useState([])
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
 
@@ -73,10 +75,11 @@ export function FinanceiroProvider({ children, allowedLojas = '*' }) {
   const [mesInicio,      setMesInicio]      = useState('')
   const [mesFim,         setMesFim]         = useState('')
   const [grupoCategoria, setGrupoCategoria] = useState('todos')
+  const [mesNF,          setMesNF]          = useState('')   // v27: 'yyyy-MM' das telas de NF
 
   // ── Carregamento inicial ──────────────────────────────────
   useEffect(() => {
-    loadTudo().then(({ contas: c, historicoRaw: h, historicoCatRaw: hc, historicoDetRaw: hd, historicoBURaw: hbu }) => {
+    loadTudo().then(({ contas: c, historicoRaw: h, historicoCatRaw: hc, historicoDetRaw: hd, historicoBURaw: hbu, nfResumo: nf, bus }) => {
       const safe  = x => Array.isArray(x) ? x : []
       const normH = arr => safe(arr).map(x => ({ ...x, mes: normalizarMes(x.mes) }))
 
@@ -99,6 +102,15 @@ export function FinanceiroProvider({ children, allowedLojas = '*' }) {
       setHistoricoCatRaw(hcN)
       setHistoricoDetRaw(hdN)
       setHistoricoBURaw(hbuN)
+      setNfResumo(nf || null)
+      setBusConfig(Array.isArray(bus) ? bus : [])
+      // mês padrão das telas de NF: o mês da última baixa arquivada
+      // (o mês corrente ainda está incompleto); senão o último com dados
+      if (nf) {
+        const mesesNF = (nf.meses || []).map(m => m.mes).filter(Boolean).sort()
+        const doCorte = nf.baixas_ate ? nf.baixas_ate.substring(0, 7) : ''
+        setMesNF(doCorte && mesesNF.includes(doCorte) ? doCorte : (mesesNF[mesesNF.length - 1] || ''))
+      }
       setMesFiltro(mesPadrao)
       setMesFim(mesPadrao)
       setMesInicio(todosMeses.length > 1 ? todosMeses[0] : mesPadrao)
@@ -201,10 +213,28 @@ export function FinanceiroProvider({ children, allowedLojas = '*' }) {
   ), [historicoBUFiltrado, buFiltro])
 
   // Lista de BUs disponíveis (pra popular o filtro no Header)
+  // v27: vem da aba BUs (ordem e nomes oficiais); só cai pro modo antigo
+  // se o Apps Script ainda não devolver a lista
   const busDisponiveis = useMemo(() => {
+    if (busConfig.length) return ['Todas', ...busConfig.map(b => b.bu)]
     const set = new Set(historicoBURaw.map(h => h.centro_custo).filter(Boolean))
     return ['Todas', ...Array.from(set).sort()]
-  }, [historicoBURaw])
+  }, [historicoBURaw, busConfig])
+
+  // v27: cor e grupo fixos por BU (aba BUs)
+  const infoBU = useMemo(() => {
+    const m = {}
+    busConfig.forEach(b => { m[b.bu] = b })
+    return m
+  }, [busConfig])
+  const corBU   = bu => (infoBU[bu] && infoBU[bu].cor) || '#9a9c9f'
+  const grupoBU = bu => (infoBU[bu] && infoBU[bu].grupo) || (bu === 'Revisar' ? 'Pendente' : 'Operacional')
+
+  // v27: lojas que aparecem nos dados (já filtradas pela permissão do usuário)
+  const lojasDisponiveis = useMemo(() => {
+    const set = new Set(historicoRaw.map(h => h.loja).filter(Boolean))
+    return ['Todas', ...Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'))]
+  }, [historicoRaw])
 
   // ── Contas ────────────────────────────────────────────────
   const contasFiltradas = useMemo(() => {
@@ -255,6 +285,9 @@ export function FinanceiroProvider({ children, allowedLojas = '*' }) {
       mesesDisponiveis,
       kpis,
       lojasPermitidas,
+      // v27
+      nfResumo, busConfig, corBU, grupoBU, lojasDisponiveis,
+      mesNF, setMesNF,
       // aliases de compatibilidade
       custosFiltrados:          [],
       custosVariaveisFiltrados: [],
