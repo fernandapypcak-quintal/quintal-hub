@@ -7,7 +7,6 @@ import Sidebar from './components/layout/Sidebar'
 import BottomNav from './components/layout/BottomNav'
 import { PAGINAS, paginasVisiveis } from './components/layout/navegacao.js'
 import { TIPO_OPCOES } from './components/layout/Header.jsx'
-import Home from './components/pages/Home'
 import CustoFixo from './components/pages/CustoFixo'
 import CustoVariavel from './components/pages/CustoVariavel'
 import Evolucao from './components/pages/Evolucao'
@@ -22,7 +21,6 @@ import { mesISOLabel, fmtData } from './utils.js'
 // v27 — layout no padrão do HUB (igual ao Comercial): topbar preta,
 // cabeçalho verde com os filtros em selects, sidebar e bottom nav.
 const PAGES: Record<string, React.ComponentType<any>> = {
-  home: Home,
   report: ReportCEO,
   area: GestorArea,
   porbu: PorBUNF,
@@ -62,16 +60,16 @@ function ErrorScreen({ error }: { error: string }) {
 }
 
 function AppInner({ podeVerNF }: { podeVerNF: boolean }) {
-  const [pageRaw, setPageRaw] = useState('home')
+  const [pageRaw, setPageRaw] = useState(podeVerNF ? 'report' : 'custos')
   const f: any = useFinanceiro()
   const { loading, error } = f
 
   const visiveis = paginasVisiveis(podeVerNF)
-  const page = visiveis.some(p => p.id === pageRaw) ? pageRaw : 'home'
+  const page = visiveis.some(p => p.id === pageRaw) ? pageRaw : visiveis[0].id
   function setPage(p: string) { if (visiveis.some(v => v.id === p)) setPageRaw(p) }
 
   const info = PAGINAS.find(p => p.id === page) || PAGINAS[0]
-  const PageComponent = PAGES[page] || Home
+  const PageComponent = PAGES[page] || PAGES[visiveis[0].id]
   const ehNF = info.grupo === 'bastidores'
   const semFiltros = info.grupo === 'gestao'   // report e por área têm os próprios filtros
 
