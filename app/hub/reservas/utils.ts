@@ -18,8 +18,12 @@ export type Linha = {
 }
 export type Meta = { mes: string; faixas: number[]; desafio: number | null }
 export type MetaSemanal = { inicio: string; operador: string; base: number; pcts: number[] }
+export type Saude = {
+  gatilhos: string[]; ultimaExecucao: string; ultimaRevisao60: string
+  ultimoErro: { quando: string; funcao: string; msg: string } | null
+}
 export type Config = {
-  restrito: boolean; atualizado: string; hoje: string
+  restrito: boolean; atualizado: string; hoje: string; saude: Saude | null
   metas: Meta[]; metasSemanais: MetaSemanal[]; meses: string[]; mesesDr: string[]; unidades: string[]
 }
 export type Filtros = { grupos: Grupo[]; unidades: string[] }
@@ -42,6 +46,22 @@ export const STATUS: { id: string; label: string; cor: string }[] = [
 export const statusLabel = (s: string) => STATUS.find(x => x.id === s)?.label || s || 'Sem status'
 export const CANCELADAS = new Set(['canceled-user', 'canceled-agent'])
 export const ativa = (r: Linha) => !CANCELADAS.has(r.s)
+
+// Problema na atualização automática? (dados com mais de 2h, erro na última execução ou gatilho faltando)
+export function avisoAtualizacao(c: Config): string | null {
+  const agora = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' }).format(new Date())
+  const min = (a: string, b: string) => (Date.parse(b.replace(' ', 'T') + ':00Z') - Date.parse(a.replace(' ', 'T') + ':00Z')) / 60000
+  const s = c.saude
+  if (s?.ultimoErro && (!c.atualizado || s.ultimoErro.quando >= c.atualizado)) {
+    return `a atualização automática falhou em ${s.ultimoErro.quando.slice(8, 10)}/${s.ultimoErro.quando.slice(5, 7)} às ${s.ultimoErro.quando.slice(11)}: ${s.ultimoErro.msg}`
+  }
+  if (s && !s.gatilhos.includes('atualizarRecentes')) return 'a atualização automática não está ligada (gatilho de hora em hora não instalado)'
+  if (c.atualizado && min(c.atualizado, agora) > 150) {
+    const h = Math.floor(min(c.atualizado, agora) / 60)
+    return `os dados não são atualizados há ${h} horas`
+  }
+  return null
+}
 
 // ─── Formatação ─────────────────────────────────────────────────────────
 const intFmt = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 })
