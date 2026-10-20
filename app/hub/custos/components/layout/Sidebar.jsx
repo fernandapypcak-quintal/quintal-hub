@@ -2,8 +2,8 @@ import React from 'react'
 import { GRUPOS, paginasVisiveis } from './navegacao.js'
 
 // v27.2 — mesmo padrão do Comercial (fundo branco, item ativo verde-claro)
-export default function Sidebar({ page, setPage, podeVerNF = false }) {
-  const paginas = paginasVisiveis(podeVerNF)
+export default function Sidebar({ page, setPage, podeVerNF = false, isAdmin = false }) {
+  const paginas = paginasVisiveis(podeVerNF, isAdmin)
   const inicio = paginas.filter(p => p.grupo === 'inicio')
   const grupos = GRUPOS.map(g => ({ ...g, itens: paginas.filter(p => p.grupo === g.id) })).filter(g => g.itens.length)
 

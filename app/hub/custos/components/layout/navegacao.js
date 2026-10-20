@@ -22,6 +22,7 @@ export const PAGINAS = [
   { id: 'conciliacao',  icon: '🔗', label: 'Pendências',           curto: 'Pend.',    grupo: 'bastidores', titulo: 'Pendências',              sub: 'Notas sem pagamento, pagamentos sem nota e divergências', restrita: true, soDesktop: true },
 ]
 
-export function paginasVisiveis(podeVerNF) {
-  return PAGINAS.filter(p => !p.restrita || podeVerNF)
+// v27.7: Bastidores (manutenção do dado) só pra admin do HUB
+export function paginasVisiveis(podeVerNF, isAdmin = false) {
+  return PAGINAS.filter(p => (!p.restrita || podeVerNF) && (p.grupo !== 'bastidores' || isAdmin))
 }

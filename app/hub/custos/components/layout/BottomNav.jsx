@@ -2,8 +2,8 @@ import React from 'react'
 import { paginasVisiveis } from './navegacao.js'
 
 // v27 — mesmo padrão do Comercial. Conciliação fica só no desktop.
-export default function BottomNav({ activePage, onPageChange, podeVerNF = false }) {
-  const paginas = paginasVisiveis(podeVerNF).filter(p => !p.soDesktop)
+export default function BottomNav({ activePage, onPageChange, podeVerNF = false, isAdmin = false }) {
+  const paginas = paginasVisiveis(podeVerNF, isAdmin).filter(p => !p.soDesktop)
   return (
     <nav className="no-print" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '0.5px solid #E8E8E2', display: 'flex', zIndex: 50, paddingBottom: 'env(safe-area-inset-bottom)' }}>
       {paginas.map(p => (
