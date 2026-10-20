@@ -28,7 +28,6 @@ export async function GET(req: NextRequest) {
       if (tipo !== 'bus' && (!areaPedida || !access.bus.includes(areaPedida))) {
         return NextResponse.json({ erro: 'Acesso negado a essa área' }, { status: 403 })
       }
-      if (tipo === 'nf_lista') { searchParams.delete('status'); searchParams.delete('fornecedor') }
     } else if (access.lojas !== '*') {
       // Acesso restrito por loja: nada dos dados do grupo inteiro (notas por área)
       const DO_GRUPO = ['gestor', 'nf_lista', 'pagamentos_bu', 'nf_resumo', 'conciliacao']
