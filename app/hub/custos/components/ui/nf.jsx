@@ -168,3 +168,45 @@ export const botaoSecundario = {
   padding: '6px 12px', borderRadius: 8, border: `0.5px solid ${COR.borda}`, background: '#fff',
   color: COR.texto, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
 }
+
+// v27.3 — exporta uma lista pra Excel (.xlsx). colunas: [{ titulo, valor: linha => any, tipo: 'num'|'data'|'texto', largura }]
+// datas 'yyyy-mm-dd' viram data de verdade no Excel; números ficam com formato de moeda.
+export async function exportarExcel(nomeArquivo, colunas, linhas, nomeAba = 'Dados') {
+  const XLSX = await import('xlsx')
+  const paraData = s => {
+    if (!s || !/^\d{4}-\d{2}-\d{2}/.test(s)) return s || ''
+    const [a, m, d] = s.substring(0, 10).split('-').map(Number)
+    return new Date(Date.UTC(a, m - 1, d, 12))
+  }
+  const aoa = [colunas.map(c => c.titulo)]
+  linhas.forEach(l => aoa.push(colunas.map(c => {
+    const v = c.valor(l)
+    if (c.tipo === 'num') return Number(v) || 0
+    if (c.tipo === 'data') return paraData(v)
+    return v === null || v === undefined ? '' : String(v)
+  })))
+  const ws = XLSX.utils.aoa_to_sheet(aoa, { cellDates: true })
+  colunas.forEach((c, j) => {
+    for (let i = 1; i < aoa.length; i++) {
+      const ref = XLSX.utils.encode_cell({ r: i, c: j })
+      if (!ws[ref]) continue
+      if (c.tipo === 'num') ws[ref].z = c.formato || '#,##0.00'
+      if (c.tipo === 'data' && ws[ref].t === 'd') ws[ref].z = 'dd/mm/yyyy'
+    }
+  })
+  ws['!cols'] = colunas.map(c => ({ wch: c.largura || Math.max(12, c.titulo.length + 2) }))
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: aoa.length - 1, c: colunas.length - 1 } }) }
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, nomeAba.substring(0, 31))
+  XLSX.writeFile(wb, nomeArquivo.replace(/[\\/:*?"<>|]/g, '-') + '.xlsx')
+}
+
+export function BotaoExportar({ onClick, desabilitado }) {
+  const [ocupado, setOcupado] = useState(false)
+  return (
+    <button disabled={desabilitado || ocupado} onClick={async () => { setOcupado(true); try { await onClick() } finally { setOcupado(false) } }}
+      style={{ ...botaoSecundario, display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 500, minHeight: 34, opacity: desabilitado ? 0.5 : 1 }}>
+      <span aria-hidden="true">⬇</span>{ocupado ? 'Gerando…' : 'Exportar Excel'}
+    </button>
+  )
+}
