@@ -3,6 +3,7 @@ import { useFinanceiro } from '../../hooks/useFinanceiro.jsx'
 import { fmtK, fmtData, mesAnteriorISO, mesISOLabel, mesNome, mesNomeCurto } from '../../utils.js'
 import { COR, num, Vazio, SemDadosNF, botaoSecundario } from '../ui/nf.jsx'
 import { ListasArea } from './GestorArea.jsx'
+import CaixaTotal from '../ui/CaixaTotal.jsx'
 
 // v27.2 — Report do mês pro CEO: o grupo inteiro numa página, com
 // variação vs mês anterior, áreas lado a lado e o que puxou o mês.
@@ -44,13 +45,16 @@ export default function ReportCEO() {
 
     const A = nfResumo.aberto || []
     const kpis = [
-      ['Pago no mês', tot(P, mes), tot(P, ant), 'O que saiu do caixa, pela data do pagamento (relatório de contas pagas).'],
+      ['Pago no mês', tot(P, mes), tot(P, ant), 'Custo fixo + variável pago no mês, pela data do pagamento (relatório de contas pagas).'],
       ['Custo fixo', tipo(mes, 'Fixo'), tipo(ant, 'Fixo'), 'Aluguel, folha fixa, sistemas e contratos mensais.'],
       ['Custo variável', tipo(mes, 'Variável'), tipo(ant, 'Variável'), 'Insumos, mão de obra variável, manutenção, eventos.'],
     ]
     const comNota = soma(P, x => x.mes === mes && noTotal(x.bu), 'valor_com_nf')
     const abertoTot = soma(A, x => noTotal(x.bu)), abertoQtd = soma(A, x => noTotal(x.bu), 'qtd')
     const vencidoTot = soma(A, x => noTotal(x.bu), 'vencido')
+    // conciliação com o "Tudo" das páginas por casa: o que saiu do caixa no total
+    const investMes = soma(T, x => x.mes === mes && x.tipo === 'Investimento')
+    const foraMes = soma(T, x => x.mes === mes && x.tipo === 'Fora')
 
     // mudanças por área + categoria
     const chaves = [...new Set(C.filter(x => (x.mes === mes || x.mes === ant) && naLista(x.bu)).map(x => x.bu + '||' + x.categoria))]
@@ -84,7 +88,7 @@ export default function ReportCEO() {
     const hist = ult.map(m => ({ m, fixo: tipo(m, 'Fixo'), vari: tipo(m, 'Variável') }))
     const maxH = Math.max(1, ...hist.map(h => h.fixo + h.vari))
 
-    return { kpis, comNota, abertoTot, abertoQtd, vencidoTot, areas, puxou, semAreaAnt, semAreaMes, hist, maxH, temTipo: T.length > 0 }
+    return { kpis, investMes, foraMes, comNota, abertoTot, abertoQtd, vencidoTot, areas, puxou, semAreaAnt, semAreaMes, hist, maxH, temTipo: T.length > 0 }
   }, [nfResumo, busConfig, mes, ant, meses])
 
   if (!nfResumo) return <SemDadosNF />
@@ -149,6 +153,10 @@ export default function ReportCEO() {
           <div style={{ fontSize: 12, color: COR.suave, lineHeight: 1.4 }}>Já chegaram, ainda não estão nas contas pagas. Entram no mês em que forem pagas.</div>
         </div>
       </section>
+
+      {r.temTipo && (nfResumo.caixa_fora || []).length > 0 && (
+        <CaixaTotal caixaFora={nfResumo.caixa_fora} custo={pagoK[1]} custoAnt={pagoK[2]} mes={mes} ant={ant} />
+      )}
 
       <section aria-labelledby="ceo-areas" style={{ ...card, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div>
