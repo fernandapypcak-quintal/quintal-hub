@@ -32,6 +32,7 @@ type GasConfig = GasResp & {
   atualizado?: string; hoje?: string; meses?: string[]; mesesDr?: string[]; unidades?: string[]
   metas?: { mes: string; faixas: number[]; desafio: number | null }[]
   metasSemanais?: { inicio: string; operador: string; base: number; pcts: number[] }[]
+  saude?: { gatilhos: string[]; ultimaExecucao: string; ultimaRevisao60: string; ultimoErro: { quando: string; funcao: string; msg: string } | null }
 }
 
 async function gas<T extends GasResp>(params: Record<string, string>): Promise<T> {
@@ -103,7 +104,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ ok: false, erro: 'Nenhuma unidade liberada para o seu usuário' }, { status: 403 })
       }
       return NextResponse.json({
-        ok: true, restrito, atualizado: c.atualizado || '', hoje: c.hoje || '',
+        ok: true, restrito, atualizado: c.atualizado || '', hoje: c.hoje || '', saude: c.saude || null,
         metas: c.metas || [], metasSemanais: c.metasSemanais || [], meses: c.meses || [], mesesDr: c.mesesDr || [], unidades,
       })
     }
