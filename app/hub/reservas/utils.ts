@@ -18,13 +18,16 @@ export type Linha = {
 }
 export type Meta = { mes: string; faixas: number[]; desafio: number | null }
 export type MetaSemanal = { inicio: string; operador: string; base: number; pcts: number[] }
+export type Escala = { mes: string; semana: number; operador: string; dias: string[] }
+export type OperadorCad = { nome: string; chaves: string[]; time: string }
 export type Saude = {
   gatilhos: string[]; ultimaExecucao: string; ultimaRevisao60: string
   ultimoErro: { quando: string; funcao: string; msg: string } | null
 }
 export type Config = {
   restrito: boolean; atualizado: string; hoje: string; saude: Saude | null
-  metas: Meta[]; metasSemanais: MetaSemanal[]; meses: string[]; mesesDr: string[]; unidades: string[]
+  metas: Meta[]; metasSemanais: MetaSemanal[]; escala: Escala[]; operadores: OperadorCad[]
+  meses: string[]; mesesDr: string[]; unidades: string[]
 }
 export type Filtros = { grupos: Grupo[]; unidades: string[] }
 
@@ -219,21 +222,41 @@ export function semanaDoMes(iso: string) {
 export const semanaAnterior = (ini: string) => semanaDoMes(addDias(ini, -1))
 export const semanaSeguinte = (ini: string) => semanaDoMes(addDias(semanaDoMes(ini).fim, 1))
 
-// Meta de uma semana do mês para a operadora: a linha mais recente que já valia até o fim da semana;
+// Nome padrão da operadora (aceita os apelidos da aba OPERADORES: "Keila" → "Keyla")
+export function nomePadrao(c: Pick<Config, 'operadores'>, nome: string) {
+  const k = normNome(nome)
+  const o = (c.operadores || []).find(x => normNome(x.nome) === k || x.chaves.includes(k))
+  return o ? o.nome : nome.trim()
+}
+
+// Escala da semana (nº da semana do mês): Map<nome padrão, dias>
+export function escalaDaSemana(c: Pick<Config, 'operadores' | 'escala'>, mes: string, numero: number) {
+  const out = new Map<string, string[]>()
+  for (const e of c.escala || []) {
+    if (e.mes !== mes || e.semana !== numero) continue
+    out.set(nomePadrao(c, e.operador), [...e.dias].sort())
+  }
+  return out
+}
+
+// Meta de uma semana para a operadora: a linha mais recente que já valia até o fim da semana;
 // meta própria da operadora tem prioridade sobre a geral (operador vazio).
-// Semana curta (29–fim do mês): faixas proporcionais aos dias (× dias/7). Sempre arredondado para baixo.
-export function metaSemanalDe(metas: MetaSemanal[], operador: string, ini: string) {
+//   com escala: meta cheia para 5 dias de escala (menos dias = proporcional × dias/5)
+//   sem escala: semana do calendário; a semana curta (29–fim do mês) é proporcional × dias/7
+// Sempre arredondado para baixo.
+export function metaSemanalDe(metas: MetaSemanal[], operador: string, ini: string, diasEscala?: number, c?: Pick<Config, 'operadores'>) {
   const sem = semanaDoMes(ini)
   const validas = (metas || []).filter(m => m.inicio <= sem.fim).sort((a, b) => a.inicio.localeCompare(b.inicio))
-  const alvo = normNome(operador)
-  const propria = validas.filter(m => m.operador && normNome(m.operador) === alvo).pop()
+  const alvo = normNome(c ? nomePadrao(c, operador) : operador)
+  const propria = validas.filter(m => m.operador && normNome(c ? nomePadrao(c, m.operador) : m.operador) === alvo).pop()
   const geral = validas.filter(m => !m.operador).pop()
   const m = propria || geral
   if (!m) return null
   const pcts = m.pcts.length ? m.pcts : [100, 120, 140]
-  const fator = sem.dias / 7
+  const fator = diasEscala !== undefined ? Math.min(1, diasEscala / 5) : sem.dias / 7
+  const curta = diasEscala !== undefined ? diasEscala < 5 : sem.dias < 7
   return {
-    base: m.base, pcts, propria: !!propria, curta: sem.dias < 7, dias: sem.dias,
+    base: m.base, pcts, propria: !!propria, curta, fator, dias: diasEscala ?? sem.dias, porEscala: diasEscala !== undefined,
     faixas: pcts.map(p => Math.floor((m.base * p * fator) / 100)),
   }
 }
