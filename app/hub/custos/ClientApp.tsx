@@ -59,12 +59,12 @@ function ErrorScreen({ error }: { error: string }) {
   )
 }
 
-function AppInner({ podeVerNF }: { podeVerNF: boolean }) {
+function AppInner({ podeVerNF, isAdmin }: { podeVerNF: boolean; isAdmin: boolean }) {
   const [pageRaw, setPageRaw] = useState(podeVerNF ? 'report' : 'custos')
   const f: any = useFinanceiro()
   const { loading, error } = f
 
-  const visiveis = paginasVisiveis(podeVerNF)
+  const visiveis = paginasVisiveis(podeVerNF, isAdmin)
   const page = visiveis.some(p => p.id === pageRaw) ? pageRaw : visiveis[0].id
   function setPage(p: string) { if (visiveis.some(v => v.id === p)) setPageRaw(p) }
 
@@ -80,7 +80,7 @@ function AppInner({ podeVerNF }: { podeVerNF: boolean }) {
   return (
     <div className="flex h-screen overflow-hidden bg-surface-base">
       <div className="hidden lg:flex no-print">
-        <Sidebar page={page} setPage={setPage} podeVerNF={podeVerNF} />
+        <Sidebar page={page} setPage={setPage} podeVerNF={podeVerNF} isAdmin={isAdmin} />
       </div>
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
@@ -143,7 +143,7 @@ function AppInner({ podeVerNF }: { podeVerNF: boolean }) {
       </div>
 
       <div className="lg:hidden no-print">
-        <BottomNav activePage={page} onPageChange={setPage} podeVerNF={podeVerNF} />
+        <BottomNav activePage={page} onPageChange={setPage} podeVerNF={podeVerNF} isAdmin={isAdmin} />
       </div>
     </div>
   )
@@ -175,7 +175,7 @@ function GestorShell({ areas }: { areas: string[] }) {
   )
 }
 
-export default function CustosClientApp({ allowedLojas = '*', allowedBus = '*' }: { allowedLojas?: string[] | '*'; allowedBus?: string[] | '*' }) {
+export default function CustosClientApp({ allowedLojas = '*', allowedBus = '*', isAdmin = false }: { allowedLojas?: string[] | '*'; allowedBus?: string[] | '*'; isAdmin?: boolean }) {
   if (allowedBus !== '*') return <GestorShell areas={allowedBus} />
 
   // Report, Por área e Bastidores mostram o grupo inteiro (a visão de NF é
@@ -183,7 +183,7 @@ export default function CustosClientApp({ allowedLojas = '*', allowedBus = '*' }
   const podeVerNF = allowedLojas === '*'
   return (
     <FinanceiroProvider allowedLojas={allowedLojas as any}>
-      <AppInner podeVerNF={podeVerNF} />
+      <AppInner podeVerNF={podeVerNF} isAdmin={isAdmin} />
     </FinanceiroProvider>
   )
 }
