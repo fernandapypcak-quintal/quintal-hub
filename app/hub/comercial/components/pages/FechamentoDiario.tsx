@@ -362,29 +362,43 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
                   Mês em curso — comparando dia 01 até ontem nos dois anos, pra não comparar um mês cheio com um pela metade.
                 </div>
               )}
-              {[{ anoLabel: dados.anoAnterior, dias: bloco.diasAnterior, cor: '#8a8c8f' }, { anoLabel: dados.anoAtual, dias: bloco.diasAtual, cor: '#185FA5' }].map(linha => (
-                <div key={linha.anoLabel} style={{ marginBottom: 14, overflowX: 'auto' }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: linha.cor, marginBottom: 6 }}>{linha.anoLabel}</div>
-                  <table style={{ borderCollapse: 'collapse', whiteSpace: 'nowrap' }}>
-                    <thead>
-                      <tr>
-                        <th style={{ textAlign: 'left', padding: '3px 8px 3px 0', fontSize: 10, color: '#9a9c9f' }}></th>
-                        {linha.dias.map(d => <th key={d.dia} style={{ textAlign: 'right', padding: '3px 8px', fontSize: 10, color: '#9a9c9f' }}>{String(d.dia).padStart(2,'0')}/{MESES[bloco.mesFechamento-1].toLowerCase()}</th>)}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr style={{ borderTop: '0.5px solid #F0F0EC' }}>
-                        <td style={{ padding: '4px 8px 4px 0', fontWeight: 700, fontSize: 11, color: '#9a9c9f' }}>Nº</td>
-                        {linha.dias.map(d => <td key={d.dia} style={{ textAlign: 'right', padding: '4px 8px', fontSize: 12, fontWeight: d.qtd ? 700 : 400, color: d.qtd ? '#0D0F14' : '#d8d8d4' }}>{d.qtd || '—'}</td>)}
-                      </tr>
-                      <tr>
-                        <td style={{ padding: '2px 8px 6px 0', fontWeight: 700, fontSize: 11, color: '#9a9c9f' }}>Valor</td>
-                        {linha.dias.map(d => <td key={d.dia} style={{ textAlign: 'right', padding: '2px 8px 6px', fontSize: 11, fontFamily: 'DM Mono, monospace', color: d.valor ? '#5a5c5f' : '#d8d8d4' }}>{d.valor ? fmt(d.valor) : '—'}</td>)}
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              ))}
+              {(() => {
+                const maxDia = Math.max(...bloco.diasAnterior.map(d => d.valor), ...bloco.diasAtual.map(d => d.valor), 1)
+                const altura = (v: number) => Math.max((v / maxDia) * 110, v > 0 ? 3 : 0)
+                return (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 4 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#8a8c8f' }}><span style={{ width: 10, height: 10, borderRadius: 2, background: '#c9ccd1', display: 'inline-block' }} />{dados.anoAnterior}</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#185FA5' }}><span style={{ width: 10, height: 10, borderRadius: 2, background: '#185FA5', display: 'inline-block' }} />{dados.anoAtual}</span>
+                  </div>
+                )
+              })()}
+              {(() => {
+                const maxDia = Math.max(...bloco.diasAnterior.map(d => d.valor), ...bloco.diasAtual.map(d => d.valor), 1)
+                const altura = (v: number) => Math.max((v / maxDia) * 110, v > 0 ? 3 : 0)
+                const porDiaAnt: Record<number, DiaFD> = {}; bloco.diasAnterior.forEach(d => { porDiaAnt[d.dia] = d })
+                const porDiaAtu: Record<number, DiaFD> = {}; bloco.diasAtual.forEach(d => { porDiaAtu[d.dia] = d })
+                const totalDias = Math.max(bloco.diasAnterior.length, bloco.diasAtual.length)
+                const zero = { dia: 0, qtd: 0, valor: 0 }
+                return (
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 130, overflowX: 'auto', paddingBottom: 4, marginBottom: 10 }}>
+                    {Array.from({ length: totalDias }, (_, i) => i + 1).map(dia => {
+                      const dAnt = porDiaAnt[dia] || zero
+                      const dAtu = porDiaAtu[dia] || zero
+                      return (
+                        <div key={dia} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 20 }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 110 }}>
+                            <div title={`${dados.anoAnterior}, dia ${dia}: ${dAnt.qtd} negócios, ${fmt(dAnt.valor)}`}
+                              style={{ width: 8, height: `${altura(dAnt.valor)}px`, background: '#c9ccd1', borderRadius: '2px 2px 0 0' }} />
+                            <div title={`${dados.anoAtual}, dia ${dia}: ${dAtu.qtd} negócios, ${fmt(dAtu.valor)}`}
+                              style={{ width: 8, height: `${altura(dAtu.valor)}px`, background: '#185FA5', borderRadius: '2px 2px 0 0' }} />
+                          </div>
+                          <span style={{ fontSize: 8, color: '#c9ccd1' }}>{String(dia).padStart(2,'0')}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
               <table style={{ borderCollapse: 'collapse' }}>
                 <thead>
                   <tr>
