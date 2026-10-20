@@ -10,7 +10,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
-  type Filtros, type Grao, type Grupo, type Preset, PRESETS, calcularPeriodo, dataCurta, hojeSP,
+  type Filtros, type Grao, type Grupo, type Preset, PRESETS, avisoAtualizacao, calcularPeriodo, dataCurta, hojeSP,
   limparCache, useConfig,
 } from './utils'
 import { Aviso, Spinner } from './ui'
@@ -195,6 +195,12 @@ export default function ReservasClientApp() {
           </div>
         </div>
 
+        {config && avisoAtualizacao(config) && (
+          <div style={{ background: '#FBEFEF', borderBottom: '0.5px solid #F0D5D5', padding: '8px 20px', fontSize: 12.5, color: '#8C1414', flexShrink: 0 }}>
+            ⚠ Atenção: {avisoAtualizacao(config)}. Os números abaixo podem estar desatualizados.
+            {' '}No Apps Script do Reservas, rode <b>diagnostico()</b> — ele mostra a causa e religa a atualização.
+          </div>
+        )}
         {abaAtual.base === 'criacao' && config && (
           <div style={{ background: '#fff', borderBottom: '0.5px solid #E8E8E2', padding: '7px 20px', fontSize: 12, color: '#5a5c5f', flexShrink: 0 }}>
             Criadas de <b>{periodo.label}</b> · comparado com {periodo.labelAnt} e com {periodo.labelAno}
