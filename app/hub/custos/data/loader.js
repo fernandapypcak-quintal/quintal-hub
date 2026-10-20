@@ -184,6 +184,7 @@ function parseNFResumo(r) {
     pago:         arr(r.pago).map(e => ({ ...e, valor: num(e.valor), valor_com_nf: num(e.valor_com_nf), qtd: num(e.qtd) })),
     pago_tipo:    arr(r.pago_tipo).map(e => ({ ...e, valor: num(e.valor) })),
     pago_cat:     arr(r.pago_cat).map(e => ({ ...e, valor: num(e.valor) })),
+    caixa_fora:   arr(r.caixa_fora).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
     aberto:       arr(r.aberto).map(e => ({ ...e, valor: num(e.valor), vencido: num(e.vencido), qtd: num(e.qtd), qtd_vencido: num(e.qtd_vencido) })),
     agenda:       arr(r.agenda).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
     pago_sem_nf:  arr(r.pago_sem_nf).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
@@ -241,6 +242,14 @@ export async function loadGestor(bu) {
 // v27.2 — contas pagas de uma BU no mês (data do pagamento). mes: '2026-09'
 export async function loadPagamentosBU({ bu, mes }) {
   const d = await fetchComParametros({ tipo: 'pagamentos_bu', bu, mes })
+  return Array.isArray(d) ? d.map(r => ({ ...r, valor: Number(r.valor || 0) })) : []
+}
+
+// v27.5 — o que saiu do caixa e não é custo das áreas (impostos, aplicações...). mes: '2026-09'
+export async function loadPagamentosFora({ mes, grupo }) {
+  const p = { tipo: 'pagamentos_fora', mes }
+  if (grupo) p.grupo = grupo
+  const d = await fetchComParametros(p)
   return Array.isArray(d) ? d.map(r => ({ ...r, valor: Number(r.valor || 0) })) : []
 }
 
