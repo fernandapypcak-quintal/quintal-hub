@@ -234,6 +234,7 @@ export async function loadGestor(bu) {
     pago_tipo: arr(d.pago_tipo).map(e => ({ ...e, valor: num(e.valor) })),
     pago_cat: arr(d.pago_cat).map(e => ({ ...e, valor: num(e.valor) })),
     revisar_cat: arr(d.revisar_cat).map(e => ({ ...e, valor: num(e.valor) })),
+    aberto: arr(d.aberto).map(e => ({ ...e, valor: num(e.valor), vencido: num(e.vencido), qtd: num(e.qtd), qtd_vencido: num(e.qtd_vencido) })),
   }
 }
 
