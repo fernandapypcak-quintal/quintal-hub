@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
       }
     } else if (access.lojas !== '*') {
       // Acesso restrito por loja: nada dos dados do grupo inteiro (notas por área)
-      const DO_GRUPO = ['gestor', 'nf_lista', 'pagamentos_bu', 'nf_resumo', 'conciliacao']
+      const DO_GRUPO = ['gestor', 'nf_lista', 'pagamentos_bu', 'nf_resumo', 'conciliacao', 'pagamentos_fora']
       if (DO_GRUPO.includes(tipo)) return NextResponse.json({ erro: 'Acesso negado' }, { status: 403 })
     }
 
