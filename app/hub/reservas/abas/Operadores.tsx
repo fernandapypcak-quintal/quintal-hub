@@ -35,7 +35,7 @@ export default function Operadores({ config, filtros, periodo, hoje }: { config:
     return { atual, linhas, total: atual.length, porGrupo }
   }, [dados.linhas, filtros, periodo])
 
-  const semanal = <MetaSemanal config={config} hoje={hoje} modo="operadores" />
+  const semanal = <MetaSemanal config={config} hoje={hoje} />
   if (dados.erro) return <>{semanal}<Aviso>{dados.erro}</Aviso></>
   if (!calc) return <>{semanal}<div style={card}><Spinner /></div></>
 
