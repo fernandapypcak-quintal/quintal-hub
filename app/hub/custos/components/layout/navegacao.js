@@ -3,6 +3,7 @@
 //        'casa'       = custos por loja (pagamentos)
 //        'bastidores' = detalhe das notas, prazos e pendências (manutenção do dado)
 // restrita: só aparece pra quem vê todas as lojas
+// v27.6: a Visão geral saiu — o dashboard abre no Report do mês
 export const GRUPOS = [
   { id: 'gestao',     label: 'Gestão' },
   { id: 'casa',       label: 'Por casa' },
@@ -10,7 +11,6 @@ export const GRUPOS = [
 ]
 
 export const PAGINAS = [
-  { id: 'home',         icon: '🏠', label: 'Visão geral',          curto: 'Geral',    grupo: 'inicio',     titulo: 'Visão geral',             sub: 'Resumo do mês' },
   { id: 'report',       icon: '📊', label: 'Report do mês',        curto: 'Report',   grupo: 'gestao',     titulo: 'Report do mês',           sub: 'Custos do grupo por área, pro CEO', restrita: true },
   { id: 'area',         icon: '🧩', label: 'Por área',             curto: 'Áreas',    grupo: 'gestao',     titulo: 'Por área',                sub: 'O que cada gestor vê na página dele', restrita: true },
   { id: 'custos',       icon: '📌', label: 'Custo fixo',           curto: 'Fixo',     grupo: 'casa',       titulo: 'Custo fixo',              sub: 'Por casa' },
