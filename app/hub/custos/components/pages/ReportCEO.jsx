@@ -88,7 +88,19 @@ export default function ReportCEO() {
     const hist = ult.map(m => ({ m, fixo: tipo(m, 'Fixo'), vari: tipo(m, 'Variável') }))
     const maxH = Math.max(1, ...hist.map(h => h.fixo + h.vari))
 
-    return { kpis, investMes, foraMes, comNota, abertoTot, abertoQtd, vencidoTot, areas, puxou, semAreaAnt, semAreaMes, hist, maxH, temTipo: T.length > 0 }
+    // "Com o que gastamos": custo do mês por tipo de gasto (todas as áreas e casas)
+    const catsMes = [...new Set(C.filter(x => (x.mes === mes || x.mes === ant) && noTotal(x.bu)).map(x => x.categoria))]
+    const totCat = soma(C, x => x.mes === mes && noTotal(x.bu))
+    let cats = catsMes.map(cat => ({
+      cat, v: soma(C, x => x.mes === mes && x.categoria === cat && noTotal(x.bu)), a: soma(C, x => x.mes === ant && x.categoria === cat && noTotal(x.bu)),
+    })).filter(c => c.v || c.a).sort((x, y) => y.v - x.v)
+    const pequenas = cats.filter(c => totCat && c.v / totCat < 0.01)
+    if (pequenas.length > 1) {
+      cats = cats.filter(c => !pequenas.includes(c))
+      cats.push({ cat: `Outros (${pequenas.map(c => c.cat.toLowerCase()).join(', ')})`, v: pequenas.reduce((t, c) => t + c.v, 0), a: pequenas.reduce((t, c) => t + c.a, 0), outros: true })
+    }
+
+    return { cats, totCat, kpis, investMes, foraMes, comNota, abertoTot, abertoQtd, vencidoTot, areas, puxou, semAreaAnt, semAreaMes, hist, maxH, temTipo: T.length > 0 }
   }, [nfResumo, busConfig, mes, ant, meses])
 
   if (!nfResumo) return <SemDadosNF />
@@ -200,6 +212,39 @@ export default function ReportCEO() {
           </div>
         )}
       </section>
+
+      {r.cats.length > 0 && (
+        <section aria-labelledby="ceo-tipo" style={{ ...card, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <h2 id="ceo-tipo" style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Com o que gastamos</h2>
+            <div style={{ fontSize: 12, color: COR.suave, marginTop: 3, lineHeight: 1.5 }}>Custo do mês por tipo de gasto, somando todas as áreas e casas. A barra mostra quanto cada tipo pesa no total de {fmtK(r.totCat)}.</div>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <div style={{ minWidth: 620 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(170px, 1.2fr) minmax(140px, 1.6fr) 100px 84px 110px', gap: 10, fontSize: 12, color: COR.suave, padding: '6px 4px', borderBottom: `0.5px solid ${COR.borda}` }}>
+                <div>Tipo de gasto</div><div>Peso no custo</div><div style={{ textAlign: 'right' }}>{mesNomeCurto(mes).split('/')[0]}</div><div style={{ textAlign: 'right' }}>vs {mesNome(ant).substring(0, 3)}</div><div style={{ textAlign: 'right' }}>Diferença</div>
+              </div>
+              {r.cats.map(c => {
+                const p = varPct(c.v, c.a), dif = c.v - c.a, maxV = r.cats[0].v || 1
+                return (
+                  <div key={c.cat} style={{ display: 'grid', gridTemplateColumns: 'minmax(170px, 1.2fr) minmax(140px, 1.6fr) 100px 84px 110px', gap: 10, alignItems: 'center', padding: '9px 4px', borderBottom: '0.5px solid #F0F0EC', fontSize: 13, breakInside: 'avoid' }}>
+                    <div style={{ fontWeight: c.outros ? 400 : 500, fontSize: c.outros ? 12 : 13, color: c.outros ? COR.suave : COR.texto }}>{c.cat}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ flex: 1, height: 8, background: '#EEEDE6', borderRadius: 4, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${(c.v / maxV * 100).toFixed(1)}%`, background: '#4F6B14', borderRadius: 4, printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact' }} />
+                      </div>
+                      <span style={{ ...num, fontSize: 11, color: COR.suave, width: 34, textAlign: 'right' }}>{r.totCat ? Math.round(c.v / r.totCat * 100) : 0}%</span>
+                    </div>
+                    <div style={{ ...num, textAlign: 'right' }}>{fmtK(c.v)}</div>
+                    <div style={{ ...num, textAlign: 'right', color: corVar(p), fontWeight: p !== null && Math.abs(p) > 10 ? 600 : 400 }}>{pctSinal(p)}</div>
+                    <div style={{ ...num, textAlign: 'right', fontSize: 12, color: dif >= 0 ? '#9A3C06' : '#4F6B14' }}>{dif >= 0 ? '+' : ''}{fmtK(dif)}</div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </section>
+      )}
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'stretch' }}>
         <section aria-labelledby="ceo-puxou" style={{ ...card, flex: '1 1 420px', display: 'flex', flexDirection: 'column', gap: 12 }}>
