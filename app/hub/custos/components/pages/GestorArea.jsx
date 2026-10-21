@@ -3,6 +3,7 @@ import { AREAS_CUSTOS } from '@/lib/bus'
 import { loadGestor, loadNFLista, loadPagamentosBU, reportarDivergenciaBU } from '../../data/loader.js'
 import { fmt, fmtK, fmtData, mesAnteriorISO, mesISOLabel, mesNome, mesNomeCurto } from '../../utils.js'
 import { COR, num, Busca, Carregando, Erro, Vazio, useCarga, botaoSecundario, exportarExcel, BotaoExportar } from '../ui/nf.jsx'
+import DRECustos from '../ui/DRECustos.jsx'
 
 // v27.3 — "Minha área": tudo pelo MÊS DO PAGAMENTO. O que a área pagou (com
 // e sem nota), fixo e variável, de onde veio a diferença, a lista de
@@ -29,7 +30,9 @@ export default function GestorArea({ areas }) {
   const g = carga.dados
 
   const meses = useMemo(() => (g ? g.meses.map(m => m.mes).filter(Boolean).sort().reverse() : []), [g])
-  const mesPadrao = g ? ((g.baixas_ate && meses.includes(g.baixas_ate.substring(0, 7))) ? g.baixas_ate.substring(0, 7) : meses[0]) : ''
+  // abre no último mês FECHADO (o atual ainda está em andamento)
+  const fechados = g ? meses.filter(m => !g.mes_atual || m < g.mes_atual) : []
+  const mesPadrao = fechados[0] || meses[0] || ''
   const mes = mesEscolhido && meses.includes(mesEscolhido) ? mesEscolhido : mesPadrao
   const ant = mesAnteriorISO(mes)
 
@@ -57,9 +60,11 @@ export default function GestorArea({ areas }) {
     const pago = soma(g.pago, x => x.mes === mes), pagoA = soma(g.pago, x => x.mes === ant)
     const comNota = soma(g.pago, x => x.mes === mes, 'valor_com_nf')
     const abertoValor = soma(g.aberto || [], () => true), abertoQtd = soma(g.aberto || [], () => true, 'qtd')
+    const ehAtual = mes === g.mes_atual
+    const aPagarMes = ehAtual ? soma(g.a_pagar_mes || [], x => x.mes === mes) : 0, aPagarQtd = ehAtual ? soma(g.a_pagar_mes || [], x => x.mes === mes, 'qtd') : 0
     const tipo = (m, t) => soma(g.pago_tipo, x => x.mes === m && x.tipo === t)
     const fixo = tipo(mes, 'Fixo'), fixoA = tipo(ant, 'Fixo'), vari = tipo(mes, 'Variável'), variA = tipo(ant, 'Variável')
-    const outros = pago - fixo - vari
+    const invest = tipo(mes, 'Investimento')
 
     const ult = meses.filter(m => m <= mes).sort().slice(-6)
     const hist = ult.map(m => ({ m, fixo: tipo(m, 'Fixo'), vari: tipo(m, 'Variável') }))
@@ -75,7 +80,7 @@ export default function GestorArea({ areas }) {
       return { c, dif: b - a, texto }
     }).filter(x => Math.abs(x.dif) >= 1).sort((x, y) => Math.abs(y.dif) - Math.abs(x.dif)).slice(0, 5)
 
-    return { pago, pagoA, comNota, abertoValor, abertoQtd, fixo, fixoA, vari, variA, outros, hist, maxH, mudancas }
+    return { pago, pagoA, comNota, abertoValor, abertoQtd, aPagarMes, aPagarQtd, ehAtual, fixo, fixoA, vari, variA, invest, hist, maxH, mudancas }
   }, [g, mes, ant, meses])
 
   if (carga.carregando) return <div style={{ padding: 20 }}>{barraFiltros}<Carregando texto={`Carregando ${bu}…`} /></div>
@@ -83,9 +88,10 @@ export default function GestorArea({ areas }) {
   if (!conteudo) return <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>{barraFiltros}<Vazio>Ainda não tem dados de {bu}.</Vazio></div>
 
   const c = conteudo
-  const vPago = varPct(c.pago, c.pagoA)
+  const vPago = varPct(c.ehAtual ? c.pago + c.aPagarMes : c.pago, c.pagoA)
   const frasePago = vPago === null ? '' : Math.abs(vPago) < 1 ? `, praticamente igual a ${mesNome(ant)}` : `, ${pctTxt(vPago)} ${vPago > 0 ? 'a mais' : 'a menos'} que em ${mesNome(ant)}`
   const fraseNotas = c.pago ? ` ${fmtK(c.comNota)} desses pagamentos tinham nota fiscal.` : ''
+  const fraseAtual = `${mesNome(mes)[0].toUpperCase()}${mesNome(mes).slice(1)} está em andamento: ${bu} já pagou ${fmtK(c.pago)} e tem ${fmtK(c.aPagarMes)} em notas a pagar no mês, o que dá ${fmtK(c.pago + c.aPagarMes)} (${mesNome(ant)} fechou em ${fmtK(c.pagoA)}).`
   const pctNota = c.pago ? Math.round(c.comNota / c.pago * 100) : 0
   const card = { background: '#fff', border: `0.5px solid ${COR.borda}`, borderRadius: 12, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }
 
@@ -95,12 +101,12 @@ export default function GestorArea({ areas }) {
 
       <section aria-labelledby="g-resumo" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <h1 id="g-resumo" style={{ margin: 0, fontSize: 24, fontWeight: 600, lineHeight: 1.3, maxWidth: 780 }}>
-          Em {mesNome(mes)}, {bu} pagou <span style={num}>{fmtK(c.pago)}</span>{frasePago}.{fraseNotas}
+          {c.ehAtual ? fraseAtual : <>Em {mesNome(mes)}, {bu} pagou <span style={num}>{fmtK(c.pago)}</span>{frasePago}.{fraseNotas}</>}
         </h1>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
           <div style={card}>
             <div style={{ fontSize: 13, fontWeight: 600 }}>Pago no mês</div>
-            <div style={{ fontSize: 12, color: COR.suave, lineHeight: 1.45 }}>O que saiu do caixa no mês, pela data do pagamento. É o relatório de contas pagas.</div>
+            <div style={{ fontSize: 12, color: COR.suave, lineHeight: 1.45 }}>Custo fixo + variável pago no mês, pela data do pagamento. É o relatório de contas pagas.</div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginTop: 4 }}>
               <span style={{ ...num, fontSize: 28 }}>{fmtK(c.pago)}</span><ChipVar p={vPago} mesAnt={ant} />
             </div>
@@ -114,13 +120,18 @@ export default function GestorArea({ areas }) {
             </div>
           </div>
           <div style={card}>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>Notas recebidas e ainda não pagas (hoje)</div>
-            <div style={{ fontSize: 12, color: COR.suave, lineHeight: 1.45 }}>Notas da área que já chegaram e ainda não aparecem no relatório de contas pagas. Entram no mês em que forem pagas.</div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>Pago + a pagar em {mesNome(mes)}</div>
+            <div style={{ fontSize: 12, color: COR.suave, lineHeight: 1.45 }}>O que já foi pago no mês somado às notas em aberto com previsão de pagamento no mês.</div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginTop: 4 }}>
-              <span style={{ ...num, fontSize: 28 }}>{fmtK(c.abertoValor)}</span>
-              <span style={{ fontSize: 13, color: COR.suave }}>{c.abertoQtd.toLocaleString('pt-BR')} notas</span>
+              <span style={{ ...num, fontSize: 28 }}>{fmtK(c.pago + c.aPagarMes)}</span>
             </div>
-            <div style={{ fontSize: 12, color: COR.suave }}>A lista está na aba "Notas ainda não pagas", lá embaixo.</div>
+            <div style={{ fontSize: 12, color: COR.suave, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+              <span><b style={{ color: COR.texto, fontWeight: 600 }}>{fmtK(c.pago)}</b> pago</span>
+              {c.ehAtual
+                ? <span><b style={{ color: COR.texto, fontWeight: 600 }}>{fmtK(c.aPagarMes)}</b> a pagar ({c.aPagarQtd.toLocaleString('pt-BR')} notas)</span>
+                : <span>mês fechado: o que ficou em aberto passa pro mês atual</span>}
+            </div>
+            <div style={{ fontSize: 12, color: COR.suave }}>Notas não pagas dos últimos 40 dias: {fmtK(c.abertoValor)} ({c.abertoQtd.toLocaleString('pt-BR')} notas). Lista lá embaixo.</div>
           </div>
         </div>
       </section>
@@ -155,7 +166,7 @@ export default function GestorArea({ areas }) {
           <div style={{ display: 'flex', gap: 16, fontSize: 12, color: COR.suave, flexWrap: 'wrap' }}>
             <span><span aria-hidden="true" style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: '#2B4C7E', marginRight: 5 }} />Fixo</span>
             <span><span aria-hidden="true" style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: '#97A624', marginRight: 5 }} />Variável</span>
-            {c.outros > 1 && <span>Investimentos e outros no mês: {fmtK(c.outros)}</span>}
+            {c.invest > 1 && <span>Fora do custo: investimentos de {fmtK(c.invest)} no mês</span>}
           </div>
         </section>
 
@@ -176,6 +187,8 @@ export default function GestorArea({ areas }) {
         </section>
       </div>
 
+      <DRECustos key={bu} bu={bu} />
+
       <ListasArea bu={bu} mes={mes} />
     </div>
   )
@@ -191,7 +204,7 @@ export function ListasArea({ bu, mes, semRevisao = false }) {
   const [busca, setBusca] = useState('')
   const [limite, setLimite] = useState(100)
   const pagos = useCarga(() => (aba === 'pagos' ? loadPagamentosBU({ mes, bu }) : Promise.resolve(null)), [aba, mes, bu])
-  const abertas = useCarga(() => (aba === 'abertas' ? loadNFLista({ status: 'aberto', bu }) : Promise.resolve(null)), [aba, bu])
+  const abertas = useCarga(() => (aba === 'abertas' ? loadNFLista({ status: 'aberto', bu, dias: 40 }) : Promise.resolve(null)), [aba, bu])
   const atual = aba === 'pagos' ? pagos : abertas
   const b = busca.trim().toUpperCase()
   const base = (atual.dados || []).map(l => aba === 'abertas' ? { ...l, emAberto: Math.max(0, l.valor - (l.valor_pago || 0)) } : l)
@@ -199,6 +212,7 @@ export function ListasArea({ bu, mes, semRevisao = false }) {
     .filter(l => !b || [l.fornecedor, l.documento, l.nf_documento, l.descricao, l.categoria, l.item_principal].some(v => String(v || '').toUpperCase().includes(b)))
     .sort((x, y) => aba === 'abertas' ? String(x.dt_dig).localeCompare(String(y.dt_dig)) : y.valor - x.valor)
   const total = linhas.reduce((t, l) => t + (aba === 'abertas' ? l.emAberto : l.valor), 0)
+  const totalInvest = aba === 'pagos' ? linhas.filter(l => l.tipo !== 'Fixo' && l.tipo !== 'Variável').reduce((t, l) => t + l.valor, 0) : 0
 
   const exportar = () => aba === 'pagos'
     ? exportarExcel(`${bu} - pagamentos ${mesNomeCurto(mes).replace('/', '-')}`, [
@@ -213,7 +227,7 @@ export function ListasArea({ bu, mes, semRevisao = false }) {
         { titulo: 'Nota fiscal', valor: l => l.nf_documento || (l.com_nf ? 'sim' : 'sem nota'), largura: 14 },
         { titulo: 'Entrada da nota', valor: l => l.nf_dt_dig, tipo: 'data', largura: 16 },
       ], linhas, 'Pagamentos')
-    : exportarExcel(`${bu} - notas ainda não pagas`, [
+    : exportarExcel(`${bu} - notas não pagas (últimos 40 dias)`, [
         { titulo: 'Fornecedor', valor: l => l.fornecedor, largura: 40 },
         { titulo: 'Nota fiscal', valor: l => l.documento, largura: 14 },
         { titulo: 'Item principal', valor: l => l.item_principal, largura: 32 },
@@ -241,13 +255,13 @@ export function ListasArea({ bu, mes, semRevisao = false }) {
         </div>
         <div role="tablist" style={{ display: 'flex', gap: 4, background: '#F4F4EF', padding: 3, borderRadius: 9, flexWrap: 'wrap' }}>
           <button role="tab" aria-selected={aba === 'pagos'} onClick={() => { setAba('pagos'); setLimite(100) }} style={tab('pagos')}>Pagamentos de {mesNome(mes)}</button>
-          <button role="tab" aria-selected={aba === 'abertas'} onClick={() => { setAba('abertas'); setLimite(100) }} style={tab('abertas')}>Notas ainda não pagas</button>
+          <button role="tab" aria-selected={aba === 'abertas'} onClick={() => { setAba('abertas'); setLimite(100) }} style={tab('abertas')}>Notas não pagas (últimos 40 dias)</button>
         </div>
       </div>
       <div style={{ fontSize: 13, background: COR.fundo, borderRadius: 8, padding: '10px 12px', lineHeight: 1.5 }}>
         {aba === 'pagos'
           ? `Tudo que a área pagou em ${mesNome(mes)}, pela data do pagamento. Quando o pagamento tem nota fiscal, aparece o número e a data em que a nota entrou (muitas vezes no mês anterior). Aluguel, cartão, folha e impostos não têm nota, e isso é normal.`
-          : 'Notas da área que já entraram e ainda não foram pagas, das mais antigas para as mais novas. Elas vão aparecer nos pagamentos do mês em que forem pagas.'}
+          : 'Notas da área que entraram nos últimos 40 dias e ainda não foram pagas, das mais antigas para as mais novas. Elas vão aparecer nos pagamentos do mês em que forem pagas.'}
       </div>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'space-between' }}>
         <Busca valor={busca} onChange={v => { setBusca(v); setLimite(100) }} placeholder="Buscar fornecedor, conta ou número da nota" />
@@ -296,7 +310,7 @@ export function ListasArea({ bu, mes, semRevisao = false }) {
                 </div>
               ))}
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', padding: '12px 4px 0', fontSize: 13 }}>
-                <span style={{ color: COR.suave }}>{linhas.length.toLocaleString('pt-BR')} {aba === 'pagos' ? 'pagamentos' : 'notas'} · {fmt(total)}</span>
+                <span style={{ color: COR.suave }}>{linhas.length.toLocaleString('pt-BR')} {aba === 'pagos' ? 'pagamentos' : 'notas'} · {fmt(total)}{totalInvest > 0 ? ` (custo ${fmt(total - totalInvest)} + investimentos ${fmt(totalInvest)})` : ''}</span>
                 {linhas.length > limite && <button onClick={() => setLimite(l => l + 200)} style={botaoSecundario}>Mostrar mais {Math.min(200, linhas.length - limite)}</button>}
               </div>
             </div>
