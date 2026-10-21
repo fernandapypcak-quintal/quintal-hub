@@ -12,6 +12,7 @@ export const GRUPOS = [
 
 export const PAGINAS = [
   { id: 'report',       icon: '📊', label: 'Report do mês',        curto: 'Report',   grupo: 'gestao',     titulo: 'Report do mês',           sub: 'Custos do grupo por área, pro CEO', restrita: true },
+  { id: 'dre',          icon: '📑', label: 'DRE de custos',        curto: 'DRE',      grupo: 'gestao',     titulo: 'DRE de custos',           sub: 'Área, tipo de gasto e fornecedor: últimos meses e o mês atual', restrita: true },
   { id: 'area',         icon: '🧩', label: 'Por área',             curto: 'Áreas',    grupo: 'gestao',     titulo: 'Por área',                sub: 'O que cada gestor vê na página dele', restrita: true },
   { id: 'custos',       icon: '📌', label: 'Custo fixo',           curto: 'Fixo',     grupo: 'casa',       titulo: 'Custo fixo',              sub: 'Por casa' },
   { id: 'variavel',     icon: '🔄', label: 'Custo variável',       curto: 'Variável', grupo: 'casa',       titulo: 'Custo variável',          sub: 'Por casa' },
