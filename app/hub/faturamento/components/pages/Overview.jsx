@@ -168,6 +168,17 @@ export default function Overview() {
     const tendVsAACasa = variation(tendFatCasa, totalAAFull_casa);
     const tendVsAADel  = variation(tendFatDel,  totalAAFull_del);
 
+    // MoM: mês atual vs mês anterior (jan → dez do ano anterior)
+    const mesMA = mes === 1 ? 12 : mes - 1;
+    const anoMA = mes === 1 ? ano - 1 : ano;
+    const recsMA      = baseData.filter(r => r.Ano === anoMA && r.Mes === mesMA);
+    const totalMAFull = sum(recsMA);
+    const momAteDia   = variation(total, sum(recsMA.filter(r => r.Dia <= lastDay)));
+    const tendVsMA    = variation(tendFat, totalMAFull);
+    const tendVsMACasa = variation(tendFatCasa, sum(recsMA.filter(r => r.Canal === 'CASA')));
+    const tendVsMADel  = variation(tendFatDel,  sum(recsMA.filter(r => r.Canal === 'DELIVERY')));
+    const mesMALabel  = `${['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][mesMA]}/${String(anoMA).slice(2)}`;
+
     // Almoço — respeita o filtro de loja selecionado (igual ao baseData),
     // senão o total de almoço aparece "colado" em qualquer loja filtrada
     // mesmo sendo a soma de outras lojas.
@@ -179,6 +190,7 @@ export default function Overview() {
     return { total, casa, del, yoy, tendFat, tendVsAA,
       totalAlmoco, pesoAlmoco, jantarCasa,
       tendFatCasa, tendFatDel, tendVsAACasa, tendVsAADel,
+      momAteDia, tendVsMA, tendVsMACasa, tendVsMADel, mesMALabel,
       pctCasa: total>0 ? casa/total*100 : 0,
       pctDel:  total>0 ? del/total*100  : 0 };
   }, [baseData, periodo, filters, getAlmoco]);
@@ -357,25 +369,33 @@ export default function Overview() {
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard title="Faturamento Total" value={kpis.total} icon={DollarSign} accent="#97A624"
-          tooltip="Faturamento acumulado do mês atual. YoY compara com o mesmo período do ano anterior."
+          tooltip={`Faturamento acumulado do mês atual. YoY compara com o mesmo período do ano anterior; MoM compara com ${kpis.mesMALabel} cortado no mesmo dia.`}
           variation={kpis.yoy}
-          variationLabel={`YoY até dia ${periodo.lastDay}`} delay={0} />
+          variationLabel={`YoY até dia ${periodo.lastDay}`}
+          variation2={kpis.momAteDia}
+          variationLabel2={`vs ${kpis.mesMALabel} até dia ${periodo.lastDay}`} delay={0} />
         <KpiCard title="Salão" value={kpis.casa} icon={Home} accent="#8C1414"
           tooltip={`Realizado Casa até dia ${periodo?.lastDay}. Tend Fat = R$${(kpis.tendFatCasa/1e6).toFixed(2).replace('.',',')}M (projeção do mês).`}
           variation={kpis.tendVsAACasa}
           variationLabel={`Tend vs ${periodo?.label?.split('/')[0]}/${String(periodo?.ano-1).slice(2)}`}
           subtitle={`Tend Fat ${formatBRL(kpis.tendFatCasa, true)}`}
+          variation2={kpis.tendVsMACasa}
+          variationLabel2={`Tend vs ${kpis.mesMALabel}`}
           delay={80} />
         <KpiCard title="Delivery" value={kpis.del} icon={Truck} accent="#D9B504"
           tooltip={`Realizado Delivery até dia ${periodo?.lastDay}. Tend Fat = ${formatBRL(kpis.tendFatDel, true)} (projeção do mês).`}
           variation={kpis.tendVsAADel}
           variationLabel={`Tend vs ${periodo?.label?.split('/')[0]}/${String(periodo?.ano-1).slice(2)}`}
           subtitle={`Tend Fat ${formatBRL(kpis.tendFatDel, true)}`}
+          variation2={kpis.tendVsMADel}
+          variationLabel2={`Tend vs ${kpis.mesMALabel}`}
           delay={160} />
         <KpiCard title="Projeção do Mês" value={kpis.tendFat} icon={Target} accent="#97A624"
           tooltip="Tend Fat = Realizado + Σ(média de cada dia da semana × dias restantes). Mesma fórmula da planilha."
           variation={kpis.tendVsAA}
-          variationLabel={`vs ${periodo.label.split('/')[0]}/${String(periodo.ano-1).slice(2)}`} delay={240} />
+          variationLabel={`vs ${periodo.label.split('/')[0]}/${String(periodo.ano-1).slice(2)}`}
+          variation2={kpis.tendVsMA}
+          variationLabel2={`vs ${kpis.mesMALabel}`} delay={240} />
       </div>
 
       {/* ── TICKET MÉDIO + DESCONTO ── */}
