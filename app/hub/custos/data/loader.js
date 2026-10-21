@@ -185,6 +185,9 @@ function parseNFResumo(r) {
     pago_tipo:    arr(r.pago_tipo).map(e => ({ ...e, valor: num(e.valor) })),
     pago_cat:     arr(r.pago_cat).map(e => ({ ...e, valor: num(e.valor) })),
     caixa_fora:   arr(r.caixa_fora).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
+    a_pagar_mes:  arr(r.a_pagar_mes).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
+    aberto_desde: r.aberto_desde || '',
+    mes_atual:    r.mes_atual || '',
     aberto:       arr(r.aberto).map(e => ({ ...e, valor: num(e.valor), vencido: num(e.vencido), qtd: num(e.qtd), qtd_vencido: num(e.qtd_vencido) })),
     agenda:       arr(r.agenda).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
     pago_sem_nf:  arr(r.pago_sem_nf).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
@@ -236,6 +239,8 @@ export async function loadGestor(bu) {
     pago_cat: arr(d.pago_cat).map(e => ({ ...e, valor: num(e.valor) })),
     revisar_cat: arr(d.revisar_cat).map(e => ({ ...e, valor: num(e.valor) })),
     aberto: arr(d.aberto).map(e => ({ ...e, valor: num(e.valor), vencido: num(e.vencido), qtd: num(e.qtd), qtd_vencido: num(e.qtd_vencido) })),
+    a_pagar_mes: arr(d.a_pagar_mes).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
+    aberto_desde: d.aberto_desde || '', mes_atual: d.mes_atual || '',
   }
 }
 
@@ -251,6 +256,19 @@ export async function loadPagamentosFora({ mes, grupo }) {
   if (grupo) p.grupo = grupo
   const d = await fetchComParametros(p)
   return Array.isArray(d) ? d.map(r => ({ ...r, valor: Number(r.valor || 0) })) : []
+}
+
+// v27.7 — DRE de custos (área > tipo de gasto > fornecedor). bu vazio = todas
+export async function loadDRE({ bu } = {}) {
+  const p = { tipo: 'dre' }
+  if (bu && bu !== 'Todas') p.bu = bu
+  const d = await fetchComParametros(p, 45000)
+  const arr = x => Array.isArray(x) ? x : []
+  return {
+    meses: arr(d.meses), mes_atual: d.mes_atual || '', baixas_ate: d.baixas_ate || '',
+    pago: arr(d.pago).map(r => ({ ...r, valor: Number(r.valor || 0) })),
+    a_pagar: arr(d.a_pagar).map(r => ({ ...r, valor: Number(r.valor || 0), qtd: Number(r.qtd || 0) })),
+  }
 }
 
 // Tela de conciliação. mes: '2026-09' (vazio = tudo)
