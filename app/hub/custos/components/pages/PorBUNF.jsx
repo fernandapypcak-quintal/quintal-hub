@@ -27,8 +27,10 @@ export default function PorBUNF({ irPara }) {
       const e  = somar(nfResumo.entrou, x => x.bu === bu && x.mes === mesNF)
       const eA = somar(nfResumo.entrou, x => x.bu === bu && x.mes === ant)
       const qn = somar(nfResumo.entrou, x => x.bu === bu && x.mes === mesNF, 'qtd')
-      const p  = somar(nfResumo.pago,   x => x.bu === bu && x.mes === mesNF)
-      const pA = somar(nfResumo.pago,   x => x.bu === bu && x.mes === ant)
+      // v27.4: "pago" é só fixo + variável; as BUs fora dos totais vêm do pago_tipo
+      const fonte = grupoBU(bu) === 'Fora dos totais' ? (nfResumo.pago_tipo || []) : nfResumo.pago
+      const p  = somar(fonte, x => x.bu === bu && x.mes === mesNF)
+      const pA = somar(fonte, x => x.bu === bu && x.mes === ant)
       const pN = somar(nfResumo.pago,   x => x.bu === bu && x.mes === mesNF, 'valor_com_nf')
       const ab = nfResumo.aberto.find(x => x.bu === bu) || { valor: 0, vencido: 0, qtd: 0, qtd_vencido: 0 }
       return { bu, grupo: grupoBU(bu), entrou: e, entrouAnt: eA, qtdNotas: qn, pago: p, pagoAnt: pA, pagoComNF: pN, aberto: ab.valor, vencido: ab.vencido, qtdAberto: ab.qtd, qtdVencido: ab.qtd_vencido }
