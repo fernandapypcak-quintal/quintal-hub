@@ -1,5 +1,5 @@
 import React from 'react'
-import { fmtK, fmtData, mesNome, mesAnteriorISO } from '../../utils.js'
+import { fmtK, fmtData, mesNome, mesNomeCurto, mesAnteriorISO } from '../../utils.js'
 import { COR, num } from './nf.jsx'
 
 // v27.10 — Projeção: como o mês atual vai fechar e o que já está comprometido
@@ -13,39 +13,43 @@ const somar = (arr, f, k = 'valor') => (arr || []).filter(f).reduce((t, x) => t 
 const proxMes = m => { const [a, mm] = m.split('-').map(Number); return mm === 12 ? `${a + 1}-01` : `${a}-${String(mm + 1).padStart(2, '0')}` }
 
 // pago: [{mes, bu, valor, valor_com_nf}]  aPagarMes: [{mes, bu, valor}]
-export function calcularProjecao({ pago, aPagarMes, mesAtual, bus, nProximos = 2 }) {
-  const ant = mesAnteriorISO(mesAtual)
-  const fechados = [ant, mesAnteriorISO(ant), mesAnteriorISO(mesAnteriorISO(ant))]
-  const proximos = []
-  let m = mesAtual
-  for (let i = 0; i < nProximos; i++) { m = proxMes(m); proximos.push(m) }
+// mesAlvo = mês atual (projeção) ou um mês futuro (já comprometido).
+export function calcularProjecao({ pago, aPagarMes, mesAtual, mesAlvo, bus }) {
+  const alvo = mesAlvo || mesAtual
+  const futuro = alvo > mesAtual
+  const ultimoFechado = mesAnteriorISO(mesAtual)
+  const fechados = [ultimoFechado, mesAnteriorISO(ultimoFechado), mesAnteriorISO(mesAnteriorISO(ultimoFechado))]
+  const ref = futuro ? ultimoFechado : mesAnteriorISO(alvo)   // comparação: sempre um mês fechado
 
   const linhas = bus.map(bu => {
     const semNota = mm => somar(pago, x => x.bu === bu && x.mes === mm) - somar(pago, x => x.bu === bu && x.mes === mm, 'valor_com_nf')
     const comDado = fechados.filter(mm => somar(pago, x => x.bu === bu && x.mes === mm) > 0)
     // "Sem área" não tem conta fixa pra estimar: entra só o que é real (pago + notas)
     const mediaSemNota = bu === 'Revisar' || !comDado.length ? 0 : comDado.reduce((t, mm) => t + semNota(mm), 0) / comDado.length
-    const pagoAt = somar(pago, x => x.bu === bu && x.mes === mesAtual)
-    const fixasRest = Math.max(0, mediaSemNota - semNota(mesAtual))
-    const notas = somar(aPagarMes, x => x.bu === bu && x.mes === mesAtual)
-    return {
-      bu, anterior: somar(pago, x => x.bu === bu && x.mes === ant),
-      pago: pagoAt, notas, fixas: fixasRest, proj: pagoAt + notas + fixasRest, mediaSemNota,
-      proximos: proximos.map(pm => {
-        const n = somar(aPagarMes, x => x.bu === bu && x.mes === pm)
-        return { mes: pm, notas: n, fixas: mediaSemNota, total: n + mediaSemNota }
-      }),
-    }
-  }).filter(l => l.anterior || l.pago || l.notas || l.fixas || l.proximos.some(p => p.notas))
+    const pagoAlvo = futuro ? 0 : somar(pago, x => x.bu === bu && x.mes === alvo)
+    const fixas = futuro ? mediaSemNota : Math.max(0, mediaSemNota - semNota(alvo))
+    const notas = somar(aPagarMes, x => x.bu === bu && x.mes === alvo)
+    return { bu, anterior: somar(pago, x => x.bu === bu && x.mes === ref), pago: pagoAlvo, notas, fixas, proj: pagoAlvo + notas + fixas }
+  }).filter(l => l.anterior || l.pago || l.notas || l.fixas)
 
   const tot = k => linhas.reduce((t, l) => t + l[k], 0)
   return {
-    mesAtual, ant, proximos, linhas,
-    total: {
-      anterior: tot('anterior'), pago: tot('pago'), notas: tot('notas'), fixas: tot('fixas'), proj: tot('proj'),
-      proximos: proximos.map((pm, i) => ({ mes: pm, notas: linhas.reduce((t, l) => t + l.proximos[i].notas, 0), fixas: linhas.reduce((t, l) => t + l.proximos[i].fixas, 0), total: linhas.reduce((t, l) => t + l.proximos[i].total, 0) })),
-    },
+    mesAtual, mesAlvo: alvo, futuro, ant: ref, linhas,
+    total: { anterior: tot('anterior'), pago: tot('pago'), notas: tot('notas'), fixas: tot('fixas'), proj: tot('proj') },
   }
+}
+
+// opções do filtro de mês: 2 próximos, o atual e os fechados
+export function opcoesDeMes(mesAtual, mesesComDado) {
+  const prox = m => { const [a, mm] = m.split('-').map(Number); return mm === 12 ? `${a + 1}-01` : `${a}-${String(mm + 1).padStart(2, '0')}` }
+  const p1 = prox(mesAtual), p2 = prox(p1)
+  const fechados = [...new Set(mesesComDado)].filter(m => m < mesAtual).sort().reverse()
+  return [
+    { mes: p2, label: `${mesNomeCurto(p2)} · previsão`, tipo: 'futuro' },
+    { mes: p1, label: `${mesNomeCurto(p1)} · previsão`, tipo: 'futuro' },
+    { mes: mesAtual, label: `${mesNomeCurto(mesAtual)} · em andamento`, tipo: 'atual' },
+    ...fechados.map(m => ({ mes: m, label: `${mesNomeCurto(m)} · fechado`, tipo: 'fechado' })),
+  ]
 }
 
 const Cap = s => (s ? s[0].toUpperCase() + s.slice(1) : '')
@@ -55,8 +59,9 @@ const corP = p => (p !== null && p > 10 ? '#9A3C06' : p !== null && p < -10 ? '#
 
 export default function Projecao({ proj, baixasAte, corBU, titulo, onArea }) {
   const t = proj.total
-  const p = pct(t.proj, t.anterior)
-  const nomeAt = mesNome(proj.mesAtual)
+  // mês futuro ainda está incompleto (faltam notas): não compara em %
+  const p = proj.futuro ? null : pct(t.proj, t.anterior)
+  const nomeAt = mesNome(proj.mesAlvo)
   const escala = Math.max(t.proj, t.anterior, 1)
   const variasAreas = proj.linhas.length > 1
 
@@ -68,16 +73,16 @@ export default function Projecao({ proj, baixasAte, corBU, titulo, onArea }) {
     </div>
   )
   const op = s => <span aria-hidden="true" style={{ fontSize: 22, color: COR.fraco, alignSelf: 'center' }}>{s}</span>
-  const grid = `minmax(140px, 1.2fr) 96px 96px 96px 104px 112px 76px ${proj.proximos.map(() => '112px').join(' ')}`
+  const grid = proj.futuro ? 'minmax(160px, 1.4fr) 130px 130px 130px 140px' : 'minmax(160px, 1.4fr) 120px 110px 120px 120px 130px 84px'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <section aria-labelledby="proj-tit" style={{ background: '#fff', border: '1.5px solid #97A624', borderRadius: 12, padding: 20, display: 'flex', flexDirection: 'column', gap: 16, breakInside: 'avoid' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'baseline' }}>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: '#4F6B14', letterSpacing: 0.3 }}>MÊS ATUAL</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#4F6B14', letterSpacing: 0.3 }}>{proj.futuro ? 'PRÓXIMO MÊS' : 'MÊS EM ANDAMENTO'}</div>
             <h2 id="proj-tit" style={{ margin: '2px 0 0', fontSize: 20, fontWeight: 600 }}>
-              {titulo || `${Cap(nomeAt)} deve fechar em ${fmtK(t.proj)}`}
+              {titulo || (proj.futuro ? `${Cap(nomeAt)}: ${fmtK(t.proj)} já comprometidos` : `${Cap(nomeAt)} deve fechar em ${fmtK(t.proj)}`)}
               {p !== null && <span style={{ fontSize: 15, fontWeight: 600, color: corP(p), marginLeft: 10 }}>{pctTxt(p)} vs {mesNome(proj.ant)}</span>}
             </h2>
           </div>
@@ -85,13 +90,13 @@ export default function Projecao({ proj, baixasAte, corBU, titulo, onArea }) {
         </div>
 
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-          {parte('Já pago', t.pago, 'contas pagas do mês')}
+          {!proj.futuro && parte('Já pago', t.pago, 'contas pagas do mês')}
+          {!proj.futuro && op('+')}
+          {parte(proj.futuro ? 'Notas já emitidas' : 'Notas a pagar', t.notas, proj.futuro ? `com vencimento em ${nomeAt}` : 'já emitidas, vencem até o fim do mês')}
           {op('+')}
-          {parte('Notas a pagar', t.notas, 'já emitidas, vencem até o fim do mês')}
-          {op('+')}
-          {parte('Fixas sem nota a sair', t.fixas, 'folha, aluguel, impostos (estimado)')}
+          {parte(proj.futuro ? 'Fixas sem nota' : 'Fixas sem nota a sair', t.fixas, 'folha, aluguel, impostos (estimado)')}
           {op('=')}
-          {parte('Projeção do mês', t.proj, null, true)}
+          {parte(proj.futuro ? 'Já comprometido' : 'Projeção do mês', t.proj, null, true)}
           <div style={{ marginLeft: 'auto', display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end' }}>
             <span style={{ fontSize: 12, color: COR.suave }}>{mesNome(proj.ant)} fechou em</span>
             <span style={{ ...num, fontSize: 22, color: COR.suave }}>{fmtK(t.anterior)}</span>
@@ -108,41 +113,31 @@ export default function Projecao({ proj, baixasAte, corBU, titulo, onArea }) {
             <div style={{ position: 'absolute', left: `calc(${Math.min(100, t.anterior / escala * 100)}% - 1px)`, top: -4, width: 2, height: 22, background: COR.texto }} />
           </div>
           <div style={{ display: 'flex', gap: 16, fontSize: 12, color: COR.suave, flexWrap: 'wrap' }}>
-            <span><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: '#4F6B14', marginRight: 5 }} />Já pago</span>
-            <span><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: '#97A624', marginRight: 5 }} />Notas a pagar</span>
+            {!proj.futuro && <span><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: '#4F6B14', marginRight: 5 }} />Já pago</span>}
+            <span><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: '#97A624', marginRight: 5 }} />{proj.futuro ? 'Notas já emitidas' : 'Notas a pagar'}</span>
             <span><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: '#C9D68A', marginRight: 5 }} />Fixas sem nota (estimado)</span>
             <span><span style={{ display: 'inline-block', width: 2, height: 10, background: COR.texto, marginRight: 5, verticalAlign: 'middle' }} />{mesNome(proj.ant)} fechado</span>
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${proj.proximos.length}, minmax(220px, 1fr))`, gap: 12 }}>
-          {t.proximos.map(pm => (
-            <div key={pm.mes} style={{ border: `0.5px solid ${COR.borda}`, borderRadius: 10, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 4, background: COR.fundo }}>
-              <span style={{ fontSize: 12, color: COR.suave, fontWeight: 600 }}>{Cap(mesNome(pm.mes))}: já comprometido</span>
-              <span style={{ ...num, fontSize: 22 }}>{fmtK(pm.total)}</span>
-              <span style={{ fontSize: 12, color: COR.suave }}>{fmtK(pm.notas)} em notas já emitidas + {fmtK(pm.fixas)} de fixas sem nota</span>
-            </div>
-          ))}
-        </div>
       </section>
 
       {variasAreas && (
         <section aria-labelledby="proj-areas" style={{ background: '#fff', border: `0.5px solid ${COR.borda}`, borderRadius: 12, padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div>
             <h2 id="proj-areas" style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Por área</h2>
-            <div style={{ fontSize: 12, color: COR.suave, marginTop: 3, lineHeight: 1.5 }}>Projeção de {nomeAt} por área e o que já está comprometido pros próximos meses. Em destaque, áreas com projeção mais de 10% acima ou abaixo de {mesNome(proj.ant)}. {onArea ? 'Clique numa área pra ver as notas e os pagamentos.' : ''}</div>
+            <div style={{ fontSize: 12, color: COR.suave, marginTop: 3, lineHeight: 1.5 }}>{proj.futuro ? `O que já está comprometido em ${nomeAt} por área. ${Cap(mesNome(proj.ant))} aparece só como referência: o mês ainda vai receber notas.` : `Projeção de ${nomeAt} por área. Em destaque, áreas mais de 10% acima ou abaixo de ${mesNome(proj.ant)}.`} {onArea ? 'Clique numa área pra ver as notas e os pagamentos.' : ''}</div>
           </div>
           <div style={{ overflowX: 'auto' }}>
-            <div style={{ minWidth: 900 + proj.proximos.length * 112 }}>
+            <div style={{ minWidth: 820 }}>
               <div style={{ display: 'grid', gridTemplateColumns: grid, gap: 10, fontSize: 12, color: COR.suave, padding: '6px 4px', borderBottom: `0.5px solid ${COR.borda}`, alignItems: 'end' }}>
                 <div>Área</div>
                 <div style={{ textAlign: 'right' }}>{Cap(mesNome(proj.ant))} (fechado)</div>
-                <div style={{ textAlign: 'right' }}>Já pago</div>
-                <div style={{ textAlign: 'right' }}>Notas a pagar</div>
+                {!proj.futuro && <div style={{ textAlign: 'right' }}>Já pago</div>}
+                <div style={{ textAlign: 'right' }}>{proj.futuro ? 'Notas já emitidas' : 'Notas a pagar'}</div>
                 <div style={{ textAlign: 'right' }}>Fixas sem nota</div>
-                <div style={{ textAlign: 'right', color: COR.texto, fontWeight: 600 }}>Projeção {mesNome(proj.mesAtual).substring(0, 3)}</div>
-                <div style={{ textAlign: 'right' }}>vs {mesNome(proj.ant).substring(0, 3)}</div>
-                {proj.proximos.map(pm => <div key={pm} style={{ textAlign: 'right' }}>{Cap(mesNome(pm).substring(0, 3))} comprometido</div>)}
+                <div style={{ textAlign: 'right', color: COR.texto, fontWeight: 600 }}>{proj.futuro ? 'Já comprometido' : 'Projeção'}</div>
+                {!proj.futuro && <div style={{ textAlign: 'right' }}>vs {mesNome(proj.ant).substring(0, 3)}</div>}
               </div>
               {[...proj.linhas].sort((a, b) => b.proj - a.proj).map(l => {
                 const pl = pct(l.proj, l.anterior)
@@ -155,24 +150,22 @@ export default function Projecao({ proj, baixasAte, corBU, titulo, onArea }) {
                       {l.bu === 'Revisar' ? 'Sem área definida' : l.bu}
                     </Nome>
                     <div style={{ ...num, textAlign: 'right', color: COR.suave }}>{l.anterior ? fmtK(l.anterior) : '—'}</div>
-                    <div style={{ ...num, textAlign: 'right' }}>{l.pago ? fmtK(l.pago) : '—'}</div>
+                    {!proj.futuro && <div style={{ ...num, textAlign: 'right' }}>{l.pago ? fmtK(l.pago) : '—'}</div>}
                     <div style={{ ...num, textAlign: 'right' }}>{l.notas ? fmtK(l.notas) : '—'}</div>
                     <div style={{ ...num, textAlign: 'right', fontStyle: 'italic', color: COR.suave }}>{l.fixas ? fmtK(l.fixas) : '—'}</div>
                     <div style={{ ...num, textAlign: 'right', fontWeight: 600 }}>{fmtK(l.proj)}</div>
-                    <div style={{ ...num, textAlign: 'right', fontSize: 12, color: corP(pl), fontWeight: pl !== null && Math.abs(pl) > 10 ? 600 : 400 }}>{pctTxt(pl)}</div>
-                    {l.proximos.map(pm => <div key={pm.mes} style={{ ...num, textAlign: 'right', color: COR.suave }}>{pm.total ? fmtK(pm.total) : '—'}</div>)}
+                    {!proj.futuro && <div style={{ ...num, textAlign: 'right', fontSize: 12, color: corP(pl), fontWeight: pl !== null && Math.abs(pl) > 10 ? 600 : 400 }}>{pctTxt(pl)}</div>}
                   </div>
                 )
               })}
               <div style={{ display: 'grid', gridTemplateColumns: grid, gap: 10, padding: '10px 4px 2px', fontSize: 13, fontWeight: 700, borderTop: `1.5px solid ${COR.texto}` }}>
                 <div>Total</div>
                 <div style={{ ...num, textAlign: 'right' }}>{fmtK(t.anterior)}</div>
-                <div style={{ ...num, textAlign: 'right' }}>{fmtK(t.pago)}</div>
+                {!proj.futuro && <div style={{ ...num, textAlign: 'right' }}>{fmtK(t.pago)}</div>}
                 <div style={{ ...num, textAlign: 'right' }}>{fmtK(t.notas)}</div>
                 <div style={{ ...num, textAlign: 'right' }}>{fmtK(t.fixas)}</div>
                 <div style={{ ...num, textAlign: 'right' }}>{fmtK(t.proj)}</div>
-                <div style={{ ...num, textAlign: 'right', fontSize: 12, color: corP(p) }}>{pctTxt(p)}</div>
-                {t.proximos.map(pm => <div key={pm.mes} style={{ ...num, textAlign: 'right' }}>{fmtK(pm.total)}</div>)}
+                {!proj.futuro && <div style={{ ...num, textAlign: 'right', fontSize: 12, color: corP(p) }}>{pctTxt(p)}</div>}
               </div>
             </div>
           </div>
@@ -180,7 +173,9 @@ export default function Projecao({ proj, baixasAte, corBU, titulo, onArea }) {
       )}
 
       <div style={{ fontSize: 12, color: COR.suave, background: COR.fundo, borderRadius: 8, padding: '10px 12px', lineHeight: 1.55 }}>
-        <b style={{ color: COR.texto }}>Como a projeção é feita:</b> já pago (contas pagas) + notas já emitidas e em aberto que vencem até o fim do mês (vencimento do TOTVS ou prazo médio do fornecedor) + o que a área costuma pagar <b>sem nota</b> (folha, aluguel, impostos, cartão), pela média dos últimos 3 meses, descontando o que já saiu sem nota no mês. Os próximos meses usam as notas já emitidas que vencem neles + a mesma média de fixas. Compras que ainda não viraram nota não entram, então os próximos meses tendem a subir conforme as notas chegam.
+        <b style={{ color: COR.texto }}>Como é calculado:</b> {proj.futuro
+          ? <>notas já emitidas com vencimento no mês (data do TOTVS ou prazo médio do fornecedor) + o que a área costuma pagar <b>sem nota</b> (folha, aluguel, impostos, cartão), pela média dos últimos 3 meses. Compras que ainda não viraram nota não entram, então esse valor sobe conforme as notas chegam.</>
+          : <>já pago (contas pagas) + notas já emitidas e em aberto que vencem até o fim do mês (data do TOTVS ou prazo médio do fornecedor) + o que a área costuma pagar <b>sem nota</b> (folha, aluguel, impostos, cartão), pela média dos últimos 3 meses, descontando o que já saiu sem nota no mês.</>}
       </div>
     </div>
   )
