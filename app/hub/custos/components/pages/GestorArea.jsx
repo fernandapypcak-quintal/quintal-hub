@@ -4,7 +4,7 @@ import { loadGestor, loadNFLista, loadPagamentosBU, reportarDivergenciaBU } from
 import { fmt, fmtK, fmtData, mesAnteriorISO, mesISOLabel, mesNome, mesNomeCurto } from '../../utils.js'
 import { COR, num, Busca, Carregando, Erro, Vazio, useCarga, botaoSecundario, exportarExcel, BotaoExportar } from '../ui/nf.jsx'
 import DRECustos from '../ui/DRECustos.jsx'
-import Projecao, { calcularProjecao } from '../ui/Projecao.jsx'
+import Projecao, { calcularProjecao, opcoesDeMes } from '../ui/Projecao.jsx'
 
 // v27.3 — "Minha área": tudo pelo MÊS DO PAGAMENTO. O que a área pagou (com
 // e sem nota), fixo e variável, de onde veio a diferença, a lista de
@@ -34,8 +34,11 @@ export default function GestorArea({ areas }) {
   // abre no último mês FECHADO (o atual ainda está em andamento)
   const fechados = g ? meses.filter(m => !g.mes_atual || m < g.mes_atual) : []
   const mesPadrao = fechados[0] || meses[0] || ''
-  // a página é do mês FECHADO; o mês em andamento fica no bloco "Prévia" do topo
-  const mes = mesEscolhido && fechados.includes(mesEscolhido) ? mesEscolhido : mesPadrao
+  // v27.11: um filtro só de mês — previsão (próximos), em andamento (atual) ou fechado
+  const opcoes = g && g.mes_atual ? opcoesDeMes(g.mes_atual, meses) : []
+  const mesSel = mesEscolhido && opcoes.some(o => o.mes === mesEscolhido) ? mesEscolhido : (g && g.mes_atual) || mesPadrao
+  const tipoSel = (opcoes.find(o => o.mes === mesSel) || {}).tipo || 'fechado'
+  const mes = tipoSel === 'fechado' ? mesSel : mesPadrao   // mês usado nos blocos de mês fechado
   const ant = mesAnteriorISO(mes)
 
   const barraFiltros = (
@@ -49,8 +52,8 @@ export default function GestorArea({ areas }) {
       )}
       {meses.length > 0 && (
         <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, color: COR.suave }}>Mês
-          <select value={mes} onChange={e => setMesEscolhido(e.target.value)} style={{ ...botaoSecundario, padding: '7px 10px', fontSize: 13 }}>
-            {fechados.map(m => <option key={m} value={m}>{mesNomeCurto(m)}</option>)}
+          <select value={mesSel} onChange={e => setMesEscolhido(e.target.value)} style={{ ...botaoSecundario, padding: '7px 10px', fontSize: 13, fontWeight: 600, minWidth: 220 }}>
+            {(opcoes.length ? opcoes : fechados.map(m => ({ mes: m, label: mesNomeCurto(m) }))).map(o => <option key={o.mes} value={o.mes}>{o.label}</option>)}
           </select>
         </label>
       )}
@@ -101,12 +104,11 @@ export default function GestorArea({ areas }) {
     <div style={{ padding: '20px 20px 48px', display: 'flex', flexDirection: 'column', gap: 22, maxWidth: 1180, width: '100%', boxSizing: 'border-box', margin: '0 auto' }}>
       {barraFiltros}
 
-      {g.mes_atual && (
-        <Projecao proj={calcularProjecao({ pago: g.pago, aPagarMes: g.a_pagar_mes || [], mesAtual: g.mes_atual, bus: [bu] })} baixasAte={g.baixas_ate} />
+      {tipoSel !== 'fechado' && g.mes_atual && (
+        <Projecao proj={calcularProjecao({ pago: g.pago, aPagarMes: g.a_pagar_mes || [], mesAtual: g.mes_atual, mesAlvo: mesSel, bus: [bu] })} baixasAte={g.baixas_ate} />
       )}
 
-      <div style={{ borderTop: `0.5px solid ${COR.borda}`, paddingTop: 18, fontSize: 15, fontWeight: 600 }}>{mesNomeCurto(mes)}: mês fechado <span style={{ fontSize: 12, fontWeight: 400, color: COR.suave }}>(pra comparar com o que já passou)</span></div>
-
+      {tipoSel === 'fechado' && <>
       <section aria-labelledby="g-resumo" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <h1 id="g-resumo" style={{ margin: 0, fontSize: 24, fontWeight: 600, lineHeight: 1.3, maxWidth: 780 }}>
           {c.ehAtual ? fraseAtual : <>Em {mesNome(mes)}, {bu} pagou <span style={num}>{fmtK(c.pago)}</span>{frasePago}.{fraseNotas}</>}
@@ -190,9 +192,11 @@ export default function GestorArea({ areas }) {
         </section>
       </div>
 
+      </>}
+
       <DRECustos key={bu} bu={bu} />
 
-      <ListasArea bu={bu} mes={mes} />
+      <ListasArea key={bu + (tipoSel === 'fechado' ? mes : g.mes_atual)} bu={bu} mes={tipoSel === 'fechado' ? mes : g.mes_atual} />
     </div>
   )
 }
