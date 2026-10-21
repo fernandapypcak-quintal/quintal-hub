@@ -350,6 +350,12 @@ export default function ReportCEO() {
   const { nfResumo, busConfig, grupoBU, corBU } = useFinanceiro()
   const [mesSel, setMesSel] = useState('')
   const [areaDet, setAreaDet] = useState('')
+  const [focoLista, setFocoLista] = useState({ aba: '', n: 0 })
+  const irParaDetalhe = (bu, aba) => {
+    if (bu) setAreaDet(bu)
+    setFocoLista(f => ({ aba: aba || f.aba, n: f.n + 1 }))
+    setTimeout(() => { const el = document.getElementById('ceo-det-atual'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }) }, 80)
+  }
 
   const mesAtual = nfResumo && nfResumo.mes_atual
   const opcoes = useMemo(() => (mesAtual ? opcoesDeMes(mesAtual, (nfResumo.meses || []).map(m => m.mes)) : []), [nfResumo, mesAtual])
@@ -398,7 +404,8 @@ export default function ReportCEO() {
           `}</style>
           {proj && (
             <Projecao proj={proj} baixasAte={nfResumo.baixas_ate} corBU={corBU}
-              onArea={bu => { setAreaDet(bu); setTimeout(() => { const el = document.getElementById('ceo-det-atual'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }) }, 50) }} />
+              onArea={bu => irParaDetalhe(bu)}
+              onNotas={tipo === 'atual' ? () => irParaDetalhe('', 'apagar') : undefined} />
           )}
 
           {proj && areaSel && (
@@ -414,7 +421,8 @@ export default function ReportCEO() {
                   </select>
                 </label>
               </div>
-              <ListasArea key={areaSel + mes} bu={areaSel} mes={mesAtual} mesPrevisto={tipo === 'futuro' ? mes : ''} semRevisao />
+              <ListasArea key={areaSel + mes + focoLista.n} bu={areaSel} mes={mesAtual} mesPrevisto={tipo === 'futuro' ? mes : ''}
+                notasAte={tipo === 'atual' ? mesAtual : ''} abaInicial={focoLista.aba} semRevisao />
             </section>
           )}
         </div>
