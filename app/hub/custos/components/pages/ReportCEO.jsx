@@ -4,7 +4,7 @@ import { fmtK, fmtData, mesAnteriorISO, mesISOLabel, mesNome, mesNomeCurto } fro
 import { COR, num, Vazio, SemDadosNF, botaoSecundario } from '../ui/nf.jsx'
 import { ListasArea } from './GestorArea.jsx'
 import CaixaTotal from '../ui/CaixaTotal.jsx'
-import Projecao, { calcularProjecao } from '../ui/Projecao.jsx'
+import Projecao, { calcularProjecao, opcoesDeMes } from '../ui/Projecao.jsx'
 
 // v27.2 — Report do mês pro CEO: o grupo inteiro numa página, com
 // variação vs mês anterior, áreas lado a lado e o que puxou o mês.
@@ -26,7 +26,7 @@ function leitura(vp, aberto, pago, maiorAlta, maiorQueda) {
   return partes.join(' ')
 }
 
-function ReportFechado() {
+function ReportFechado({ mesFixo } = {}) {
   const { nfResumo, busConfig, grupoBU, corBU } = useFinanceiro()
   const [mesEscolhido, setMesEscolhido] = useState('')
   const [areaSel, setAreaSel] = useState('')
@@ -36,7 +36,7 @@ function ReportFechado() {
   // o report é do mês FECHADO; o mês em andamento fica no bloco "Prévia" do topo
   const fechados = nfResumo ? meses.filter(m => !nfResumo.mes_atual || m < nfResumo.mes_atual) : []
   const mesPadrao = fechados[0] || meses[0] || ''
-  const mes = mesEscolhido && fechados.includes(mesEscolhido) ? mesEscolhido : mesPadrao
+  const mes = mesFixo || (mesEscolhido && fechados.includes(mesEscolhido) ? mesEscolhido : mesPadrao)
   const ant = mesAnteriorISO(mes)
 
   const r = useMemo(() => {
@@ -153,7 +153,7 @@ function ReportFechado() {
         }
       `}</style>
 
-      <div className="no-print" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+      {!mesFixo && <div className="no-print" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ fontSize: 13, color: COR.suave }}>Consulta de um mês que já fechou.</div>
         <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, color: COR.suave }}>Mês
           <select value={mes} onChange={e => setMesEscolhido(e.target.value)} style={{ ...botaoSecundario, padding: '7px 10px', fontSize: 13 }}>
@@ -161,7 +161,7 @@ function ReportFechado() {
           </select>
         </label>
         <button onClick={() => window.print()} style={{ ...botaoSecundario, background: '#4F6B14', color: '#fff', border: 'none', fontWeight: 600, padding: '8px 14px', fontSize: 13 }}>Baixar PDF</button>
-      </div>
+      </div>}
 
       <section aria-labelledby="ceo-frase" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div style={{ fontSize: 13, color: COR.suave }}>Custos do grupo · {mesNomeCurto(mes)}{nfResumo.baixas_ate ? ` · pagamentos arquivados até ${fmtData(nfResumo.baixas_ate)}` : ''}</div>
@@ -348,36 +348,43 @@ function ReportFechado() {
 // ══════════════════════════════════════════════════════════════
 export default function ReportCEO() {
   const { nfResumo, busConfig, grupoBU, corBU } = useFinanceiro()
-  const [aba, setAba] = useState('atual')
+  const [mesSel, setMesSel] = useState('')
   const [areaDet, setAreaDet] = useState('')
 
+  const mesAtual = nfResumo && nfResumo.mes_atual
+  const opcoes = useMemo(() => (mesAtual ? opcoesDeMes(mesAtual, (nfResumo.meses || []).map(m => m.mes)) : []), [nfResumo, mesAtual])
+  const mes = mesSel && opcoes.some(o => o.mes === mesSel) ? mesSel : mesAtual
+  const tipo = (opcoes.find(o => o.mes === mes) || {}).tipo
+
   const proj = useMemo(() => {
-    if (!nfResumo || !nfResumo.mes_atual) return null
+    if (!nfResumo || !mesAtual || tipo === 'fechado') return null
     const bus = (busConfig.length ? busConfig.map(b => b.bu) : [...new Set((nfResumo.pago || []).map(x => x.bu))])
       .filter(b => grupoBU(b) !== 'Fora dos totais')
-    return calcularProjecao({ pago: nfResumo.pago || [], aPagarMes: nfResumo.a_pagar_mes || [], mesAtual: nfResumo.mes_atual, bus })
-  }, [nfResumo, busConfig])
+    return calcularProjecao({ pago: nfResumo.pago || [], aPagarMes: nfResumo.a_pagar_mes || [], mesAtual, mesAlvo: mes, bus })
+  }, [nfResumo, busConfig, mes, tipo])
 
   if (!nfResumo) return <SemDadosNF />
+  if (!mesAtual) return <div style={{ padding: 24 }}><Vazio>Publique o Apps Script mais novo e recalcule o cache.</Vazio></div>
 
-  const tab = id => ({
-    padding: '8px 16px', borderRadius: 8, border: 'none', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', minHeight: 36,
-    background: aba === id ? '#fff' : 'transparent', color: aba === id ? COR.texto : COR.suave, fontWeight: aba === id ? 600 : 400,
-  })
   const areasDet = proj ? proj.linhas.map(l => l.bu).filter(b => b !== 'Revisar') : []
-  const areaSel = areaDet || areasDet[0] || ''
+  const areaSel = areaDet && areasDet.includes(areaDet) ? areaDet : (areasDet[0] || '')
+  const selo = { futuro: ['Previsão', '#2B4C7E', '#E6EDF7'], atual: ['Em andamento', '#4F6B14', '#EEF3DD'], fechado: ['Fechado', '#5a5c5f', '#F0F0EC'] }[tipo] || ['', COR.suave, '#fff']
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       <div className="no-print" style={{ padding: '20px 20px 0', maxWidth: 1180, width: '100%', boxSizing: 'border-box', margin: '0 auto', display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        <div role="tablist" style={{ display: 'flex', gap: 4, background: '#F0F0EA', padding: 4, borderRadius: 10 }}>
-          <button role="tab" aria-selected={aba === 'atual'} onClick={() => setAba('atual')} style={tab('atual')}>Mês atual e próximos</button>
-          <button role="tab" aria-selected={aba === 'anteriores'} onClick={() => setAba('anteriores')} style={tab('anteriores')}>Meses anteriores</button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 14, color: COR.suave }}>Mês
+            <select value={mes} onChange={e => setMesSel(e.target.value)} style={{ ...botaoSecundario, padding: '8px 12px', fontSize: 14, fontWeight: 600, minWidth: 230 }}>
+              {opcoes.map(o => <option key={o.mes} value={o.mes}>{o.label}</option>)}
+            </select>
+          </label>
+          <span style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 99, color: selo[1], background: selo[2] }}>{selo[0]}</span>
         </div>
-        {aba === 'atual' && <button onClick={() => window.print()} style={{ ...botaoSecundario, background: '#4F6B14', color: '#fff', border: 'none', fontWeight: 600, padding: '8px 14px', fontSize: 13 }}>Baixar PDF</button>}
+        {tipo !== 'fechado' && <button onClick={() => window.print()} style={{ ...botaoSecundario, background: '#4F6B14', color: '#fff', border: 'none', fontWeight: 600, padding: '8px 14px', fontSize: 13 }}>Baixar PDF</button>}
       </div>
 
-      {aba === 'anteriores' ? <ReportFechado /> : (
+      {tipo === 'fechado' ? <ReportFechado key={mes} mesFixo={mes} /> : (
         <div className="report-ceo" style={{ padding: '16px 20px 48px', display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1180, width: '100%', boxSizing: 'border-box', margin: '0 auto' }}>
           <style>{`
             @media print {
@@ -389,7 +396,7 @@ export default function ReportCEO() {
               @page { size: A4 landscape; margin: 12mm; }
             }
           `}</style>
-          {!proj ? <Vazio>Publique o Apps Script mais novo e recalcule o cache pra ver a projeção.</Vazio> : (
+          {proj && (
             <Projecao proj={proj} baixasAte={nfResumo.baixas_ate} corBU={corBU}
               onArea={bu => { setAreaDet(bu); setTimeout(() => { const el = document.getElementById('ceo-det-atual'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }) }, 50) }} />
           )}
@@ -399,7 +406,7 @@ export default function ReportCEO() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
                 <div>
                   <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Detalhe por área</h2>
-                  <div style={{ fontSize: 12, color: COR.suave, marginTop: 3 }}>Pagamentos de {mesNome(proj.mesAtual)} e notas não pagas dos últimos 40 dias, com previsão de pagamento. Dá pra exportar pra Excel.</div>
+                  <div style={{ fontSize: 12, color: COR.suave, marginTop: 3 }}>Pagamentos de {mesNome(mesAtual)} e notas não pagas dos últimos 40 dias, com previsão de pagamento. Dá pra exportar pra Excel.</div>
                 </div>
                 <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, color: COR.suave }}>Área
                   <select value={areaSel} onChange={e => setAreaDet(e.target.value)} style={{ ...botaoSecundario, padding: '7px 10px', fontSize: 13 }}>
@@ -407,7 +414,7 @@ export default function ReportCEO() {
                   </select>
                 </label>
               </div>
-              <ListasArea key={areaSel + proj.mesAtual} bu={areaSel} mes={proj.mesAtual} semRevisao />
+              <ListasArea key={areaSel + mesAtual} bu={areaSel} mes={mesAtual} semRevisao />
             </section>
           )}
         </div>
