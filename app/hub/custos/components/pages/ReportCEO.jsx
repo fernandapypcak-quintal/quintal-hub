@@ -406,7 +406,7 @@ export default function ReportCEO() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
                 <div>
                   <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Detalhe por área</h2>
-                  <div style={{ fontSize: 12, color: COR.suave, marginTop: 3 }}>Pagamentos de {mesNome(mesAtual)} e notas não pagas dos últimos 40 dias, com previsão de pagamento. Dá pra exportar pra Excel.</div>
+                  <div style={{ fontSize: 12, color: COR.suave, marginTop: 3 }}>{tipo === 'futuro' ? `Notas previstas pra pagar em ${mesNome(mes)}, com fornecedor, valor, data de entrada e previsão. Dá pra exportar pra Excel.` : `Pagamentos de ${mesNome(mesAtual)} e notas não pagas dos últimos 40 dias, com previsão de pagamento. Dá pra exportar pra Excel.`}</div>
                 </div>
                 <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, color: COR.suave }}>Área
                   <select value={areaSel} onChange={e => setAreaDet(e.target.value)} style={{ ...botaoSecundario, padding: '7px 10px', fontSize: 13 }}>
@@ -414,7 +414,7 @@ export default function ReportCEO() {
                   </select>
                 </label>
               </div>
-              <ListasArea key={areaSel + mesAtual} bu={areaSel} mes={mesAtual} semRevisao />
+              <ListasArea key={areaSel + mes} bu={areaSel} mes={mesAtual} mesPrevisto={tipo === 'futuro' ? mes : ''} semRevisao />
             </section>
           )}
         </div>

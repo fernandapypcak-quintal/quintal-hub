@@ -196,7 +196,7 @@ export default function GestorArea({ areas }) {
 
       <DRECustos key={bu} bu={bu} />
 
-      <ListasArea key={bu + (tipoSel === 'fechado' ? mes : g.mes_atual)} bu={bu} mes={tipoSel === 'fechado' ? mes : g.mes_atual} />
+      <ListasArea key={bu + mesSel} bu={bu} mes={tipoSel === 'fechado' ? mes : g.mes_atual} mesPrevisto={tipoSel === 'futuro' ? mesSel : ''} />
     </div>
   )
 }
@@ -206,12 +206,15 @@ const chip = (txt, cor, fundo) => <span style={{ display: 'inline-block', paddin
 const diasDesde = d => (d && d.length >= 10 ? Math.max(0, Math.round((Date.now() - Date.parse(d.substring(0, 10) + 'T12:00:00Z')) / 864e5)) : null)
 const elipse = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
 
-export function ListasArea({ bu, mes, semRevisao = false }) {
-  const [aba, setAba] = useState('pagos')
+// mesPrevisto (mês futuro): mostra só as notas com previsão de pagamento naquele mês
+export function ListasArea({ bu, mes, semRevisao = false, mesPrevisto = '' }) {
+  const [aba, setAba] = useState(mesPrevisto ? 'abertas' : 'pagos')
   const [busca, setBusca] = useState('')
   const [limite, setLimite] = useState(100)
   const pagos = useCarga(() => (aba === 'pagos' ? loadPagamentosBU({ mes, bu }) : Promise.resolve(null)), [aba, mes, bu])
-  const abertas = useCarga(() => (aba === 'abertas' ? loadNFLista({ status: 'aberto', bu, dias: 40 }) : Promise.resolve(null)), [aba, bu])
+  const abertas = useCarga(() => (aba === 'abertas'
+    ? loadNFLista(mesPrevisto ? { status: 'aberto', bu, prev_mes: mesPrevisto } : { status: 'aberto', bu, dias: 40 })
+    : Promise.resolve(null)), [aba, bu, mesPrevisto])
   const atual = aba === 'pagos' ? pagos : abertas
   const b = busca.trim().toUpperCase()
   const base = (atual.dados || []).map(l => aba === 'abertas' ? { ...l, emAberto: Math.max(0, l.valor - (l.valor_pago || 0)) } : l)
@@ -234,7 +237,7 @@ export function ListasArea({ bu, mes, semRevisao = false }) {
         { titulo: 'Nota fiscal', valor: l => l.nf_documento || (l.com_nf ? 'sim' : 'sem nota'), largura: 14 },
         { titulo: 'Entrada da nota', valor: l => l.nf_dt_dig, tipo: 'data', largura: 16 },
       ], linhas, 'Pagamentos')
-    : exportarExcel(`${bu} - notas não pagas (últimos 40 dias)`, [
+    : exportarExcel(mesPrevisto ? `${bu} - notas previstas pra ${mesNomeCurto(mesPrevisto).replace('/', '-')}` : `${bu} - notas não pagas (últimos 40 dias)`, [
         { titulo: 'Fornecedor', valor: l => l.fornecedor, largura: 40 },
         { titulo: 'Nota fiscal', valor: l => l.documento, largura: 14 },
         { titulo: 'Item principal', valor: l => l.item_principal, largura: 32 },
@@ -263,13 +266,19 @@ export function ListasArea({ bu, mes, semRevisao = false }) {
           <h2 id="g-lista" style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Detalhe da área</h2>
           {!semRevisao && <div style={{ fontSize: 12, color: COR.suave, marginTop: 2 }}>Se algo não for da sua área, clique em "Não é da minha área". O financeiro revisa e corrige.</div>}
         </div>
-        <div role="tablist" style={{ display: 'flex', gap: 4, background: '#F4F4EF', padding: 3, borderRadius: 9, flexWrap: 'wrap' }}>
-          <button role="tab" aria-selected={aba === 'pagos'} onClick={() => { setAba('pagos'); setLimite(100) }} style={tab('pagos')}>Pagamentos de {mesNome(mes)}</button>
-          <button role="tab" aria-selected={aba === 'abertas'} onClick={() => { setAba('abertas'); setLimite(100) }} style={tab('abertas')}>Notas não pagas (últimos 40 dias)</button>
-        </div>
+        {mesPrevisto ? (
+          <div style={{ fontSize: 14, fontWeight: 600, padding: '8px 4px' }}>Notas previstas pra pagar em {mesNome(mesPrevisto)}</div>
+        ) : (
+          <div role="tablist" style={{ display: 'flex', gap: 4, background: '#F4F4EF', padding: 3, borderRadius: 9, flexWrap: 'wrap' }}>
+            <button role="tab" aria-selected={aba === 'pagos'} onClick={() => { setAba('pagos'); setLimite(100) }} style={tab('pagos')}>Pagamentos de {mesNome(mes)}</button>
+            <button role="tab" aria-selected={aba === 'abertas'} onClick={() => { setAba('abertas'); setLimite(100) }} style={tab('abertas')}>Notas não pagas (últimos 40 dias)</button>
+          </div>
+        )}
       </div>
       <div style={{ fontSize: 13, background: COR.fundo, borderRadius: 8, padding: '10px 12px', lineHeight: 1.5 }}>
-        {aba === 'pagos'
+        {mesPrevisto
+          ? `Notas da área já emitidas e em aberto com previsão de pagamento em ${mesNome(mesPrevisto)}, pela ordem da previsão. A previsão é o vencimento do TOTVS ou, quando ele não vem, o prazo médio de pagamento do fornecedor. Notas que ainda não chegaram não aparecem.`
+          : aba === 'pagos'
           ? `Tudo que a área pagou em ${mesNome(mes)}, pela data do pagamento. Quando o pagamento tem nota fiscal, aparece o número e a data em que a nota entrou (muitas vezes no mês anterior). Aluguel, cartão, folha e impostos não têm nota, e isso é normal.`
           : 'Notas da área que entraram nos últimos 40 dias e ainda não foram pagas, pela ordem da previsão de pagamento (o que vence primeiro aparece primeiro). A previsão é o vencimento do TOTVS ou, quando ele não vem, o prazo médio de pagamento do fornecedor. Em laranja: a data já passou e o pagamento ainda não apareceu nas contas pagas.'}
       </div>
@@ -280,7 +289,7 @@ export function ListasArea({ bu, mes, semRevisao = false }) {
 
       {atual.carregando ? <Carregando texto={aba === 'pagos' ? 'Buscando pagamentos…' : 'Buscando notas…'} />
         : atual.erro ? <Erro texto={atual.erro} onTentar={atual.tentarDeNovo} />
-        : !linhas.length ? <Vazio>{b ? 'Nada encontrado com essa busca.' : aba === 'pagos' ? 'Nenhum pagamento da área nesse mês.' : 'Nenhuma nota da área esperando pagamento.'}</Vazio>
+        : !linhas.length ? <Vazio>{b ? 'Nada encontrado com essa busca.' : aba === 'pagos' ? 'Nenhum pagamento da área nesse mês.' : mesPrevisto ? `Nenhuma nota da área com previsão de pagamento em ${mesNome(mesPrevisto)} ainda.` : 'Nenhuma nota da área esperando pagamento.'}</Vazio>
         : (
           <div style={{ overflowX: 'auto' }}>
             <div style={{ minWidth: 820, display: 'flex', flexDirection: 'column' }}>
