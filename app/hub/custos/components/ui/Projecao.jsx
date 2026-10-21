@@ -57,7 +57,7 @@ const pct = (a, b) => (b ? (a / b - 1) * 100 : null)
 const pctTxt = p => (p === null ? '—' : `${p > 0 ? '+' : p < 0 ? '−' : ''}${Math.abs(p).toFixed(1).replace('.', ',')}%`)
 const corP = p => (p !== null && p > 10 ? '#9A3C06' : p !== null && p < -10 ? '#4F6B14' : COR.suave)
 
-export default function Projecao({ proj, baixasAte, corBU, titulo, onArea }) {
+export default function Projecao({ proj, baixasAte, corBU, titulo, onArea, onNotas }) {
   const t = proj.total
   // mês futuro ainda está incompleto (faltam notas): não compara em %
   const p = proj.futuro ? null : pct(t.proj, t.anterior)
@@ -65,13 +65,20 @@ export default function Projecao({ proj, baixasAte, corBU, titulo, onArea }) {
   const escala = Math.max(t.proj, t.anterior, 1)
   const variasAreas = proj.linhas.length > 1
 
-  const parte = (rotulo, valor, sub, destaque) => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-      <span style={{ fontSize: 12, color: destaque ? COR.texto : COR.suave, fontWeight: destaque ? 600 : 400 }}>{rotulo}</span>
-      <span style={{ ...num, fontSize: destaque ? 30 : 22, fontWeight: destaque ? 600 : 400 }}>{fmtK(valor)}</span>
-      {sub && <span style={{ fontSize: 11, color: COR.suave }}>{sub}</span>}
-    </div>
-  )
+  const parte = (rotulo, valor, sub, destaque, onClick) => {
+    const Tag = onClick ? 'button' : 'div'
+    return (
+      <Tag onClick={onClick} className={onClick ? 'proj-clicavel' : undefined}
+        style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, textAlign: 'left', fontFamily: 'inherit', color: COR.texto,
+          border: onClick ? `1px solid #C9D68A` : 'none', background: onClick ? '#F7F9EE' : 'transparent', borderRadius: 10,
+          padding: onClick ? '8px 12px' : 0, margin: onClick ? '-8px -12px' : 0, cursor: onClick ? 'pointer' : 'default' }}>
+        <span style={{ fontSize: 12, color: destaque ? COR.texto : COR.suave, fontWeight: destaque ? 600 : 400 }}>{rotulo}</span>
+        <span style={{ ...num, fontSize: destaque ? 30 : 22, fontWeight: destaque ? 600 : 400 }}>{fmtK(valor)}</span>
+        {sub && <span style={{ fontSize: 11, color: COR.suave }}>{sub}</span>}
+        {onClick && <span style={{ fontSize: 12, color: '#4F6B14', fontWeight: 600 }}>Ver as notas →</span>}
+      </Tag>
+    )
+  }
   const op = s => <span aria-hidden="true" style={{ fontSize: 22, color: COR.fraco, alignSelf: 'center' }}>{s}</span>
   const grid = proj.futuro ? 'minmax(160px, 1.4fr) 130px 130px 130px 140px' : 'minmax(160px, 1.4fr) 120px 110px 120px 120px 130px 84px'
 
@@ -92,7 +99,7 @@ export default function Projecao({ proj, baixasAte, corBU, titulo, onArea }) {
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
           {!proj.futuro && parte('Já pago', t.pago, 'contas pagas do mês')}
           {!proj.futuro && op('+')}
-          {parte(proj.futuro ? 'Notas já emitidas' : 'Notas a pagar', t.notas, proj.futuro ? `com vencimento em ${nomeAt}` : 'já emitidas, vencem até o fim do mês')}
+          {parte(proj.futuro ? 'Notas já emitidas' : 'Notas a pagar', t.notas, proj.futuro ? `com vencimento em ${nomeAt}` : 'já emitidas, vencem até o fim do mês', false, onNotas)}
           {op('+')}
           {parte(proj.futuro ? 'Fixas sem nota' : 'Fixas sem nota a sair', t.fixas, 'folha, aluguel, impostos (estimado)')}
           {op('=')}
