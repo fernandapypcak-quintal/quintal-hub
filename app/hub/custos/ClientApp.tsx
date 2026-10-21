@@ -16,12 +16,14 @@ import Fornecedores from './components/pages/Fornecedores'
 import Conciliacao from './components/pages/Conciliacao'
 import GestorArea from './components/pages/GestorArea'
 import ReportCEO from './components/pages/ReportCEO'
+import DRECustos from './components/ui/DRECustos'
 import { mesISOLabel, fmtData } from './utils.js'
 
 // v27 — layout no padrão do HUB (igual ao Comercial): topbar preta,
 // cabeçalho verde com os filtros em selects, sidebar e bottom nav.
 const PAGES: Record<string, React.ComponentType<any>> = {
   report: ReportCEO,
+  dre: () => <DRECustos comSeletor />,
   area: GestorArea,
   porbu: PorBUNF,
   apagar: APagar,
