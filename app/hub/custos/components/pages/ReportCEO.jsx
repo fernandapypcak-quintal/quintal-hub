@@ -4,6 +4,7 @@ import { fmtK, fmtData, mesAnteriorISO, mesISOLabel, mesNome, mesNomeCurto } fro
 import { COR, num, Vazio, SemDadosNF, botaoSecundario } from '../ui/nf.jsx'
 import { ListasArea } from './GestorArea.jsx'
 import CaixaTotal from '../ui/CaixaTotal.jsx'
+import PreviaMes from '../ui/PreviaMes.jsx'
 
 // v27.2 — Report do mês pro CEO: o grupo inteiro numa página, com
 // variação vs mês anterior, áreas lado a lado e o que puxou o mês.
@@ -32,9 +33,10 @@ export default function ReportCEO() {
 
   const meses = useMemo(() => (nfResumo ? nfResumo.meses.map(m => m.mes).filter(Boolean).sort().reverse() : []), [nfResumo])
   // abre no último mês FECHADO (o atual ainda está em andamento)
+  // o report é do mês FECHADO; o mês em andamento fica no bloco "Prévia" do topo
   const fechados = nfResumo ? meses.filter(m => !nfResumo.mes_atual || m < nfResumo.mes_atual) : []
   const mesPadrao = fechados[0] || meses[0] || ''
-  const mes = mesEscolhido && meses.includes(mesEscolhido) ? mesEscolhido : mesPadrao
+  const mes = mesEscolhido && fechados.includes(mesEscolhido) ? mesEscolhido : mesPadrao
   const ant = mesAnteriorISO(mes)
 
   const r = useMemo(() => {
@@ -112,7 +114,7 @@ export default function ReportCEO() {
   if (!r) return <div style={{ padding: 24 }}><Vazio>Ainda não tem mês com dados.</Vazio></div>
 
   const [pagoK] = r.kpis
-  const emAndamento = mes === nfResumo.mes_atual
+  const emAndamento = false   // v27.8: mês em andamento só no bloco Prévia
   const previsto = pagoK[1] + r.aPagarTot
   const vp = varPct(emAndamento ? previsto : pagoK[1], pagoK[2])
   let frase
@@ -125,8 +127,18 @@ export default function ReportCEO() {
     else frase += '.'
   }
   const [areaDetalhe, setAreaDetalhe] = [areaSel, setAreaSel]
+  const mesAt = nfResumo.mes_atual
+  const mesAntAt = mesAt ? mesAnteriorISO(mesAt) : ''
+  const busPrevia = [...new Set([...(nfResumo.pago || []).filter(x => x.mes === mesAt || x.mes === mesAntAt).map(x => x.bu), ...(nfResumo.a_pagar_mes || []).filter(x => x.mes === mesAt).map(x => x.bu)])]
+    .filter(b => grupoBU(b) !== 'Fora dos totais')
+  const linhasPrevia = busPrevia.map(b => ({
+    bu: b,
+    pago: soma(nfResumo.pago || [], x => x.bu === b && x.mes === mesAt),
+    aPagar: soma(nfResumo.a_pagar_mes || [], x => x.bu === b && x.mes === mesAt),
+    anterior: soma(nfResumo.pago || [], x => x.bu === b && x.mes === mesAntAt),
+  }))
   const card = { background: '#fff', border: `0.5px solid ${COR.borda}`, borderRadius: 12, padding: 18, minWidth: 0, breakInside: 'avoid' }
-  const gridAreas = 'minmax(150px, 1.4fr) 110px 110px 120px 80px minmax(170px, 1.8fr)'
+  const gridAreas = 'minmax(150px, 1.4fr) 110px 80px 80px 120px minmax(170px, 1.8fr)'
 
   return (
     <div className="report-ceo" style={{ padding: '20px 20px 48px', display: 'flex', flexDirection: 'column', gap: 22, maxWidth: 1080, width: '100%', boxSizing: 'border-box', margin: '0 auto' }}>
@@ -141,10 +153,15 @@ export default function ReportCEO() {
         }
       `}</style>
 
-      <div className="no-print" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+      {mesAt && linhasPrevia.length > 0 && (
+        <PreviaMes linhas={linhasPrevia} mesAtual={mesAt} mesAnterior={mesAntAt} baixasAte={nfResumo.baixas_ate} corBU={corBU} />
+      )}
+
+      <div className="no-print" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', borderTop: `0.5px solid ${COR.borda}`, paddingTop: 18 }}>
+        <div style={{ fontSize: 13, color: COR.suave }}><b style={{ color: COR.texto, fontSize: 15 }}>Report do mês fechado</b></div>
         <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, color: COR.suave }}>Mês
           <select value={mes} onChange={e => setMesEscolhido(e.target.value)} style={{ ...botaoSecundario, padding: '7px 10px', fontSize: 13 }}>
-            {meses.map(m => <option key={m} value={m}>{mesNomeCurto(m)}</option>)}
+            {fechados.map(m => <option key={m} value={m}>{mesNomeCurto(m)}</option>)}
           </select>
         </label>
         <button onClick={() => window.print()} style={{ ...botaoSecundario, background: '#4F6B14', color: '#fff', border: 'none', fontWeight: 600, padding: '8px 14px', fontSize: 13 }}>Baixar PDF</button>
@@ -190,14 +207,14 @@ export default function ReportCEO() {
       <section aria-labelledby="ceo-areas" style={{ ...card, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div>
           <h2 id="ceo-areas" style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Áreas</h2>
-          <div style={{ fontSize: 12, color: COR.suave, marginTop: 3, maxWidth: 720, lineHeight: 1.5 }}>O que cada área pagou no mês e, no mês atual, as notas em aberto com previsão de pagamento até o fim do mês, com a soma dos dois. Em destaque, variações acima de 10%. Clique numa área pra ver o detalhe.</div>
+          <div style={{ fontSize: 12, color: COR.suave, marginTop: 3, maxWidth: 720, lineHeight: 1.5 }}>O que cada área pagou no mês, quanto disso tinha nota fiscal e quanto ela tem em notas dos últimos 40 dias ainda não pagas. Em destaque, variações acima de 10%. Clique numa área pra ver o detalhe.</div>
         </div>
         <div style={{ overflowX: 'auto' }}>
           <div style={{ minWidth: 720 }}>
             <div style={{ display: 'grid', gridTemplateColumns: gridAreas, gap: 10, fontSize: 12, color: COR.suave, padding: '6px 4px', borderBottom: `0.5px solid ${COR.borda}` }}>
-              <div>Área</div><div style={{ textAlign: 'right' }}>{emAndamento ? 'Pago até agora' : 'Pago'}</div>
-              <div style={{ textAlign: 'right' }}>A pagar no mês</div><div style={{ textAlign: 'right', color: COR.texto, fontWeight: 600 }}>Pago + a pagar</div>
-              <div style={{ textAlign: 'right' }}>vs {mesISOLabel(ant).split('/')[0].toLowerCase()}</div><div>Leitura</div>
+              <div>Área</div><div style={{ textAlign: 'right' }}>Pago</div>
+              <div style={{ textAlign: 'right' }}>vs {mesISOLabel(ant).split('/')[0].toLowerCase()}</div>
+              <div style={{ textAlign: 'right' }}>Com nota</div><div style={{ textAlign: 'right' }}>Notas não pagas (40 dias)</div><div>Leitura</div>
             </div>
             {r.areas.map(a => (
               <div key={a.bu} style={{ display: 'grid', gridTemplateColumns: gridAreas, gap: 10, alignItems: 'center', padding: '10px 4px', borderBottom: '0.5px solid #F0F0EC', fontSize: 13, breakInside: 'avoid' }}>
@@ -206,17 +223,18 @@ export default function ReportCEO() {
                   <span aria-hidden="true" style={{ width: 9, height: 9, borderRadius: 2, background: corBU(a.bu), flexShrink: 0 }} />{a.bu}
                 </button>
                 <div style={{ ...num, textAlign: 'right' }}>{fmtK(a.p)}</div>
-                <div style={{ ...num, textAlign: 'right', color: COR.suave }}>{a.ap ? fmtK(a.ap) : '—'}</div>
-                <div style={{ ...num, textAlign: 'right', fontWeight: 600 }}>{fmtK(a.p + a.ap)}</div>
                 <div style={{ ...num, textAlign: 'right', color: corVar(a.vp), fontWeight: a.vp !== null && Math.abs(a.vp) > 10 ? 600 : 400 }}>{pctSinal(a.vp)}</div>
+                <div style={{ ...num, textAlign: 'right', color: COR.suave }}>{a.p ? `${Math.round(a.pn / a.p * 100)}%` : '—'}</div>
+                <div style={{ ...num, textAlign: 'right' }}>{a.ab ? fmtK(a.ab) : '—'}</div>
                 <div style={{ fontSize: 12, color: COR.suave, lineHeight: 1.4 }}>{a.leitura}</div>
               </div>
             ))}
             <div style={{ display: 'grid', gridTemplateColumns: gridAreas, gap: 10, padding: '12px 4px 4px', fontSize: 13, fontWeight: 700, borderTop: `1.5px solid ${COR.texto}` }}>
               <div>Grupo</div>
               <div style={{ ...num, textAlign: 'right' }}>{fmtK(pagoK[1])}</div>
-              <div style={{ ...num, textAlign: 'right' }}>{r.aPagarTot ? fmtK(r.aPagarTot) : '—'}</div><div style={{ ...num, textAlign: 'right' }}>{fmtK(previsto)}</div>
-              <div style={{ ...num, textAlign: 'right' }}>{pctSinal(vp)}</div><div />
+              <div style={{ ...num, textAlign: 'right' }}>{pctSinal(vp)}</div>
+              <div style={{ ...num, textAlign: 'right' }}>{pagoK[1] ? `${Math.round(r.comNota / pagoK[1] * 100)}%` : '—'}</div>
+              <div style={{ ...num, textAlign: 'right' }}>{fmtK(r.abertoTot)}</div><div />
             </div>
           </div>
         </div>
