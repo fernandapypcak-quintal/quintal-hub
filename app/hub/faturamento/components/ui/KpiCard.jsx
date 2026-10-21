@@ -14,11 +14,9 @@ export default function KpiCard({
   icon: Icon,
   delay = 0,
   tooltip,        // ← novo: texto explicativo
+  variation2,     // comparação secundária (ex.: vs mês anterior)
+  variationLabel2,
 }) {
-  const isPositive = variation > 0;
-  const isNegative = variation < 0;
-  const isNeutral  = variation === 0 || variation === null || variation === undefined;
-
   const displayValue = format === 'currency'
     ? formatBRL(value, true)
     : format === 'percent'
@@ -50,21 +48,36 @@ export default function KpiCard({
       </p>
 
       <div className="flex items-center gap-2 flex-wrap">
-        {variation !== null && variation !== undefined && (
-          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full
-            ${isPositive ? 'text-emerald-700 bg-emerald-50' : ''}
-            ${isNegative ? 'text-rose-700 bg-rose-50' : ''}
-            ${isNeutral  ? 'text-zinc-600 bg-zinc-100' : ''}
-          `}>
-            {isPositive && <TrendingUp size={11} />}
-            {isNegative && <TrendingDown size={11} />}
-            {isNeutral  && <Minus size={11} />}
-            {formatPct(variation)}
-          </span>
-        )}
+        <VarBadge v={variation} />
         {variationLabel && <span className="text-xs text-zinc-400">{variationLabel}</span>}
         {subtitle && <p className="text-xs text-zinc-400 mt-1 font-medium">{subtitle}</p>}
       </div>
+
+      {variation2 !== null && variation2 !== undefined && (
+        <div className="flex items-center gap-2 flex-wrap mt-1.5">
+          <VarBadge v={variation2} />
+          {variationLabel2 && <span className="text-xs text-zinc-400">{variationLabel2}</span>}
+        </div>
+      )}
     </div>
+  );
+}
+
+function VarBadge({ v }) {
+  if (v === null || v === undefined) return null;
+  const isPositive = v > 0;
+  const isNegative = v < 0;
+  const isNeutral  = v === 0;
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full
+      ${isPositive ? 'text-emerald-700 bg-emerald-50' : ''}
+      ${isNegative ? 'text-rose-700 bg-rose-50' : ''}
+      ${isNeutral  ? 'text-zinc-600 bg-zinc-100' : ''}
+    `}>
+      {isPositive && <TrendingUp size={11} />}
+      {isNegative && <TrendingDown size={11} />}
+      {isNeutral  && <Minus size={11} />}
+      {formatPct(v)}
+    </span>
   );
 }
