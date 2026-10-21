@@ -27,6 +27,11 @@ export default function GestorArea({ areas }) {
   const lista = areas && areas.length ? areas : [...AREAS_CUSTOS]
   const [bu, setBu] = useState(lista[0])
   const [mesEscolhido, setMesEscolhido] = useState('')
+  const [focoLista, setFocoLista] = useState({ aba: '', n: 0 })   // clique em "Notas a pagar" abre a lista certa
+  const verNotasAPagar = () => {
+    setFocoLista(f => ({ aba: 'apagar', n: f.n + 1 }))
+    setTimeout(() => { const el = document.getElementById('g-lista'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }) }, 80)
+  }
   const carga = useCarga(() => loadGestor(bu), [bu])
   const g = carga.dados
 
@@ -105,7 +110,8 @@ export default function GestorArea({ areas }) {
       {barraFiltros}
 
       {tipoSel !== 'fechado' && g.mes_atual && (
-        <Projecao proj={calcularProjecao({ pago: g.pago, aPagarMes: g.a_pagar_mes || [], mesAtual: g.mes_atual, mesAlvo: mesSel, bus: [bu] })} baixasAte={g.baixas_ate} />
+        <Projecao proj={calcularProjecao({ pago: g.pago, aPagarMes: g.a_pagar_mes || [], mesAtual: g.mes_atual, mesAlvo: mesSel, bus: [bu] })} baixasAte={g.baixas_ate}
+          onNotas={tipoSel === 'atual' ? verNotasAPagar : undefined} />
       )}
 
       {tipoSel === 'fechado' && <>
@@ -196,7 +202,8 @@ export default function GestorArea({ areas }) {
 
       <DRECustos key={bu} bu={bu} />
 
-      <ListasArea key={bu + mesSel} bu={bu} mes={tipoSel === 'fechado' ? mes : g.mes_atual} mesPrevisto={tipoSel === 'futuro' ? mesSel : ''} />
+      <ListasArea key={bu + mesSel + focoLista.n} bu={bu} mes={tipoSel === 'fechado' ? mes : g.mes_atual}
+        mesPrevisto={tipoSel === 'futuro' ? mesSel : ''} notasAte={tipoSel === 'atual' ? g.mes_atual : ''} abaInicial={focoLista.aba} />
     </div>
   )
 }
@@ -207,21 +214,23 @@ const diasDesde = d => (d && d.length >= 10 ? Math.max(0, Math.round((Date.now()
 const elipse = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
 
 // mesPrevisto (mês futuro): mostra só as notas com previsão de pagamento naquele mês
-export function ListasArea({ bu, mes, semRevisao = false, mesPrevisto = '' }) {
-  const [aba, setAba] = useState(mesPrevisto ? 'abertas' : 'pagos')
+// notasAte (mês atual): habilita a aba "Notas a pagar em <mês>" (previsão até o fim do mês)
+export function ListasArea({ bu, mes, semRevisao = false, mesPrevisto = '', notasAte = '', abaInicial = '' }) {
+  const [aba, setAba] = useState(abaInicial || (mesPrevisto ? 'abertas' : 'pagos'))
   const [busca, setBusca] = useState('')
   const [limite, setLimite] = useState(100)
   const pagos = useCarga(() => (aba === 'pagos' ? loadPagamentosBU({ mes, bu }) : Promise.resolve(null)), [aba, mes, bu])
-  const abertas = useCarga(() => (aba === 'abertas'
-    ? loadNFLista(mesPrevisto ? { status: 'aberto', bu, prev_mes: mesPrevisto } : { status: 'aberto', bu, dias: 40 })
-    : Promise.resolve(null)), [aba, bu, mesPrevisto])
+  const abertas = useCarga(() => (aba === 'abertas' || aba === 'apagar'
+    ? loadNFLista(aba === 'apagar' ? { status: 'aberto', bu, prev_ate: notasAte } : mesPrevisto ? { status: 'aberto', bu, prev_mes: mesPrevisto } : { status: 'aberto', bu, dias: 40 })
+    : Promise.resolve(null)), [aba, bu, mesPrevisto, notasAte])
   const atual = aba === 'pagos' ? pagos : abertas
+  const ehNota = aba !== 'pagos'
   const b = busca.trim().toUpperCase()
-  const base = (atual.dados || []).map(l => aba === 'abertas' ? { ...l, emAberto: Math.max(0, l.valor - (l.valor_pago || 0)) } : l)
+  const base = (atual.dados || []).map(l => ehNota ? { ...l, emAberto: Math.max(0, l.valor - (l.valor_pago || 0)) } : l)
   const linhas = base
     .filter(l => !b || [l.fornecedor, l.documento, l.nf_documento, l.descricao, l.categoria, l.item_principal].some(v => String(v || '').toUpperCase().includes(b)))
-    .sort((x, y) => aba === 'abertas' ? String(x.prev_pagto || '9').localeCompare(String(y.prev_pagto || '9')) || String(x.dt_dig).localeCompare(String(y.dt_dig)) : y.valor - x.valor)
-  const total = linhas.reduce((t, l) => t + (aba === 'abertas' ? l.emAberto : l.valor), 0)
+    .sort((x, y) => ehNota ? String(x.prev_pagto || '9').localeCompare(String(y.prev_pagto || '9')) || String(x.dt_dig).localeCompare(String(y.dt_dig)) : y.valor - x.valor)
+  const total = linhas.reduce((t, l) => t + (ehNota ? l.emAberto : l.valor), 0)
   const totalInvest = aba === 'pagos' ? linhas.filter(l => l.tipo !== 'Fixo' && l.tipo !== 'Variável').reduce((t, l) => t + l.valor, 0) : 0
 
   const exportar = () => aba === 'pagos'
@@ -237,7 +246,7 @@ export function ListasArea({ bu, mes, semRevisao = false, mesPrevisto = '' }) {
         { titulo: 'Nota fiscal', valor: l => l.nf_documento || (l.com_nf ? 'sim' : 'sem nota'), largura: 14 },
         { titulo: 'Entrada da nota', valor: l => l.nf_dt_dig, tipo: 'data', largura: 16 },
       ], linhas, 'Pagamentos')
-    : exportarExcel(mesPrevisto ? `${bu} - notas previstas pra ${mesNomeCurto(mesPrevisto).replace('/', '-')}` : `${bu} - notas não pagas (últimos 40 dias)`, [
+    : exportarExcel(aba === 'apagar' ? `${bu} - notas a pagar em ${mesNomeCurto(notasAte).replace('/', '-')}` : mesPrevisto ? `${bu} - notas previstas pra ${mesNomeCurto(mesPrevisto).replace('/', '-')}` : `${bu} - notas não pagas (últimos 40 dias)`, [
         { titulo: 'Fornecedor', valor: l => l.fornecedor, largura: 40 },
         { titulo: 'Nota fiscal', valor: l => l.documento, largura: 14 },
         { titulo: 'Item principal', valor: l => l.item_principal, largura: 32 },
@@ -271,12 +280,15 @@ export function ListasArea({ bu, mes, semRevisao = false, mesPrevisto = '' }) {
         ) : (
           <div role="tablist" style={{ display: 'flex', gap: 4, background: '#F4F4EF', padding: 3, borderRadius: 9, flexWrap: 'wrap' }}>
             <button role="tab" aria-selected={aba === 'pagos'} onClick={() => { setAba('pagos'); setLimite(100) }} style={tab('pagos')}>Pagamentos de {mesNome(mes)}</button>
+            {notasAte && <button role="tab" aria-selected={aba === 'apagar'} onClick={() => { setAba('apagar'); setLimite(100) }} style={tab('apagar')}>Notas a pagar em {mesNome(notasAte)}</button>}
             <button role="tab" aria-selected={aba === 'abertas'} onClick={() => { setAba('abertas'); setLimite(100) }} style={tab('abertas')}>Notas não pagas (últimos 40 dias)</button>
           </div>
         )}
       </div>
       <div style={{ fontSize: 13, background: COR.fundo, borderRadius: 8, padding: '10px 12px', lineHeight: 1.5 }}>
-        {mesPrevisto
+        {aba === 'apagar'
+          ? `As notas que compõem o "Notas a pagar" da projeção: já emitidas e em aberto, com previsão de pagamento até o fim de ${mesNome(notasAte)}, inclusive as que já passaram da data. Pela ordem da previsão. Em laranja: a data já passou e o pagamento ainda não apareceu nas contas pagas.`
+          : mesPrevisto
           ? `Notas da área já emitidas e em aberto com previsão de pagamento em ${mesNome(mesPrevisto)}, pela ordem da previsão. A previsão é o vencimento do TOTVS ou, quando ele não vem, o prazo médio de pagamento do fornecedor. Notas que ainda não chegaram não aparecem.`
           : aba === 'pagos'
           ? `Tudo que a área pagou em ${mesNome(mes)}, pela data do pagamento. Quando o pagamento tem nota fiscal, aparece o número e a data em que a nota entrou (muitas vezes no mês anterior). Aluguel, cartão, folha e impostos não têm nota, e isso é normal.`
