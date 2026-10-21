@@ -4,7 +4,7 @@ import { loadGestor, loadNFLista, loadPagamentosBU, reportarDivergenciaBU } from
 import { fmt, fmtK, fmtData, mesAnteriorISO, mesISOLabel, mesNome, mesNomeCurto } from '../../utils.js'
 import { COR, num, Busca, Carregando, Erro, Vazio, useCarga, botaoSecundario, exportarExcel, BotaoExportar } from '../ui/nf.jsx'
 import DRECustos from '../ui/DRECustos.jsx'
-import PreviaMes from '../ui/PreviaMes.jsx'
+import Projecao, { calcularProjecao } from '../ui/Projecao.jsx'
 
 // v27.3 — "Minha área": tudo pelo MÊS DO PAGAMENTO. O que a área pagou (com
 // e sem nota), fixo e variável, de onde veio a diferença, a lista de
@@ -102,13 +102,10 @@ export default function GestorArea({ areas }) {
       {barraFiltros}
 
       {g.mes_atual && (
-        <PreviaMes
-          linhas={[{ bu, pago: soma(g.pago, x => x.mes === g.mes_atual), aPagar: soma(g.a_pagar_mes || [], x => x.mes === g.mes_atual), anterior: soma(g.pago, x => x.mes === mesAnteriorISO(g.mes_atual)) }]}
-          mesAtual={g.mes_atual} mesAnterior={mesAnteriorISO(g.mes_atual)} baixasAte={g.baixas_ate}
-          titulo={`Prévia de ${mesNome(g.mes_atual)}: ${bu}`} />
+        <Projecao proj={calcularProjecao({ pago: g.pago, aPagarMes: g.a_pagar_mes || [], mesAtual: g.mes_atual, bus: [bu] })} baixasAte={g.baixas_ate} />
       )}
 
-      <div style={{ borderTop: `0.5px solid ${COR.borda}`, paddingTop: 18, fontSize: 15, fontWeight: 600 }}>{mesNomeCurto(mes)}: mês fechado</div>
+      <div style={{ borderTop: `0.5px solid ${COR.borda}`, paddingTop: 18, fontSize: 15, fontWeight: 600 }}>{mesNomeCurto(mes)}: mês fechado <span style={{ fontSize: 12, fontWeight: 400, color: COR.suave }}>(pra comparar com o que já passou)</span></div>
 
       <section aria-labelledby="g-resumo" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <h1 id="g-resumo" style={{ margin: 0, fontSize: 24, fontWeight: 600, lineHeight: 1.3, maxWidth: 780 }}>

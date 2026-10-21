@@ -4,7 +4,7 @@ import { fmtK, fmtData, mesAnteriorISO, mesISOLabel, mesNome, mesNomeCurto } fro
 import { COR, num, Vazio, SemDadosNF, botaoSecundario } from '../ui/nf.jsx'
 import { ListasArea } from './GestorArea.jsx'
 import CaixaTotal from '../ui/CaixaTotal.jsx'
-import PreviaMes from '../ui/PreviaMes.jsx'
+import Projecao, { calcularProjecao } from '../ui/Projecao.jsx'
 
 // v27.2 — Report do mês pro CEO: o grupo inteiro numa página, com
 // variação vs mês anterior, áreas lado a lado e o que puxou o mês.
@@ -26,7 +26,7 @@ function leitura(vp, aberto, pago, maiorAlta, maiorQueda) {
   return partes.join(' ')
 }
 
-export default function ReportCEO() {
+function ReportFechado() {
   const { nfResumo, busConfig, grupoBU, corBU } = useFinanceiro()
   const [mesEscolhido, setMesEscolhido] = useState('')
   const [areaSel, setAreaSel] = useState('')
@@ -153,12 +153,8 @@ export default function ReportCEO() {
         }
       `}</style>
 
-      {mesAt && linhasPrevia.length > 0 && (
-        <PreviaMes linhas={linhasPrevia} mesAtual={mesAt} mesAnterior={mesAntAt} baixasAte={nfResumo.baixas_ate} corBU={corBU} />
-      )}
-
-      <div className="no-print" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', borderTop: `0.5px solid ${COR.borda}`, paddingTop: 18 }}>
-        <div style={{ fontSize: 13, color: COR.suave }}><b style={{ color: COR.texto, fontSize: 15 }}>Report do mês fechado</b></div>
+      <div className="no-print" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ fontSize: 13, color: COR.suave }}>Consulta de um mês que já fechou.</div>
         <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, color: COR.suave }}>Mês
           <select value={mes} onChange={e => setMesEscolhido(e.target.value)} style={{ ...botaoSecundario, padding: '7px 10px', fontSize: 13 }}>
             {fechados.map(m => <option key={m} value={m}>{mesNomeCurto(m)}</option>)}
@@ -341,6 +337,81 @@ export default function ReportCEO() {
       </section>
 
       <div style={{ fontSize: 12, color: COR.suave }}>"Pago" = contas pagas pela data do pagamento. "Notas não pagas" = notas fiscais já recebidas (MTR090) sem pagamento localizado. Impostos, tarifas e intercompany ficam fora.</div>
+    </div>
+  )
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// v27.10 — Report: o padrão é olhar pra frente (mês atual + próximos);
+// os meses fechados ficam na aba "Meses anteriores".
+// ══════════════════════════════════════════════════════════════
+export default function ReportCEO() {
+  const { nfResumo, busConfig, grupoBU, corBU } = useFinanceiro()
+  const [aba, setAba] = useState('atual')
+  const [areaDet, setAreaDet] = useState('')
+
+  const proj = useMemo(() => {
+    if (!nfResumo || !nfResumo.mes_atual) return null
+    const bus = (busConfig.length ? busConfig.map(b => b.bu) : [...new Set((nfResumo.pago || []).map(x => x.bu))])
+      .filter(b => grupoBU(b) !== 'Fora dos totais')
+    return calcularProjecao({ pago: nfResumo.pago || [], aPagarMes: nfResumo.a_pagar_mes || [], mesAtual: nfResumo.mes_atual, bus })
+  }, [nfResumo, busConfig])
+
+  if (!nfResumo) return <SemDadosNF />
+
+  const tab = id => ({
+    padding: '8px 16px', borderRadius: 8, border: 'none', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', minHeight: 36,
+    background: aba === id ? '#fff' : 'transparent', color: aba === id ? COR.texto : COR.suave, fontWeight: aba === id ? 600 : 400,
+  })
+  const areasDet = proj ? proj.linhas.map(l => l.bu).filter(b => b !== 'Revisar') : []
+  const areaSel = areaDet || areasDet[0] || ''
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <div className="no-print" style={{ padding: '20px 20px 0', maxWidth: 1180, width: '100%', boxSizing: 'border-box', margin: '0 auto', display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div role="tablist" style={{ display: 'flex', gap: 4, background: '#F0F0EA', padding: 4, borderRadius: 10 }}>
+          <button role="tab" aria-selected={aba === 'atual'} onClick={() => setAba('atual')} style={tab('atual')}>Mês atual e próximos</button>
+          <button role="tab" aria-selected={aba === 'anteriores'} onClick={() => setAba('anteriores')} style={tab('anteriores')}>Meses anteriores</button>
+        </div>
+        {aba === 'atual' && <button onClick={() => window.print()} style={{ ...botaoSecundario, background: '#4F6B14', color: '#fff', border: 'none', fontWeight: 600, padding: '8px 14px', fontSize: 13 }}>Baixar PDF</button>}
+      </div>
+
+      {aba === 'anteriores' ? <ReportFechado /> : (
+        <div className="report-ceo" style={{ padding: '16px 20px 48px', display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1180, width: '100%', boxSizing: 'border-box', margin: '0 auto' }}>
+          <style>{`
+            @media print {
+              .no-print { display: none !important; }
+              .h-screen { height: auto !important; }
+              .overflow-hidden, .overflow-y-auto { overflow: visible !important; }
+              body { background: #fff !important; }
+              .report-ceo { padding: 0 !important; max-width: none !important; }
+              @page { size: A4 landscape; margin: 12mm; }
+            }
+          `}</style>
+          {!proj ? <Vazio>Publique o Apps Script mais novo e recalcule o cache pra ver a projeção.</Vazio> : (
+            <Projecao proj={proj} baixasAte={nfResumo.baixas_ate} corBU={corBU}
+              onArea={bu => { setAreaDet(bu); setTimeout(() => { const el = document.getElementById('ceo-det-atual'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }) }, 50) }} />
+          )}
+
+          {proj && areaSel && (
+            <section id="ceo-det-atual" className="no-print" style={{ display: 'flex', flexDirection: 'column', gap: 12, scrollMarginTop: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Detalhe por área</h2>
+                  <div style={{ fontSize: 12, color: COR.suave, marginTop: 3 }}>Pagamentos de {mesNome(proj.mesAtual)} e notas não pagas dos últimos 40 dias, com previsão de pagamento. Dá pra exportar pra Excel.</div>
+                </div>
+                <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, color: COR.suave }}>Área
+                  <select value={areaSel} onChange={e => setAreaDet(e.target.value)} style={{ ...botaoSecundario, padding: '7px 10px', fontSize: 13 }}>
+                    {areasDet.map(a => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                </label>
+              </div>
+              <ListasArea key={areaSel + proj.mesAtual} bu={areaSel} mes={proj.mesAtual} semRevisao />
+            </section>
+          )}
+        </div>
+      )}
     </div>
   )
 }
