@@ -4,6 +4,7 @@ import { loadGestor, loadNFLista, loadPagamentosBU, reportarDivergenciaBU } from
 import { fmt, fmtK, fmtData, mesAnteriorISO, mesISOLabel, mesNome, mesNomeCurto } from '../../utils.js'
 import { COR, num, Busca, Carregando, Erro, Vazio, useCarga, botaoSecundario, exportarExcel, BotaoExportar } from '../ui/nf.jsx'
 import DRECustos from '../ui/DRECustos.jsx'
+import PreviaMes from '../ui/PreviaMes.jsx'
 
 // v27.3 — "Minha área": tudo pelo MÊS DO PAGAMENTO. O que a área pagou (com
 // e sem nota), fixo e variável, de onde veio a diferença, a lista de
@@ -33,7 +34,8 @@ export default function GestorArea({ areas }) {
   // abre no último mês FECHADO (o atual ainda está em andamento)
   const fechados = g ? meses.filter(m => !g.mes_atual || m < g.mes_atual) : []
   const mesPadrao = fechados[0] || meses[0] || ''
-  const mes = mesEscolhido && meses.includes(mesEscolhido) ? mesEscolhido : mesPadrao
+  // a página é do mês FECHADO; o mês em andamento fica no bloco "Prévia" do topo
+  const mes = mesEscolhido && fechados.includes(mesEscolhido) ? mesEscolhido : mesPadrao
   const ant = mesAnteriorISO(mes)
 
   const barraFiltros = (
@@ -48,7 +50,7 @@ export default function GestorArea({ areas }) {
       {meses.length > 0 && (
         <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, color: COR.suave }}>Mês
           <select value={mes} onChange={e => setMesEscolhido(e.target.value)} style={{ ...botaoSecundario, padding: '7px 10px', fontSize: 13 }}>
-            {meses.map(m => <option key={m} value={m}>{mesNomeCurto(m)}</option>)}
+            {fechados.map(m => <option key={m} value={m}>{mesNomeCurto(m)}</option>)}
           </select>
         </label>
       )}
@@ -99,6 +101,15 @@ export default function GestorArea({ areas }) {
     <div style={{ padding: '20px 20px 48px', display: 'flex', flexDirection: 'column', gap: 22, maxWidth: 1180, width: '100%', boxSizing: 'border-box', margin: '0 auto' }}>
       {barraFiltros}
 
+      {g.mes_atual && (
+        <PreviaMes
+          linhas={[{ bu, pago: soma(g.pago, x => x.mes === g.mes_atual), aPagar: soma(g.a_pagar_mes || [], x => x.mes === g.mes_atual), anterior: soma(g.pago, x => x.mes === mesAnteriorISO(g.mes_atual)) }]}
+          mesAtual={g.mes_atual} mesAnterior={mesAnteriorISO(g.mes_atual)} baixasAte={g.baixas_ate}
+          titulo={`Prévia de ${mesNome(g.mes_atual)}: ${bu}`} />
+      )}
+
+      <div style={{ borderTop: `0.5px solid ${COR.borda}`, paddingTop: 18, fontSize: 15, fontWeight: 600 }}>{mesNomeCurto(mes)}: mês fechado</div>
+
       <section aria-labelledby="g-resumo" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <h1 id="g-resumo" style={{ margin: 0, fontSize: 24, fontWeight: 600, lineHeight: 1.3, maxWidth: 780 }}>
           {c.ehAtual ? fraseAtual : <>Em {mesNome(mes)}, {bu} pagou <span style={num}>{fmtK(c.pago)}</span>{frasePago}.{fraseNotas}</>}
@@ -120,18 +131,13 @@ export default function GestorArea({ areas }) {
             </div>
           </div>
           <div style={card}>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>Pago + a pagar em {mesNome(mes)}</div>
-            <div style={{ fontSize: 12, color: COR.suave, lineHeight: 1.45 }}>O que já foi pago no mês somado às notas em aberto com previsão de pagamento no mês.</div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>Notas não pagas (últimos 40 dias)</div>
+            <div style={{ fontSize: 12, color: COR.suave, lineHeight: 1.45 }}>Notas da área que entraram desde {fmtData(g.aberto_desde)} e ainda não aparecem nas contas pagas.</div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginTop: 4 }}>
-              <span style={{ ...num, fontSize: 28 }}>{fmtK(c.pago + c.aPagarMes)}</span>
+              <span style={{ ...num, fontSize: 28 }}>{fmtK(c.abertoValor)}</span>
+              <span style={{ fontSize: 13, color: COR.suave }}>{c.abertoQtd.toLocaleString('pt-BR')} notas</span>
             </div>
-            <div style={{ fontSize: 12, color: COR.suave, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-              <span><b style={{ color: COR.texto, fontWeight: 600 }}>{fmtK(c.pago)}</b> pago</span>
-              {c.ehAtual
-                ? <span><b style={{ color: COR.texto, fontWeight: 600 }}>{fmtK(c.aPagarMes)}</b> a pagar ({c.aPagarQtd.toLocaleString('pt-BR')} notas)</span>
-                : <span>mês fechado: o que ficou em aberto passa pro mês atual</span>}
-            </div>
-            <div style={{ fontSize: 12, color: COR.suave }}>Notas não pagas dos últimos 40 dias: {fmtK(c.abertoValor)} ({c.abertoQtd.toLocaleString('pt-BR')} notas). Lista lá embaixo.</div>
+            <div style={{ fontSize: 12, color: COR.suave }}>A lista está na aba "Notas não pagas", lá embaixo.</div>
           </div>
         </div>
       </section>
@@ -147,7 +153,7 @@ export default function GestorArea({ areas }) {
               <div key={t} style={{ borderLeft: `3px solid ${cor}`, paddingLeft: 12 }}>
                 <div style={{ fontSize: 12, color: COR.suave }}>{t} em {mesNome(mes)}</div>
                 <div style={{ ...num, fontSize: 20 }}>{fmtK(v)}</div>
-                <div style={{ marginTop: 4 }}><ChipVar p={varPct(v, a)} mesAnt={ant} /></div>
+                <div style={{ marginTop: 4 }}>{v || a ? <ChipVar p={varPct(v, a)} mesAnt={ant} /> : <span style={{ fontSize: 12, color: COR.suave }}>a área não tem {t.toLowerCase()}</span>}</div>
               </div>
             ))}
           </div>
@@ -210,7 +216,7 @@ export function ListasArea({ bu, mes, semRevisao = false }) {
   const base = (atual.dados || []).map(l => aba === 'abertas' ? { ...l, emAberto: Math.max(0, l.valor - (l.valor_pago || 0)) } : l)
   const linhas = base
     .filter(l => !b || [l.fornecedor, l.documento, l.nf_documento, l.descricao, l.categoria, l.item_principal].some(v => String(v || '').toUpperCase().includes(b)))
-    .sort((x, y) => aba === 'abertas' ? String(x.dt_dig).localeCompare(String(y.dt_dig)) : y.valor - x.valor)
+    .sort((x, y) => aba === 'abertas' ? String(x.prev_pagto || '9').localeCompare(String(y.prev_pagto || '9')) || String(x.dt_dig).localeCompare(String(y.dt_dig)) : y.valor - x.valor)
   const total = linhas.reduce((t, l) => t + (aba === 'abertas' ? l.emAberto : l.valor), 0)
   const totalInvest = aba === 'pagos' ? linhas.filter(l => l.tipo !== 'Fixo' && l.tipo !== 'Variável').reduce((t, l) => t + l.valor, 0) : 0
 
@@ -237,6 +243,7 @@ export function ListasArea({ bu, mes, semRevisao = false }) {
         { titulo: 'Em aberto', valor: l => l.emAberto, tipo: 'num', largura: 12 },
         { titulo: 'Entrada da nota', valor: l => l.dt_dig, tipo: 'data', largura: 16 },
         { titulo: 'Previsão de pagamento', valor: l => l.prev_pagto, tipo: 'data', largura: 20 },
+        { titulo: 'Origem da previsão', valor: l => ORIGEM_PREV[l.origem_prev] || l.origem_prev, largura: 20 },
         { titulo: 'Dias desde a entrada', valor: l => diasDesde(l.dt_dig), tipo: 'num', formato: '0', largura: 18 },
       ], linhas, 'Notas não pagas')
 
@@ -244,7 +251,9 @@ export function ListasArea({ bu, mes, semRevisao = false }) {
     padding: '7px 14px', borderRadius: 7, border: 'none', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', minHeight: 34,
     background: aba === id ? '#fff' : 'transparent', color: aba === id ? COR.texto : COR.suave, fontWeight: aba === id ? 600 : 400,
   })
-  const grid = aba === 'pagos' ? 'minmax(220px, 2fr) 100px 120px 96px minmax(150px, 1fr) 180px' : 'minmax(220px, 2fr) 100px 120px 96px 90px 180px'
+  const grid = aba === 'pagos' ? 'minmax(220px, 2fr) 100px 120px 96px minmax(150px, 1fr) 180px' : 'minmax(220px, 2fr) 100px 120px 96px 120px 56px 180px'
+  const hojeISO = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10)
+  const ORIGEM_PREV = { 'Vencimento': 'vencimento', 'Prazo acordado': 'prazo combinado', 'Prazo histórico': 'prazo do fornecedor', 'Prazo padrão': 'estimada (20 dias)' }
 
   return (
     <section aria-labelledby="g-lista" style={{ background: '#fff', border: `0.5px solid ${COR.borda}`, borderRadius: 12, padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -261,7 +270,7 @@ export function ListasArea({ bu, mes, semRevisao = false }) {
       <div style={{ fontSize: 13, background: COR.fundo, borderRadius: 8, padding: '10px 12px', lineHeight: 1.5 }}>
         {aba === 'pagos'
           ? `Tudo que a área pagou em ${mesNome(mes)}, pela data do pagamento. Quando o pagamento tem nota fiscal, aparece o número e a data em que a nota entrou (muitas vezes no mês anterior). Aluguel, cartão, folha e impostos não têm nota, e isso é normal.`
-          : 'Notas da área que entraram nos últimos 40 dias e ainda não foram pagas, das mais antigas para as mais novas. Elas vão aparecer nos pagamentos do mês em que forem pagas.'}
+          : 'Notas da área que entraram nos últimos 40 dias e ainda não foram pagas, pela ordem da previsão de pagamento (o que vence primeiro aparece primeiro). A previsão é o vencimento do TOTVS ou, quando ele não vem, o prazo médio de pagamento do fornecedor. Em laranja: a data já passou e o pagamento ainda não apareceu nas contas pagas.'}
       </div>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'space-between' }}>
         <Busca valor={busca} onChange={v => { setBusca(v); setLimite(100) }} placeholder="Buscar fornecedor, conta ou número da nota" />
@@ -277,7 +286,7 @@ export function ListasArea({ bu, mes, semRevisao = false }) {
               <div style={{ display: 'grid', gridTemplateColumns: grid, gap: 10, fontSize: 12, color: COR.suave, padding: '6px 4px', borderBottom: `0.5px solid ${COR.borda}` }}>
                 {aba === 'pagos'
                   ? <><div>Fornecedor e conta</div><div>Casa</div><div style={{ textAlign: 'right' }}>Valor</div><div>Pago em</div><div>Nota fiscal</div><div /></>
-                  : <><div>Fornecedor e nota</div><div>Casa</div><div style={{ textAlign: 'right' }}>Em aberto</div><div>Entrou em</div><div style={{ textAlign: 'right' }}>Há</div><div /></>}
+                  : <><div>Fornecedor e nota</div><div>Casa</div><div style={{ textAlign: 'right' }}>Em aberto</div><div>Entrou em</div><div>Previsão de pagamento</div><div style={{ textAlign: 'right' }}>Há</div><div /></>}
               </div>
               {linhas.slice(0, limite).map((l, i) => (
                 <div key={(l.chave_nf || l.fornecedor) + i} style={{ display: 'grid', gridTemplateColumns: grid, gap: 10, alignItems: 'center', padding: '10px 4px', borderBottom: '0.5px solid #F0F0EC', fontSize: 13 }}>
@@ -303,6 +312,14 @@ export function ListasArea({ bu, mes, semRevisao = false }) {
                       <div>{l.unidade}</div>
                       <div style={{ ...num, textAlign: 'right' }}>{fmt(l.emAberto)}</div>
                       <div style={num}>{fmtData(l.dt_dig)}</div>
+                      <div>
+                        <div style={{ ...num, color: l.prev_pagto && l.prev_pagto < hojeISO ? '#9A3C06' : COR.texto, fontWeight: l.prev_pagto && l.prev_pagto < hojeISO ? 600 : 400 }}>
+                          {l.prev_pagto ? fmtData(l.prev_pagto) : '—'}
+                        </div>
+                        <div style={{ fontSize: 11, color: l.prev_pagto && l.prev_pagto < hojeISO ? '#9A3C06' : COR.suave }}>
+                          {l.prev_pagto && l.prev_pagto < hojeISO ? 'já passou' : (ORIGEM_PREV[l.origem_prev] || '')}
+                        </div>
+                      </div>
                       <div style={{ ...num, textAlign: 'right', color: diasDesde(l.dt_dig) > 45 ? '#9A3C06' : COR.suave }}>{diasDesde(l.dt_dig)}d</div>
                     </>
                   )}
