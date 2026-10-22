@@ -111,7 +111,7 @@ export default function GestorArea({ areas }) {
       {barraFiltros}
 
       {tipoSel !== 'fechado' && g.mes_atual && (
-        <Projecao proj={calcularProjecao({ pago: g.pago, aPagarMes: g.a_pagar_mes || [], mesAtual: g.mes_atual, mesAlvo: mesSel, bus: [bu] })} baixasAte={g.baixas_ate}
+        <Projecao proj={calcularProjecao({ pago: g.pago, aPagarMes: g.a_pagar_mes || [], mesAtual: g.mes_atual, mesAlvo: mesSel, bus: [bu], receita: g.receita || [] })} baixasAte={g.baixas_ate}
           onNotas={tipoSel === 'atual' ? verNotasAPagar : undefined} />
       )}
 
