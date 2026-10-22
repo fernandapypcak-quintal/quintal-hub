@@ -186,6 +186,7 @@ function parseNFResumo(r) {
     pago_cat:     arr(r.pago_cat).map(e => ({ ...e, valor: num(e.valor) })),
     caixa_fora:   arr(r.caixa_fora).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
     a_pagar_mes:  arr(r.a_pagar_mes).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
+    receita:      arr(r.receita).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
     aberto_desde: r.aberto_desde || '',
     mes_atual:    r.mes_atual || '',
     aberto:       arr(r.aberto).map(e => ({ ...e, valor: num(e.valor), vencido: num(e.vencido), qtd: num(e.qtd), qtd_vencido: num(e.qtd_vencido) })),
@@ -240,6 +241,7 @@ export async function loadGestor(bu) {
     revisar_cat: arr(d.revisar_cat).map(e => ({ ...e, valor: num(e.valor) })),
     aberto: arr(d.aberto).map(e => ({ ...e, valor: num(e.valor), vencido: num(e.vencido), qtd: num(e.qtd), qtd_vencido: num(e.qtd_vencido) })),
     a_pagar_mes: arr(d.a_pagar_mes).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
+    receita: arr(d.receita).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
     aberto_desde: d.aberto_desde || '', mes_atual: d.mes_atual || '',
   }
 }
@@ -269,6 +271,12 @@ export async function loadDRE({ bu } = {}) {
     pago: arr(d.pago).map(r => ({ ...r, valor: Number(r.valor || 0) })),
     a_pagar: arr(d.a_pagar).map(r => ({ ...r, valor: Number(r.valor || 0), qtd: Number(r.qtd || 0) })),
   }
+}
+
+// v27.10 — recebimentos (contas a receber) de uma área no mês. mes: '2026-09'
+export async function loadReceitasLista({ bu, mes }) {
+  const d = await fetchComParametros({ tipo: 'receitas_lista', bu, mes })
+  return Array.isArray(d) ? d.map(r => ({ ...r, valor: Number(r.valor || 0) })) : []
 }
 
 // Tela de conciliação. mes: '2026-09' (vazio = tudo)
