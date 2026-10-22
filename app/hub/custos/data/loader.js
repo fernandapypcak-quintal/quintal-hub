@@ -294,6 +294,14 @@ export async function loadReceitasResumo(mes) {
   }
 }
 
+// v27.13 — observação do gestor numa nota (já paga sem conciliação, cancelada, outro)
+export async function registrarObsNF({ chaveNF, bu, fornecedor, documento, valor, tipo, texto }) {
+  try {
+    const d = await fetchComParametros({ tipo: 'registrar_obs_nf', chave_nf: chaveNF, bu, fornecedor, documento, valor: String(valor || 0), tipo_obs: tipo, texto: texto || '' }, 20000)
+    return !!(d && d.ok)
+  } catch (e) { return false }
+}
+
 // Tela de conciliação. mes: '2026-09' (vazio = tudo)
 export async function loadConciliacao(mes) {
   const p = { tipo: 'conciliacao' }
@@ -327,9 +335,10 @@ const parseDetalheLancamentosBU = rows => (!rows||!Array.isArray(rows)) ? [] : r
 // Registra a divergência de BU reportada pelo gestor (ex: "esse fornecedor
 // não é da minha BU, acho que é de tal BU"). Fica pendente de revisão numa
 // aba separada da planilha — não reclassifica nada sozinho.
-export async function reportarDivergenciaBU({ fornecedor, descricao, buAtual, buSugerido, mes, loja, valor, observacao, origem, codFor } = {}) {
+export async function reportarDivergenciaBU({ fornecedor, descricao, buAtual, buSugerido, mes, loja, valor, observacao, origem, codFor, chave } = {}) {
   const params = new URLSearchParams({ tipo: 'registrar_divergencia_bu' })
-  if (origem)      params.set('origem', origem)        // 'nota' | 'pagamento'
+  if (origem)      params.set('origem', origem)        // 'nota' | 'pagamento' | 'receita'
+  if (chave)       params.set('chave', chave)
   if (codFor)      params.set('cod_for', codFor)
   if (fornecedor)  params.set('fornecedor', fornecedor)
   if (descricao)   params.set('descricao', descricao)
