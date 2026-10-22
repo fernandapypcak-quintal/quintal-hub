@@ -11,8 +11,8 @@ import { COR, num, Busca, Carregando, Erro, Vazio, useCarga, botaoSecundario, ex
 const pctTxt = (a, b) => (b ? `${a >= b ? '+' : '−'}${Math.abs((a / b - 1) * 100).toFixed(1).replace('.', ',')}%` : '—')
 const Cap = s => (s ? s[0].toUpperCase() + s.slice(1) : '')
 const EXPLICA_AREA = {
-  'Compras': 'rebate, bonificação e verba comercial de fornecedor',
-  'Marketing': 'patrocínio e parcerias com marcas (exposição nas casas)',
+  'Compras': 'rebate, bonificação e verba de fornecedor (inclui verba de patrocínio)',
+  'Marketing': 'parcerias com marcas (exposição nas casas)',
 }
 const ehExtra = a => !['Fora', 'Faturamento', 'Revisar'].includes(a)
 
@@ -120,7 +120,7 @@ export default function Receitas() {
       {detalhe && <ListaDetalhe key={detalhe.area + detalhe.natureza + d.mes} detalhe={detalhe} mes={d.mes} onFechar={() => setDetalhe(null)} />}
 
       <div style={{ fontSize: 12, color: COR.suave, background: COR.fundo, borderRadius: 8, padding: '12px 14px', lineHeight: 1.6 }}>
-        <b style={{ color: COR.texto }}>O que entra aqui:</b> só o que as áreas trazem <b>a mais</b>, fora do faturamento: rebate, bonificação e verba comercial de fornecedor (Compras), patrocínio e parcerias com marcas (Marketing). Vendas das casas, eventos corporativos e ingressos já estão no faturamento e ficam de fora, assim como resgates, transferências e movimentos entre empresas do grupo. Cada tipo do TOTVS tem sua classificação na aba <b>Mapeamento_Receita</b>; tipo novo com "rebate", "bonificação", "patrocínio" ou "parceria" no nome já entra sozinho na área certa.
+        <b style={{ color: COR.texto }}>O que entra aqui:</b> só o que as áreas trazem <b>a mais</b>, fora do faturamento: rebate, bonificação e verba de fornecedor, inclusive verba de patrocínio (Compras), e parcerias com marcas (Marketing). Vendas das casas, eventos corporativos e ingressos já estão no faturamento e ficam de fora, assim como resgates, transferências e movimentos entre empresas do grupo. Cada tipo do TOTVS tem sua classificação na aba <b>Mapeamento_Receita</b>; tipo novo com "rebate", "bonificação" ou "verba" no nome já entra sozinho em Compras, e com "parceria" em Marketing.
       </div>
     </div>
   )
