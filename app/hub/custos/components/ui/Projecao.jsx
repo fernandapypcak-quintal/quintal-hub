@@ -14,7 +14,7 @@ const proxMes = m => { const [a, mm] = m.split('-').map(Number); return mm === 1
 
 // pago: [{mes, bu, valor, valor_com_nf}]  aPagarMes: [{mes, bu, valor}]
 // mesAlvo = mês atual (projeção) ou um mês futuro (já comprometido).
-export function calcularProjecao({ pago, aPagarMes, mesAtual, mesAlvo, bus }) {
+export function calcularProjecao({ pago, aPagarMes, mesAtual, mesAlvo, bus, receita = [] }) {
   const alvo = mesAlvo || mesAtual
   const futuro = alvo > mesAtual
   const ultimoFechado = mesAnteriorISO(mesAtual)
@@ -29,13 +29,14 @@ export function calcularProjecao({ pago, aPagarMes, mesAtual, mesAlvo, bus }) {
     const pagoAlvo = futuro ? 0 : somar(pago, x => x.bu === bu && x.mes === alvo)
     const fixas = futuro ? mediaSemNota : Math.max(0, mediaSemNota - semNota(alvo))
     const notas = somar(aPagarMes, x => x.bu === bu && x.mes === alvo)
-    return { bu, anterior: somar(pago, x => x.bu === bu && x.mes === ref), pago: pagoAlvo, notas, fixas, proj: pagoAlvo + notas + fixas }
-  }).filter(l => l.anterior || l.pago || l.notas || l.fixas)
+    const rec = futuro ? 0 : somar(receita, x => x.bu === bu && x.mes === alvo)
+    return { bu, anterior: somar(pago, x => x.bu === bu && x.mes === ref), pago: pagoAlvo, notas, fixas, proj: pagoAlvo + notas + fixas, rec }
+  }).filter(l => l.anterior || l.pago || l.notas || l.fixas || l.rec)
 
   const tot = k => linhas.reduce((t, l) => t + l[k], 0)
   return {
     mesAtual, mesAlvo: alvo, futuro, ant: ref, linhas,
-    total: { anterior: tot('anterior'), pago: tot('pago'), notas: tot('notas'), fixas: tot('fixas'), proj: tot('proj') },
+    total: { anterior: tot('anterior'), pago: tot('pago'), notas: tot('notas'), fixas: tot('fixas'), proj: tot('proj'), rec: tot('rec') },
   }
 }
 
@@ -80,7 +81,7 @@ export default function Projecao({ proj, baixasAte, corBU, titulo, onArea, onNot
     )
   }
   const op = s => <span aria-hidden="true" style={{ fontSize: 22, color: COR.fraco, alignSelf: 'center' }}>{s}</span>
-  const grid = proj.futuro ? 'minmax(160px, 1.4fr) 130px 130px 130px 140px' : 'minmax(160px, 1.4fr) 120px 110px 120px 120px 130px 84px'
+  const grid = proj.futuro ? 'minmax(160px, 1.4fr) 130px 130px 130px 140px' : 'minmax(160px, 1.4fr) 116px 104px 112px 112px 124px 76px 120px'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -110,6 +111,14 @@ export default function Projecao({ proj, baixasAte, corBU, titulo, onArea, onNot
           </div>
         </div>
 
+        {t.rec > 0 && (
+          <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap', fontSize: 13, background: '#F4F8EC', borderRadius: 8, padding: '8px 12px' }}>
+            <span style={{ fontWeight: 600 }}>Receita recebida em {nomeAt} até agora:</span>
+            <span style={{ ...num, fontSize: 16, fontWeight: 600, color: '#4F6B14' }}>{fmtK(t.rec)}</span>
+            <span style={{ fontSize: 12, color: COR.suave }}>contas a receber · contra {fmtK(t.pago)} já pagos de custo</span>
+          </div>
+        )}
+
         <div aria-hidden="true" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div style={{ position: 'relative' }}>
             <div style={{ display: 'flex', height: 14, borderRadius: 7, overflow: 'hidden', background: '#EEEDE6' }}>
@@ -136,7 +145,7 @@ export default function Projecao({ proj, baixasAte, corBU, titulo, onArea, onNot
             <div style={{ fontSize: 12, color: COR.suave, marginTop: 3, lineHeight: 1.5 }}>{proj.futuro ? `O que já está comprometido em ${nomeAt} por área. ${Cap(mesNome(proj.ant))} aparece só como referência: o mês ainda vai receber notas.` : `Projeção de ${nomeAt} por área. Em destaque, áreas mais de 10% acima ou abaixo de ${mesNome(proj.ant)}.`} {onArea ? 'Clique numa área pra ver as notas e os pagamentos.' : ''}</div>
           </div>
           <div style={{ overflowX: 'auto' }}>
-            <div style={{ minWidth: 820 }}>
+            <div style={{ minWidth: 940 }}>
               <div style={{ display: 'grid', gridTemplateColumns: grid, gap: 10, fontSize: 12, color: COR.suave, padding: '6px 4px', borderBottom: `0.5px solid ${COR.borda}`, alignItems: 'end' }}>
                 <div>Área</div>
                 <div style={{ textAlign: 'right' }}>{Cap(mesNome(proj.ant))} (fechado)</div>
@@ -145,6 +154,7 @@ export default function Projecao({ proj, baixasAte, corBU, titulo, onArea, onNot
                 <div style={{ textAlign: 'right' }}>Fixas sem nota</div>
                 <div style={{ textAlign: 'right', color: COR.texto, fontWeight: 600 }}>{proj.futuro ? 'Já comprometido' : 'Projeção'}</div>
                 {!proj.futuro && <div style={{ textAlign: 'right' }}>vs {mesNome(proj.ant).substring(0, 3)}</div>}
+                {!proj.futuro && <div style={{ textAlign: 'right' }}>Receita até agora</div>}
               </div>
               {[...proj.linhas].sort((a, b) => b.proj - a.proj).map(l => {
                 const pl = pct(l.proj, l.anterior)
@@ -162,6 +172,7 @@ export default function Projecao({ proj, baixasAte, corBU, titulo, onArea, onNot
                     <div style={{ ...num, textAlign: 'right', fontStyle: 'italic', color: COR.suave }}>{l.fixas ? fmtK(l.fixas) : '—'}</div>
                     <div style={{ ...num, textAlign: 'right', fontWeight: 600 }}>{fmtK(l.proj)}</div>
                     {!proj.futuro && <div style={{ ...num, textAlign: 'right', fontSize: 12, color: corP(pl), fontWeight: pl !== null && Math.abs(pl) > 10 ? 600 : 400 }}>{pctTxt(pl)}</div>}
+                    {!proj.futuro && <div style={{ ...num, textAlign: 'right', color: l.rec ? '#4F6B14' : COR.fraco }}>{l.rec ? fmtK(l.rec) : '—'}</div>}
                   </div>
                 )
               })}
@@ -173,6 +184,7 @@ export default function Projecao({ proj, baixasAte, corBU, titulo, onArea, onNot
                 <div style={{ ...num, textAlign: 'right' }}>{fmtK(t.fixas)}</div>
                 <div style={{ ...num, textAlign: 'right' }}>{fmtK(t.proj)}</div>
                 {!proj.futuro && <div style={{ ...num, textAlign: 'right', fontSize: 12, color: corP(p) }}>{pctTxt(p)}</div>}
+                {!proj.futuro && <div style={{ ...num, textAlign: 'right' }}>{t.rec ? fmtK(t.rec) : '—'}</div>}
               </div>
             </div>
           </div>
