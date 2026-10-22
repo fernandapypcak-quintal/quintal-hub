@@ -11,7 +11,8 @@
 //
 // Agrupa por gerente (lib/metas/gerentes.ts) e filtra pelas unidades
 // permitidas do usuário — quem tem lojas:'*' (admin/diretor) vê os 3
-// grupos + Consolidado + Top 5; cada gerente só vê o próprio.
+// grupos + Ranking de Unidades (com filtro Top 5); cada gerente só vê
+// o próprio.
 //
 // IMPORTANTE: os indicadores manuais são buscados do Apps Script UMA
 // ÚNICA VEZ (sheet inteira, sem filtro de mes_ref) e depois filtrados
@@ -26,6 +27,8 @@ import { GERENTES } from '@/lib/metas/gerentes'
 import {
   calcularResultadoUnidade,
   calcularResultadoGerente,
+  pontuarUnidade,
+  compararUnidades,
   TIPO_AGREGACAO,
 } from '@/lib/metas/scoring'
 import { loadData, buscarTipo } from '@/app/hub/faturamento/data/loader'
@@ -236,27 +239,11 @@ export function MetasDataProvider({ children, allowedLojas = '*', isAdmin = fals
     })).filter((g) => g.unidades.length > 0)
   }, [allowedLojas])
 
-  // Visão consolidada (todas as 10 unidades, incluindo Santo André que
-  // não pertence a nenhum gerente) — só aparece pra quem tem acesso
-  // total (admin/diretor). Cada gerente comum não vê isso.
-  const unidadesHolding = useMemo(() => ALL_UNIT_IDS.filter((u) => u !== 'holding'), [])
-
-  const grupoConsolidado = useMemo(() => {
-    if (allowedLojas !== '*') return null
-    return { id: 'consolidado', nome: 'Consolidado — todas as unidades', unidades: unidadesHolding }
-  }, [allowedLojas, unidadesHolding])
-
-  // Top 5 — unidades críticas (cross-gerente). Também só pra quem tem
-  // acesso total, já que junta unidades de gerentes diferentes.
+  // Unidades críticas — viram filtro dentro do Ranking de Unidades.
   const UNIDADES_TOP5_CRITICAS = useMemo(
     () => ['santo_andre', 'chacara', 'santana', 'tatuape', 'vila_madalena'],
     []
   )
-
-  const grupoTop5 = useMemo(() => {
-    if (allowedLojas !== '*') return null
-    return { id: 'top5', nome: 'Top 5 — Unidades Críticas', unidades: UNIDADES_TOP5_CRITICAS }
-  }, [allowedLojas, UNIDADES_TOP5_CRITICAS])
 
   const resultadosPorGerente = useMemo(() => {
     return gruposVisiveis.map((g) => {
@@ -268,23 +255,28 @@ export function MetasDataProvider({ children, allowedLojas = '*', isAdmin = fals
     })
   }, [gruposVisiveis, manuaisPorMes, faturamentoRealPorMes, faturamentoMetaPorMes, anoMes])
 
-  const resultadoConsolidado = useMemo(() => {
-    if (!grupoConsolidado) return null
-    const unidadesResultado = grupoConsolidado.unidades.map((unidade) => {
-      const inputs = montarInputsDaUnidade(unidade, manuaisPorMes, faturamentoRealPorMes, faturamentoMetaPorMes)
-      return calcularResultadoUnidade(unidade, anoMes, inputs)
-    })
-    return calcularResultadoGerente(grupoConsolidado.id, grupoConsolidado.nome, anoMes, unidadesResultado)
-  }, [grupoConsolidado, manuaisPorMes, faturamentoRealPorMes, faturamentoMetaPorMes, anoMes])
+  // Ranking de Unidades (substitui Consolidado + Top 5) — todas as 10
+  // unidades (inclui Santo André, que não tem gerente), cada uma com a
+  // PRÓPRIA pontuação. Só pra quem tem acesso total (admin/diretor).
+  const rankingUnidades = useMemo(() => {
+    if (allowedLojas !== '*') return null
+    const gerentePorUnidade = {}
+    GERENTES.forEach((g) => g.unidades.forEach((u) => { gerentePorUnidade[u] = g }))
 
-  const resultadoTop5 = useMemo(() => {
-    if (!grupoTop5) return null
-    const unidadesResultado = grupoTop5.unidades.map((unidade) => {
+    const lista = ALL_UNIT_IDS.filter((u) => u !== 'holding').map((unidade) => {
       const inputs = montarInputsDaUnidade(unidade, manuaisPorMes, faturamentoRealPorMes, faturamentoMetaPorMes)
-      return calcularResultadoUnidade(unidade, anoMes, inputs)
+      const pontuacao = pontuarUnidade(calcularResultadoUnidade(unidade, anoMes, inputs))
+      const g = gerentePorUnidade[unidade]
+      return {
+        ...pontuacao,
+        gerenteId: g?.id ?? null,
+        gerenteNome: g?.nome ?? 'Sem regional',
+        critica: UNIDADES_TOP5_CRITICAS.includes(unidade),
+      }
     })
-    return calcularResultadoGerente(grupoTop5.id, grupoTop5.nome, anoMes, unidadesResultado)
-  }, [grupoTop5, manuaisPorMes, faturamentoRealPorMes, faturamentoMetaPorMes, anoMes])
+
+    return lista.sort(compararUnidades).map((u, i) => ({ ...u, posicao: i + 1 }))
+  }, [allowedLojas, UNIDADES_TOP5_CRITICAS, manuaisPorMes, faturamentoRealPorMes, faturamentoMetaPorMes, anoMes])
 
   const salvarIndicador = useCallback(async (row) => {
     const res = await fetch('/api/metas', {
@@ -304,8 +296,7 @@ export function MetasDataProvider({ children, allowedLojas = '*', isAdmin = fals
       visao, setVisao,
       trimestreLabel: trimestreDoMes(anoMes),
       resultadosPorGerente,
-      resultadoConsolidado,
-      resultadoTop5,
+      rankingUnidades,
       loading, error, isAdmin,
       salvarIndicador,
       recarregar: () => { invalidarCacheManuais(); carregar(anoMes, visao) },
