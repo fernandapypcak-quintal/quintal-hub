@@ -398,7 +398,7 @@ export default function ReportCEO() {
     if (!nfResumo || !mesAtual || tipo === 'fechado') return null
     const bus = (busConfig.length ? busConfig.map(b => b.bu) : [...new Set((nfResumo.pago || []).map(x => x.bu))])
       .filter(b => grupoBU(b) !== 'Fora dos totais')
-    return calcularProjecao({ pago: nfResumo.pago || [], aPagarMes: nfResumo.a_pagar_mes || [], mesAtual, mesAlvo: mes, bus })
+    return calcularProjecao({ pago: nfResumo.pago || [], aPagarMes: nfResumo.a_pagar_mes || [], mesAtual, mesAlvo: mes, bus, receita: nfResumo.receita || [] })
   }, [nfResumo, busConfig, mes, tipo])
 
   if (!nfResumo) return <SemDadosNF />
