@@ -34,6 +34,42 @@ async function dadosDoGas(): Promise<Record<string, unknown> | null> {
   }
 }
 
+// Ajustes depois de juntar o Apps Script com o snapshot:
+// - linhas de posição (agenda/aplicações) só vêm do snapshot se o script não mandou
+// - estrutura fixa da Projeção (estrutura/saldo) vem do snapshot
+// - o que a base do financeiro não tem (Orçamento, Visão Diretoria, GER) segue do snapshot pelo merge
+const FD_POSICAO = ['(+) Aplicações financeiras (saldo)', '(+) Agenda de recebíveis (saldo a receber de cartão)']
+const FD_DISP = 'DISPONIBILIDADE TOTAL (caixa + aplicação + agenda)'
+const PROJ_POSICAO = ['Agenda de recebíveis (saldo no fim do mês)', 'Aplicações financeiras (saldo no fim do mês)']
+
+type Obj = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
+
+function completarComSnapshot(dados: Obj, snap: Obj) {
+  const r2 = (x: number) => Math.round(x * 100) / 100
+  const fd = dados.FDIARIO?.fd, sfd = snap.FDIARIO?.fd
+  if (fd && sfd && dados.FDIARIO !== snap.FDIARIO) {
+    for (const u of Object.keys(fd)) for (const m of Object.keys(fd[u])) {
+      const L = fd[u][m].linhas, s = sfd[u]?.[m]
+      if (L[FD_DISP] || !s || s.datas?.join() !== fd[u][m].datas?.join()) continue
+      for (const k of FD_POSICAO) if (!L[k] && s.linhas[k]) L[k] = s.linhas[k]
+      const fim: number[] = L['SALDO CAIXA FINAL'] || []
+      L[FD_DISP] = fim.map((v, i) => r2(v + FD_POSICAO.reduce((a, k) => a + (L[k]?.[i] || 0), 0)))
+    }
+  }
+  const P = dados.PROJ, SP = snap.PROJ
+  if (P && SP && P !== SP) {
+    if (!P.estrutura) P.estrutura = SP.estrutura
+    if (!P.saldo) P.saldo = SP.saldo
+    if (!P.meses) P.meses = SP.meses
+    for (const u of Object.keys(P.unidades || {})) for (const k of PROJ_POSICAO) {
+      const vazio = !P.unidades[u][k] || Object.keys(P.unidades[u][k]).length === 0
+      if (vazio && SP.unidades?.[u]?.[k]) P.unidades[u][k] = SP.unidades[u][k]
+    }
+    for (const k of PROJ_POSICAO) if (!P.cons?.[k] && SP.cons?.[k]) P.cons[k] = SP.cons[k]
+  }
+  return dados
+}
+
 function pagina(titulo: string, msg: string, status: number) {
   return new Response(
     `<!doctype html><meta charset="utf-8"><body style="font-family:system-ui;padding:40px;color:#26320F;background:#EEF6DC"><h3>${titulo}</h3><p>${msg}</p></body>`,
@@ -50,7 +86,7 @@ export async function GET() {
     const template = PAINEL_HTML
     const snapshot = SNAPSHOT as Record<string, unknown>
     const doGas = await dadosDoGas()
-    const dados = doGas ? { ...snapshot, ...doGas } : snapshot
+    const dados = doGas ? completarComSnapshot({ ...snapshot, ...doGas }, snapshot) : snapshot
 
     // "<" vira \u003c pra nenhum texto dos dados fechar a <script> no meio
     const json = JSON.stringify(dados).replace(/</g, '\\u003c')
