@@ -113,9 +113,9 @@ export default function Projecao({ proj, baixasAte, corBU, titulo, onArea, onNot
 
         {t.rec > 0 && (
           <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap', fontSize: 13, background: '#F4F8EC', borderRadius: 8, padding: '8px 12px' }}>
-            <span style={{ fontWeight: 600 }}>Receita recebida em {nomeAt} até agora:</span>
+            <span style={{ fontWeight: 600 }}>Receitas extras em {nomeAt} até agora:</span>
             <span style={{ ...num, fontSize: 16, fontWeight: 600, color: '#4F6B14' }}>{fmtK(t.rec)}</span>
-            <span style={{ fontSize: 12, color: COR.suave }}>contas a receber · contra {fmtK(t.pago)} já pagos de custo</span>
+            <span style={{ fontSize: 12, color: COR.suave }}>rebate, verba e parcerias de marca (fora do faturamento)</span>
           </div>
         )}
 
@@ -154,7 +154,7 @@ export default function Projecao({ proj, baixasAte, corBU, titulo, onArea, onNot
                 <div style={{ textAlign: 'right' }}>Fixas sem nota</div>
                 <div style={{ textAlign: 'right', color: COR.texto, fontWeight: 600 }}>{proj.futuro ? 'Já comprometido' : 'Projeção'}</div>
                 {!proj.futuro && <div style={{ textAlign: 'right' }}>vs {mesNome(proj.ant).substring(0, 3)}</div>}
-                {!proj.futuro && <div style={{ textAlign: 'right' }}>Receita até agora</div>}
+                {!proj.futuro && <div style={{ textAlign: 'right' }}>Receitas extras</div>}
               </div>
               {[...proj.linhas].sort((a, b) => b.proj - a.proj).map(l => {
                 const pl = pct(l.proj, l.anterior)
