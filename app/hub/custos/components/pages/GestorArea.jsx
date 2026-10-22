@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { AREAS_CUSTOS } from '@/lib/bus'
-import { loadGestor, loadNFLista, loadPagamentosBU, reportarDivergenciaBU } from '../../data/loader.js'
+import { loadGestor, loadNFLista, loadPagamentosBU, loadReceitasLista, reportarDivergenciaBU } from '../../data/loader.js'
 import { fmt, fmtK, fmtData, mesAnteriorISO, mesISOLabel, mesNome, mesNomeCurto } from '../../utils.js'
 import { COR, num, Busca, Carregando, Erro, Vazio, useCarga, botaoSecundario, exportarExcel, BotaoExportar } from '../ui/nf.jsx'
 import DRECustos from '../ui/DRECustos.jsx'
@@ -69,6 +69,7 @@ export default function GestorArea({ areas }) {
     if (!g || !mes) return null
     const pago = soma(g.pago, x => x.mes === mes), pagoA = soma(g.pago, x => x.mes === ant)
     const comNota = soma(g.pago, x => x.mes === mes, 'valor_com_nf')
+    const rec = soma(g.receita || [], x => x.mes === mes), recA = soma(g.receita || [], x => x.mes === ant)
     const abertoValor = soma(g.aberto || [], () => true), abertoQtd = soma(g.aberto || [], () => true, 'qtd')
     const ehAtual = mes === g.mes_atual
     const aPagarMes = ehAtual ? soma(g.a_pagar_mes || [], x => x.mes === mes) : 0, aPagarQtd = ehAtual ? soma(g.a_pagar_mes || [], x => x.mes === mes, 'qtd') : 0
@@ -90,7 +91,7 @@ export default function GestorArea({ areas }) {
       return { c, dif: b - a, texto }
     }).filter(x => Math.abs(x.dif) >= 1).sort((x, y) => Math.abs(y.dif) - Math.abs(x.dif)).slice(0, 5)
 
-    return { pago, pagoA, comNota, abertoValor, abertoQtd, aPagarMes, aPagarQtd, ehAtual, fixo, fixoA, vari, variA, invest, hist, maxH, mudancas }
+    return { pago, pagoA, rec, recA, comNota, abertoValor, abertoQtd, aPagarMes, aPagarQtd, ehAtual, fixo, fixoA, vari, variA, invest, hist, maxH, mudancas }
   }, [g, mes, ant, meses])
 
   if (carga.carregando) return <div style={{ padding: 20 }}>{barraFiltros}<Carregando texto={`Carregando ${bu}…`} /></div>
@@ -145,6 +146,24 @@ export default function GestorArea({ areas }) {
             <div style={{ fontSize: 12, color: COR.suave }}>A lista está na aba "Notas não pagas", lá embaixo.</div>
           </div>
         </div>
+        {c.rec > 0 && (
+          <div style={{ ...card, flexDirection: 'row', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start' }}>
+            <div style={{ flexBasis: '100%', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>Receita × custo da área</span>
+              <span style={{ fontSize: 12, color: COR.suave }}>receita pelo contas a receber (data do recebimento)</span>
+            </div>
+            {[['Receita', c.rec, c.recA ? `${mesNomeCurto(ant)}: ${fmtK(c.recA)}` : ''], ['Custo', c.pago, ''], ['Receita − custo', c.rec - c.pago, `${Math.round((c.rec - c.pago) / c.rec * 100)}% da receita`]].map(([rot, v, sub], i) => (
+              <React.Fragment key={rot}>
+                {i > 0 && <span aria-hidden="true" style={{ fontSize: 22, color: COR.fraco, alignSelf: 'center' }}>{i === 1 ? '−' : '='}</span>}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span style={{ fontSize: 12, color: i === 2 ? COR.texto : COR.suave, fontWeight: i === 2 ? 600 : 400 }}>{rot}</span>
+                  <span style={{ ...num, fontSize: i === 2 ? 26 : 22, fontWeight: i === 2 ? 600 : 400, color: i === 2 && v < 0 ? '#9A3C06' : COR.texto }}>{fmtK(v)}</span>
+                  {sub && <span style={{ fontSize: 11, color: COR.suave }}>{sub}</span>}
+                </div>
+              </React.Fragment>
+            ))}
+          </div>
+        )}
       </section>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'stretch' }}>
@@ -203,7 +222,8 @@ export default function GestorArea({ areas }) {
       <DRECustos key={bu} bu={bu} />
 
       <ListasArea key={bu + mesSel + focoLista.n} bu={bu} mes={tipoSel === 'fechado' ? mes : g.mes_atual}
-        mesPrevisto={tipoSel === 'futuro' ? mesSel : ''} notasAte={tipoSel === 'atual' ? g.mes_atual : ''} abaInicial={focoLista.aba} />
+        mesPrevisto={tipoSel === 'futuro' ? mesSel : ''} notasAte={tipoSel === 'atual' ? g.mes_atual : ''} abaInicial={focoLista.aba}
+        temReceita={(g.receita || []).some(x => x.mes === (tipoSel === 'fechado' ? mes : g.mes_atual) && x.valor > 0)} />
     </div>
   )
 }
@@ -215,7 +235,7 @@ const elipse = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowr
 
 // mesPrevisto (mês futuro): mostra só as notas com previsão de pagamento naquele mês
 // notasAte (mês atual): habilita a aba "Notas a pagar em <mês>" (previsão até o fim do mês)
-export function ListasArea({ bu, mes, semRevisao = false, mesPrevisto = '', notasAte = '', abaInicial = '' }) {
+export function ListasArea({ bu, mes, semRevisao = false, mesPrevisto = '', notasAte = '', abaInicial = '', temReceita = false }) {
   const [aba, setAba] = useState(abaInicial || (mesPrevisto ? 'abertas' : 'pagos'))
   const [busca, setBusca] = useState('')
   const [limite, setLimite] = useState(100)
@@ -280,13 +300,16 @@ export function ListasArea({ bu, mes, semRevisao = false, mesPrevisto = '', nota
         ) : (
           <div role="tablist" style={{ display: 'flex', gap: 4, background: '#F4F4EF', padding: 3, borderRadius: 9, flexWrap: 'wrap' }}>
             <button role="tab" aria-selected={aba === 'pagos'} onClick={() => { setAba('pagos'); setLimite(100) }} style={tab('pagos')}>Pagamentos de {mesNome(mes)}</button>
+            {temReceita && <button role="tab" aria-selected={aba === 'receitas'} onClick={() => { setAba('receitas'); setLimite(100) }} style={tab('receitas')}>Receitas de {mesNome(mes)}</button>}
             {notasAte && <button role="tab" aria-selected={aba === 'apagar'} onClick={() => { setAba('apagar'); setLimite(100) }} style={tab('apagar')}>Notas a pagar em {mesNome(notasAte)}</button>}
             <button role="tab" aria-selected={aba === 'abertas'} onClick={() => { setAba('abertas'); setLimite(100) }} style={tab('abertas')}>Notas não pagas (últimos 40 dias)</button>
           </div>
         )}
       </div>
       <div style={{ fontSize: 13, background: COR.fundo, borderRadius: 8, padding: '10px 12px', lineHeight: 1.5 }}>
-        {aba === 'apagar'
+        {aba === 'receitas'
+          ? `Tudo que a área recebeu em ${mesNome(mes)}, pelo relatório de contas a receber (data do recebimento). Eventos corporativos podem ser recebidos antes da data do evento.`
+          : aba === 'apagar'
           ? `As notas que compõem o "Notas a pagar" da projeção: já emitidas e em aberto, com previsão de pagamento até o fim de ${mesNome(notasAte)}, inclusive as que já passaram da data. Pela ordem da previsão. Em laranja: a data já passou e o pagamento ainda não apareceu nas contas pagas.`
           : mesPrevisto
           ? `Notas da área já emitidas e em aberto com previsão de pagamento em ${mesNome(mesPrevisto)}, pela ordem da previsão. A previsão é o vencimento do TOTVS ou, quando ele não vem, o prazo médio de pagamento do fornecedor. Notas que ainda não chegaram não aparecem.`
@@ -294,6 +317,7 @@ export function ListasArea({ bu, mes, semRevisao = false, mesPrevisto = '', nota
           ? `Tudo que a área pagou em ${mesNome(mes)}, pela data do pagamento. Quando o pagamento tem nota fiscal, aparece o número e a data em que a nota entrou (muitas vezes no mês anterior). Aluguel, cartão, folha e impostos não têm nota, e isso é normal.`
           : 'Notas da área que entraram nos últimos 40 dias e ainda não foram pagas, pela ordem da previsão de pagamento (o que vence primeiro aparece primeiro). A previsão é o vencimento do TOTVS ou, quando ele não vem, o prazo médio de pagamento do fornecedor. Em laranja: a data já passou e o pagamento ainda não apareceu nas contas pagas.'}
       </div>
+      {aba === 'receitas' ? <ListaReceitas bu={bu} mes={mes} /> : <>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'space-between' }}>
         <Busca valor={busca} onChange={v => { setBusca(v); setLimite(100) }} placeholder="Buscar fornecedor, conta ou número da nota" />
         <BotaoExportar onClick={exportar} desabilitado={!linhas.length} />
@@ -355,6 +379,7 @@ export function ListasArea({ bu, mes, semRevisao = false, mesPrevisto = '', nota
             </div>
           </div>
         )}
+      </>}
     </section>
   )
 }
@@ -385,5 +410,60 @@ function NaoEMinha({ item, tipo, bu, mes }) {
         {estado === 'enviando' ? 'Enviando…' : estado === 'erro' ? 'Tentar de novo' : 'Enviar'}
       </button>
     </div>
+  )
+}
+
+// v27.10 — recebimentos da área no mês (contas a receber)
+function ListaReceitas({ bu, mes }) {
+  const [busca, setBusca] = useState('')
+  const [limite, setLimite] = useState(100)
+  const c = useCarga(() => loadReceitasLista({ bu, mes }), [bu, mes])
+  const b = busca.trim().toUpperCase()
+  const linhas = (c.dados || []).filter(l => !b || [l.cliente, l.historico, l.descricao].some(v => String(v || '').toUpperCase().includes(b)))
+  const total = linhas.reduce((t, l) => t + l.valor, 0)
+  const exportar = () => exportarExcel(`${bu} - receitas ${mesNomeCurto(mes).replace('/', '-')}`, [
+    { titulo: 'Cliente', valor: l => l.cliente, largura: 40 },
+    { titulo: 'Tipo de receita', valor: l => l.descricao, largura: 30 },
+    { titulo: 'Histórico', valor: l => l.historico, largura: 36 },
+    { titulo: 'Casa', valor: l => l.loja, largura: 14 },
+    { titulo: 'Valor recebido', valor: l => l.valor, tipo: 'num', largura: 14 },
+    { titulo: 'Data do recebimento', valor: l => l.dt_baixa, tipo: 'data', largura: 18 },
+  ], linhas, 'Receitas')
+  const grid = 'minmax(220px, 2fr) minmax(160px, 1.4fr) 100px 120px 100px'
+  return (
+    <>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'space-between' }}>
+        <Busca valor={busca} onChange={v => { setBusca(v); setLimite(100) }} placeholder="Buscar cliente ou histórico" />
+        <BotaoExportar onClick={exportar} desabilitado={!linhas.length} />
+      </div>
+      {c.carregando ? <Carregando texto="Buscando receitas…" />
+        : c.erro ? <Erro texto={c.erro} onTentar={c.tentarDeNovo} />
+        : !linhas.length ? <Vazio>Nenhuma receita da área nesse mês.</Vazio>
+        : (
+          <div style={{ overflowX: 'auto' }}>
+            <div style={{ minWidth: 720 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: grid, gap: 10, fontSize: 12, color: COR.suave, padding: '6px 4px', borderBottom: `0.5px solid ${COR.borda}` }}>
+                <div>Cliente</div><div>Histórico</div><div>Casa</div><div style={{ textAlign: 'right' }}>Valor</div><div>Recebido em</div>
+              </div>
+              {linhas.slice(0, limite).map((l, i) => (
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: grid, gap: 10, alignItems: 'center', padding: '9px 4px', borderBottom: '0.5px solid #F0F0EC', fontSize: 13 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={l.cliente}>{l.cliente || '—'}</div>
+                    <div style={{ fontSize: 11, color: COR.suave }}>{l.descricao}</div>
+                  </div>
+                  <div style={{ fontSize: 12, color: COR.suave, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={l.historico}>{l.historico}</div>
+                  <div>{l.loja}</div>
+                  <div style={{ ...num, textAlign: 'right' }}>{fmt(l.valor)}</div>
+                  <div style={num}>{fmtData(l.dt_baixa)}</div>
+                </div>
+              ))}
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', padding: '12px 4px 0', fontSize: 13 }}>
+                <span style={{ color: COR.suave }}>{linhas.length.toLocaleString('pt-BR')} recebimentos · {fmt(total)}</span>
+                {linhas.length > limite && <button onClick={() => setLimite(x => x + 200)} style={botaoSecundario}>Mostrar mais {Math.min(200, linhas.length - limite)}</button>}
+              </div>
+            </div>
+          </div>
+        )}
+    </>
   )
 }
