@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     // Gestor de área (access.bus = lista) só chama os endpoints da página
     // "Minha área", e sempre de uma área dele.
     if (access.bus !== '*') {
-      const PERMITIDOS = ['gestor', 'nf_lista', 'pagamentos_bu', 'registrar_divergencia_bu', 'bus', 'dre', 'receitas_lista']
+      const PERMITIDOS = ['gestor', 'nf_lista', 'pagamentos_bu', 'registrar_divergencia_bu', 'registrar_obs_nf', 'bus', 'dre', 'receitas_lista']
       if (!PERMITIDOS.includes(tipo)) return NextResponse.json({ erro: 'Acesso negado' }, { status: 403 })
       const areaPedida = tipo === 'registrar_divergencia_bu' ? searchParams.get('bu_atual') : searchParams.get('bu')
       if (tipo !== 'bus' && (!areaPedida || !access.bus.includes(areaPedida))) {
@@ -33,6 +33,9 @@ export async function GET(req: NextRequest) {
       const DO_GRUPO = ['gestor', 'nf_lista', 'pagamentos_bu', 'nf_resumo', 'conciliacao', 'pagamentos_fora', 'dre', 'receitas_lista', 'receitas_resumo']
       if (DO_GRUPO.includes(tipo)) return NextResponse.json({ erro: 'Acesso negado' }, { status: 403 })
     }
+
+    // v27.13: quem registrou correção/observação vem do login, não do navegador
+    if (tipo.startsWith('registrar_')) searchParams.set('usuario', access.email)
 
     const params = searchParams.toString()
 
