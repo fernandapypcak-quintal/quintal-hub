@@ -274,9 +274,24 @@ export async function loadDRE({ bu } = {}) {
 }
 
 // v27.10 — recebimentos (contas a receber) de uma área no mês. mes: '2026-09'
-export async function loadReceitasLista({ bu, mes }) {
-  const d = await fetchComParametros({ tipo: 'receitas_lista', bu, mes })
+export async function loadReceitasLista({ bu, mes, natureza }) {
+  const p = { tipo: 'receitas_lista', bu, mes }
+  if (natureza) p.natureza = natureza
+  const d = await fetchComParametros(p)
   return Array.isArray(d) ? d.map(r => ({ ...r, valor: Number(r.valor || 0) })) : []
+}
+
+// v27.12 — página Receitas: o que entrou no mês por área e tipo. mes vazio = último
+export async function loadReceitasResumo(mes) {
+  const p = { tipo: 'receitas_resumo' }
+  if (mes) p.mes = mes
+  const d = await fetchComParametros(p)
+  const arr = x => Array.isArray(x) ? x : []
+  return {
+    mes: d.mes || '', mes_anterior: d.mes_anterior || '', meses: arr(d.meses),
+    linhas: arr(d.linhas).map(r => ({ ...r, valor: Number(r.valor || 0), valor_ant: Number(r.valor_ant || 0), qtd: Number(r.qtd || 0) })),
+    por_unidade: arr(d.por_unidade).map(r => ({ ...r, valor: Number(r.valor || 0) })),
+  }
 }
 
 // Tela de conciliação. mes: '2026-09' (vazio = tudo)
