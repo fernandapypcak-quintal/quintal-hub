@@ -1,5 +1,5 @@
 // app/hub/metas/components/pages/Home.jsx
-// Ordem: Placar dos regionais → Ranking das unidades (admin/diretor,
+// Ordem: Placar dos regionais → Visão por unidade (admin/diretor,
 // com filtro Top 5 críticas) → card de cada regional.
 // Filtros de período ficam no header verde (ClientApp).
 'use client'
