@@ -190,6 +190,8 @@ export interface PontuacaoUnidade {
   pontosComDado: number
   pontosPossiveis: number
   qtdBateu: number
+  /** nº de indicadores com dado e meta no período (denominador do "x/y batidas") */
+  qtdComDado: number
 }
 
 export function pontuarUnidade(resultado: ResultadoUnidade): PontuacaoUnidade {
@@ -197,6 +199,7 @@ export function pontuarUnidade(resultado: ResultadoUnidade): PontuacaoUnidade {
   let pontosTotais = 0
   let pontosComDado = 0
   let qtdBateu = 0
+  let qtdComDado = 0
 
   ORDEM_INDICADORES.forEach((indicador) => {
     const linha = resultado.indicadores.find((i) => i.indicador === indicador)
@@ -221,6 +224,7 @@ export function pontuarUnidade(resultado: ResultadoUnidade): PontuacaoUnidade {
     const pontos = bateu ? pesoPts : 0
     pontosTotais += pontos
     pontosComDado += pesoPts
+    qtdComDado += 1
     if (bateu) qtdBateu += 1
 
     indicadores[indicador] = {
@@ -242,6 +246,7 @@ export function pontuarUnidade(resultado: ResultadoUnidade): PontuacaoUnidade {
     pontosComDado,
     pontosPossiveis: TOTAL_PTS_POSSIVEL,
     qtdBateu,
+    qtdComDado,
   }
 }
 
@@ -249,6 +254,22 @@ export function pontuarUnidade(resultado: ResultadoUnidade): PontuacaoUnidade {
 export function compararUnidades(a: PontuacaoUnidade, b: PontuacaoUnidade): number {
   if (b.pontosTotais !== a.pontosTotais) return b.pontosTotais - a.pontosTotais
   if (b.qtdBateu !== a.qtdBateu) return b.qtdBateu - a.qtdBateu
+  const fat = (p: PontuacaoUnidade) => {
+    const f = p.indicadores.faturamento
+    return f.meta && f.real != null ? f.real / f.meta - 1 : -Infinity
+  }
+  return fat(b) - fat(a)
+}
+
+/**
+ * Ordenação da visão por unidade (sem pontos): mais metas batidas
+ * primeiro; empate → menos metas furadas; depois desvio de faturamento.
+ */
+export function compararPorMetasBatidas(a: PontuacaoUnidade, b: PontuacaoUnidade): number {
+  if (b.qtdBateu !== a.qtdBateu) return b.qtdBateu - a.qtdBateu
+  const furadasA = a.qtdComDado - a.qtdBateu
+  const furadasB = b.qtdComDado - b.qtdBateu
+  if (furadasA !== furadasB) return furadasA - furadasB
   const fat = (p: PontuacaoUnidade) => {
     const f = p.indicadores.faturamento
     return f.meta && f.real != null ? f.real / f.meta - 1 : -Infinity
