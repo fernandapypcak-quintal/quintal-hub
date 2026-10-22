@@ -155,3 +155,103 @@ export function calcularResultadoGerente(
     pontosPossiveis: TOTAL_PTS_POSSIVEL,
   }
 }
+
+// -------------------------------------------------------------------
+// Pontuação POR UNIDADE — usada no Ranking de Unidades (antigo
+// Consolidado + Top 5) e como referência na matriz de cada gerente.
+// Mesma regra binária e mesmos pesos do gerente, aplicada à unidade
+// isolada. NÃO altera a pontuação do gerente (bônus), que continua
+// sendo calculada sobre o Total da carteira em calcularResultadoGerente.
+//
+// Diferença: indicador sem lançamento, ou sem meta (meta <= 0, exceto
+// Bandas), vira 'sem_dado' em vez de contar como batido/não batido.
+// -------------------------------------------------------------------
+
+export const ORDEM_INDICADORES: IndicadorKey[] = ['cmv', 'custo_folha', 'custo_freela', 'nps', 'bandas', 'faturamento']
+
+export type StatusIndicador = 'bateu' | 'nao_bateu' | 'sem_dado'
+
+export interface PontuacaoIndicadorUnidade {
+  indicador: IndicadorKey
+  status: StatusIndicador
+  pontos: number
+  pesoPts: number
+  meta: number | null
+  real: number | null
+  custoArtista: number | null
+  delta: number | null
+}
+
+export interface PontuacaoUnidade {
+  unidade: string
+  indicadores: Record<IndicadorKey, PontuacaoIndicadorUnidade>
+  pontosTotais: number
+  /** soma dos pesos dos indicadores que têm dado — teto real da unidade no período */
+  pontosComDado: number
+  pontosPossiveis: number
+  qtdBateu: number
+}
+
+export function pontuarUnidade(resultado: ResultadoUnidade): PontuacaoUnidade {
+  const indicadores = {} as Record<IndicadorKey, PontuacaoIndicadorUnidade>
+  let pontosTotais = 0
+  let pontosComDado = 0
+  let qtdBateu = 0
+
+  ORDEM_INDICADORES.forEach((indicador) => {
+    const linha = resultado.indicadores.find((i) => i.indicador === indicador)
+    const pesoPts = PESOS_PTS[indicador]
+    const semMeta = !!linha && indicador !== 'bandas' && !(linha.meta > 0)
+
+    if (!linha || semMeta) {
+      indicadores[indicador] = {
+        indicador,
+        status: 'sem_dado',
+        pontos: 0,
+        pesoPts,
+        meta: linha?.meta ?? null,
+        real: linha?.real ?? null,
+        custoArtista: linha?.custoArtista ?? null,
+        delta: null,
+      }
+      return
+    }
+
+    const bateu = bateuMetaTotal(indicador, linha.meta, linha.real, linha.custoArtista ?? 0)
+    const pontos = bateu ? pesoPts : 0
+    pontosTotais += pontos
+    pontosComDado += pesoPts
+    if (bateu) qtdBateu += 1
+
+    indicadores[indicador] = {
+      indicador,
+      status: bateu ? 'bateu' : 'nao_bateu',
+      pontos,
+      pesoPts,
+      meta: linha.meta,
+      real: linha.real,
+      custoArtista: linha.custoArtista ?? null,
+      delta: linha.delta,
+    }
+  })
+
+  return {
+    unidade: resultado.unidade,
+    indicadores,
+    pontosTotais,
+    pontosComDado,
+    pontosPossiveis: TOTAL_PTS_POSSIVEL,
+    qtdBateu,
+  }
+}
+
+/** Ordenação do ranking: pontos, depois nº de metas batidas, depois desvio de faturamento. */
+export function compararUnidades(a: PontuacaoUnidade, b: PontuacaoUnidade): number {
+  if (b.pontosTotais !== a.pontosTotais) return b.pontosTotais - a.pontosTotais
+  if (b.qtdBateu !== a.qtdBateu) return b.qtdBateu - a.qtdBateu
+  const fat = (p: PontuacaoUnidade) => {
+    const f = p.indicadores.faturamento
+    return f.meta && f.real != null ? f.real / f.meta - 1 : -Infinity
+  }
+  return fat(b) - fat(a)
+}
