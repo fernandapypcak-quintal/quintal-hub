@@ -8,7 +8,7 @@
 import { useMemo } from 'react'
 import { Check, X, Minus } from 'lucide-react'
 import { labelForUnit } from '@/lib/units'
-import { PESOS_PTS, pontuarUnidade, compararUnidades } from '@/lib/metas/scoring'
+import { PESOS_PTS, pontuarUnidade, compararPorMetasBatidas } from '@/lib/metas/scoring'
 import { INDICADORES, COR_STATUS, GERENTE_COLORS, corPontuacao, fmtValor, fmtDelta, fmtMoeda, deltaBom, valorPrincipal, rotulos } from './formato'
 import MatrizUnidades, { Legenda } from './MatrizUnidades'
 
@@ -51,7 +51,7 @@ export default function GerenteResumo({ resultado }) {
   const cor = GERENTE_COLORS[resultado.gerenteId] || '#97A624'
 
   const linhasUnidades = useMemo(
-    () => resultado.unidades.map(pontuarUnidade).sort(compararUnidades),
+    () => resultado.unidades.map(pontuarUnidade).sort(compararPorMetasBatidas),
     [resultado.unidades]
   )
 
@@ -96,9 +96,6 @@ export default function GerenteResumo({ resultado }) {
         <div className="mt-3">
           <Legenda />
         </div>
-        <p className="text-[11px] text-zinc-400 mt-2">
-          Pontos por unidade são referência pra ver quem puxa o resultado — não entram no bônus do regional.
-        </p>
       </div>
     </section>
   )

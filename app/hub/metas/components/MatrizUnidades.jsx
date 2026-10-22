@@ -1,7 +1,9 @@
 // app/hub/metas/components/MatrizUnidades.jsx
 // Matriz unidade × indicador. Cada célula = real do indicador, pintada
 // por status (bateu / não bateu / sem dado). Clique na linha abre o
-// detalhe com meta, real e desvio. Usada no Ranking e no card do gerente.
+// detalhe com meta, real e desvio. Unidade não tem pontos — a última
+// coluna mostra quantas metas bateu. Usada na Visão por Unidade e no
+// card do gerente.
 
 'use client'
 
@@ -9,7 +11,6 @@ import { Fragment, useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { labelForUnit } from '@/lib/units'
 import { INDICADORES, COR_STATUS, fmtValor, fmtDelta, fmtMoeda, deltaBom, valorPrincipal, rotulos, GERENTE_COLORS } from './formato'
-import { PESOS_PTS } from '@/lib/metas/scoring'
 
 function Celula({ ind, indicador, tipo }) {
   const status = ind?.status ?? 'sem_dado'
@@ -50,10 +51,10 @@ function Detalhe({ pontuacao }) {
 }
 
 /**
- * linhas: [{ unidade, pontosTotais, pontosComDado, indicadores, posicao?, gerenteId?, gerenteNome?, critica? }]
- * mostrarPosicao / mostrarGerente controlam colunas extras (Ranking).
+ * linhas: [{ unidade, indicadores, qtdBateu, qtdComDado, gerenteId?, gerenteNome?, critica? }]
+ * mostrarGerente mostra o regional embaixo do nome (Visão por Unidade).
  */
-export default function MatrizUnidades({ linhas, mostrarPosicao = false, mostrarGerente = false }) {
+export default function MatrizUnidades({ linhas, mostrarGerente = false }) {
   const [aberta, setAberta] = useState(null)
 
   return (
@@ -61,14 +62,13 @@ export default function MatrizUnidades({ linhas, mostrarPosicao = false, mostrar
       <table className="w-full min-w-[760px] border-separate" style={{ borderSpacing: '4px 4px' }}>
         <thead>
           <tr>
-            {mostrarPosicao && <th className="w-8" />}
             <th className="text-left text-xs font-medium text-zinc-500 px-2 pb-1">Unidade</th>
             {INDICADORES.map((g) => (
               <th key={g.key} className="text-center text-xs font-medium text-zinc-500 pb-1 w-[11%]">
-                {g.curto} <span className="font-normal text-zinc-400">{PESOS_PTS[g.key]}</span>
+                {g.curto}
               </th>
             ))}
-            <th className="text-right text-xs font-medium text-zinc-500 px-2 pb-1 w-20">Pontos</th>
+            <th className="text-right text-xs font-medium text-zinc-500 px-2 pb-1 w-20">Batidas</th>
           </tr>
         </thead>
         <tbody>
@@ -80,9 +80,6 @@ export default function MatrizUnidades({ linhas, mostrarPosicao = false, mostrar
                   onClick={() => setAberta(isOpen ? null : l.unidade)}
                   className="cursor-pointer group"
                 >
-                  {mostrarPosicao && (
-                    <td className="text-right text-sm text-zinc-400 tabular-nums pr-1">{l.posicao}º</td>
-                  )}
                   <td className="px-2 rounded-md group-hover:bg-surface-muted">
                     <div className="flex items-center gap-1.5">
                       {isOpen ? <ChevronDown size={14} className="text-zinc-400 shrink-0" /> : <ChevronRight size={14} className="text-zinc-400 shrink-0" />}
@@ -104,15 +101,13 @@ export default function MatrizUnidades({ linhas, mostrarPosicao = false, mostrar
                     </td>
                   ))}
                   <td className="text-right px-2">
-                    <div className="text-lg font-semibold text-brand-black tabular-nums leading-none">{l.pontosTotais}</div>
-                    {l.pontosComDado < 100 && (
-                      <div className="text-[11px] text-zinc-400 whitespace-nowrap mt-0.5">de {l.pontosComDado} possíveis</div>
-                    )}
+                    <span className="text-sm font-semibold text-brand-black tabular-nums whitespace-nowrap">
+                      {l.qtdBateu}<span className="font-normal text-zinc-400">/{l.qtdComDado}</span>
+                    </span>
                   </td>
                 </tr>
                 {isOpen && (
                   <tr>
-                    {mostrarPosicao && <td />}
                     <td colSpan={INDICADORES.length + 2}>
                       <Detalhe pontuacao={l} />
                     </td>
