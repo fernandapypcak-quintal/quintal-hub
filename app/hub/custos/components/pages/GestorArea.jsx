@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { AREAS_CUSTOS } from '@/lib/bus'
-import { loadGestor, loadNFLista, loadPagamentosBU, loadReceitasLista, reportarDivergenciaBU } from '../../data/loader.js'
+import { loadGestor, loadNFLista, loadPagamentosBU, loadReceitasLista, reportarDivergenciaBU, registrarObsNF } from '../../data/loader.js'
 import { fmt, fmtK, fmtData, mesAnteriorISO, mesISOLabel, mesNome, mesNomeCurto } from '../../utils.js'
 import { COR, num, Busca, Carregando, Erro, Vazio, useCarga, botaoSecundario, exportarExcel, BotaoExportar } from '../ui/nf.jsx'
 import DRECustos from '../ui/DRECustos.jsx'
@@ -223,7 +223,7 @@ export default function GestorArea({ areas }) {
 
       <ListasArea key={bu + mesSel + focoLista.n} bu={bu} mes={tipoSel === 'fechado' ? mes : g.mes_atual}
         mesPrevisto={tipoSel === 'futuro' ? mesSel : ''} notasAte={tipoSel === 'atual' ? g.mes_atual : ''} abaInicial={focoLista.aba}
-        temReceita={(g.receita || []).some(x => x.mes === (tipoSel === 'fechado' ? mes : g.mes_atual) && x.valor > 0)} />
+        temReceita={(g.receita || []).some(x => x.valor > 0)} />
     </div>
   )
 }
@@ -278,6 +278,7 @@ export function ListasArea({ bu, mes, semRevisao = false, mesPrevisto = '', nota
         { titulo: 'Previsão de pagamento', valor: l => l.prev_pagto, tipo: 'data', largura: 20 },
         { titulo: 'Origem da previsão', valor: l => ORIGEM_PREV[l.origem_prev] || l.origem_prev, largura: 20 },
         { titulo: 'Dias desde a entrada', valor: l => diasDesde(l.dt_dig), tipo: 'num', formato: '0', largura: 18 },
+        { titulo: 'Observação do gestor', valor: l => l.obs_tipo ? `${l.obs_tipo}${l.obs_texto ? ': ' + l.obs_texto : ''} (${l.obs_por}, ${l.obs_em})` : '', largura: 40 },
       ], linhas, 'Notas não pagas')
 
   const tab = id => ({
@@ -308,7 +309,7 @@ export function ListasArea({ bu, mes, semRevisao = false, mesPrevisto = '', nota
       </div>
       <div style={{ fontSize: 13, background: COR.fundo, borderRadius: 8, padding: '10px 12px', lineHeight: 1.5 }}>
         {aba === 'receitas'
-          ? `Tudo que a área recebeu em ${mesNome(mes)}, pelo relatório de contas a receber (data do recebimento). Eventos corporativos podem ser recebidos antes da data do evento.`
+          ? `Tudo que a área recebeu em ${mesNome(mes)}, pelo relatório de contas a receber (data do recebimento). Eventos corporativos podem ser recebidos antes da data do evento.${semRevisao ? '' : ' Se algum recebimento não for da área, clique em "Não é da minha área" e escolha a área certa (ou "Não é receita").'}`
           : aba === 'apagar'
           ? `As notas que compõem o "Notas a pagar" da projeção: já emitidas e em aberto, com previsão de pagamento até o fim de ${mesNome(notasAte)}, inclusive as que já passaram da data. Pela ordem da previsão. Em laranja: a data já passou e o pagamento ainda não apareceu nas contas pagas.`
           : mesPrevisto
@@ -317,7 +318,7 @@ export function ListasArea({ bu, mes, semRevisao = false, mesPrevisto = '', nota
           ? `Tudo que a área pagou em ${mesNome(mes)}, pela data do pagamento. Quando o pagamento tem nota fiscal, aparece o número e a data em que a nota entrou (muitas vezes no mês anterior). Aluguel, cartão, folha e impostos não têm nota, e isso é normal.`
           : 'Notas da área que entraram nos últimos 40 dias e ainda não foram pagas, pela ordem da previsão de pagamento (o que vence primeiro aparece primeiro). A previsão é o vencimento do TOTVS ou, quando ele não vem, o prazo médio de pagamento do fornecedor. Em laranja: a data já passou e o pagamento ainda não apareceu nas contas pagas.'}
       </div>
-      {aba === 'receitas' ? <ListaReceitas bu={bu} mes={mes} /> : <>
+      {aba === 'receitas' ? <ListaReceitas bu={bu} mes={mes} semRevisao={semRevisao} /> : <>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'space-between' }}>
         <Busca valor={busca} onChange={v => { setBusca(v); setLimite(100) }} placeholder="Buscar fornecedor, conta ou número da nota" />
         <BotaoExportar onClick={exportar} desabilitado={!linhas.length} />
@@ -354,6 +355,7 @@ export function ListasArea({ bu, mes, semRevisao = false, mesPrevisto = '', nota
                       <div style={{ minWidth: 0 }}>
                         <div style={elipse} title={l.fornecedor}>{l.fornecedor}</div>
                         <div style={{ ...elipse, fontSize: 11, color: COR.suave }}>NF {l.documento}{l.item_principal ? ` · ${l.item_principal}` : ''}{l.valor_pago ? ` · já pago ${fmt(l.valor_pago)}` : ''}</div>
+                        {l.obs_tipo && <div style={{ fontSize: 11, marginTop: 3, color: '#7A5A00', background: '#FBF1D2', borderRadius: 6, padding: '2px 6px', display: 'inline-block', maxWidth: '100%', ...elipse }} title={`${l.obs_tipo}: ${l.obs_texto} (${l.obs_por}, ${l.obs_em})`}>📝 {l.obs_tipo}{l.obs_texto ? `: ${l.obs_texto}` : ''}</div>}
                       </div>
                       <div>{l.unidade}</div>
                       <div style={{ ...num, textAlign: 'right' }}>{fmt(l.emAberto)}</div>
@@ -369,7 +371,10 @@ export function ListasArea({ bu, mes, semRevisao = false, mesPrevisto = '', nota
                       <div style={{ ...num, textAlign: 'right', color: diasDesde(l.dt_dig) > 45 ? '#9A3C06' : COR.suave }}>{diasDesde(l.dt_dig)}d</div>
                     </>
                   )}
-                  <div>{!semRevisao && <NaoEMinha item={l} tipo={aba === 'pagos' ? 'pagamento' : 'nota'} bu={bu} mes={mes} />}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
+                    {!semRevisao && <NaoEMinha item={l} tipo={aba === 'pagos' ? 'pagamento' : 'nota'} bu={bu} mes={mes} />}
+                    {!semRevisao && aba !== 'pagos' && <ObservacaoNota item={l} bu={bu} />}
+                  </div>
                 </div>
               ))}
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', padding: '12px 4px 0', fontSize: 13 }}>
@@ -393,7 +398,9 @@ function NaoEMinha({ item, tipo, bu, mes }) {
   )
   const enviar = async () => {
     setEstado('enviando')
-    const ok = await reportarDivergenciaBU(tipo === 'nota'
+    const ok = await reportarDivergenciaBU(tipo === 'receita'
+      ? { origem: 'receita', chave: item.chave, fornecedor: item.cliente, descricao: item.descricao, buAtual: bu, buSugerido: area, mes: mesISOLabel(String(item.dt_baixa || '').substring(0, 7)), loja: item.loja, valor: item.valor }
+      : tipo === 'nota'
       ? { origem: 'nota', fornecedor: item.fornecedor, codFor: item.cod_for, descricao: `NF ${item.documento}`, buAtual: bu, buSugerido: area, mes: mesISOLabel(String(item.dt_dig || '').substring(0, 7)), loja: item.unidade, valor: item.valor }
       : { origem: 'pagamento', fornecedor: item.fornecedor, descricao: item.descricao, buAtual: bu, buSugerido: area, mes: item.mes, loja: item.loja, valor: item.valor })
     setEstado(ok ? 'enviado' : 'erro')
@@ -403,6 +410,7 @@ function NaoEMinha({ item, tipo, bu, mes }) {
       <select value={area} onChange={e => setArea(e.target.value)} aria-label="Área certa" style={{ fontSize: 12, padding: 5, borderRadius: 6, border: `0.5px solid ${COR.borda}`, fontFamily: 'inherit' }}>
         <option value="">Qual área?</option>
         {AREAS_CUSTOS.filter(a => a !== bu).map(a => <option key={a} value={a}>{a}</option>)}
+        {tipo === 'receita' && <option value="Fora">Não é receita</option>}
         <option value="Não sei">Não sei</option>
       </select>
       <button disabled={!area || estado === 'enviando'} onClick={enviar}
@@ -413,8 +421,42 @@ function NaoEMinha({ item, tipo, bu, mes }) {
   )
 }
 
+// v27.13 — observação do gestor numa nota: já paga (sem conciliação), cancelada ou outro
+function ObservacaoNota({ item, bu }) {
+  const [estado, setEstado] = useState('')   // '' | escrevendo | enviando | enviado | erro
+  const [tipo, setTipo] = useState('Já paga')
+  const [texto, setTexto] = useState('')
+  if (estado === 'enviado') return <span style={{ fontSize: 12, color: '#4F6B14' }}>Observação registrada</span>
+  if (estado === '') return <button onClick={() => setEstado('escrevendo')} style={{ ...botaoSecundario, minHeight: 32 }}>{item.obs_tipo ? 'Nova observação' : 'Observação'}</button>
+  const enviar = async () => {
+    setEstado('enviando')
+    const ok = await registrarObsNF({ chaveNF: item.chave_nf, bu, fornecedor: item.fornecedor, documento: item.documento, valor: item.valor, tipo, texto })
+    setEstado(ok ? 'enviado' : 'erro')
+  }
+  const precisaTexto = tipo === 'Outro'
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%', minWidth: 170 }}>
+      <select value={tipo} onChange={e => setTipo(e.target.value)} aria-label="Tipo de observação" style={{ fontSize: 12, padding: 5, borderRadius: 6, border: `0.5px solid ${COR.borda}`, fontFamily: 'inherit' }}>
+        <option value="Já paga">Já foi paga (sem conciliação)</option>
+        <option value="Cancelada">Nota cancelada</option>
+        <option value="Outro">Outro</option>
+      </select>
+      <textarea value={texto} onChange={e => setTexto(e.target.value)} rows={2} maxLength={500} aria-label="Observação"
+        placeholder={tipo === 'Já paga' ? 'Como foi paga? (data, cartão, junto com outra nota…)' : tipo === 'Cancelada' ? 'Motivo, nota que substituiu…' : 'Descreva'}
+        style={{ fontSize: 12, padding: 6, borderRadius: 6, border: `0.5px solid ${COR.borda}`, fontFamily: 'inherit', resize: 'vertical' }} />
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button disabled={estado === 'enviando' || (precisaTexto && !texto.trim())} onClick={enviar}
+          style={{ padding: '5px 10px', borderRadius: 6, border: 'none', background: precisaTexto && !texto.trim() ? '#C9CCBF' : '#4F6B14', color: '#fff', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+          {estado === 'enviando' ? 'Enviando…' : estado === 'erro' ? 'Tentar de novo' : 'Enviar'}
+        </button>
+        <button onClick={() => setEstado('')} style={{ ...botaoSecundario, padding: '5px 10px' }}>Cancelar</button>
+      </div>
+    </div>
+  )
+}
+
 // v27.10 — recebimentos da área no mês (contas a receber)
-function ListaReceitas({ bu, mes }) {
+function ListaReceitas({ bu, mes, semRevisao = false }) {
   const [busca, setBusca] = useState('')
   const [limite, setLimite] = useState(100)
   const c = useCarga(() => loadReceitasLista({ bu, mes }), [bu, mes])
@@ -429,7 +471,7 @@ function ListaReceitas({ bu, mes }) {
     { titulo: 'Valor recebido', valor: l => l.valor, tipo: 'num', largura: 14 },
     { titulo: 'Data do recebimento', valor: l => l.dt_baixa, tipo: 'data', largura: 18 },
   ], linhas, 'Receitas')
-  const grid = 'minmax(220px, 2fr) minmax(160px, 1.4fr) 100px 120px 100px'
+  const grid = semRevisao ? 'minmax(220px, 2fr) minmax(160px, 1.4fr) 100px 120px 100px' : 'minmax(220px, 2fr) minmax(140px, 1.2fr) 90px 120px 96px 190px'
   return (
     <>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'space-between' }}>
@@ -441,20 +483,21 @@ function ListaReceitas({ bu, mes }) {
         : !linhas.length ? <Vazio>Nenhuma receita da área nesse mês.</Vazio>
         : (
           <div style={{ overflowX: 'auto' }}>
-            <div style={{ minWidth: 720 }}>
+            <div style={{ minWidth: semRevisao ? 720 : 900 }}>
               <div style={{ display: 'grid', gridTemplateColumns: grid, gap: 10, fontSize: 12, color: COR.suave, padding: '6px 4px', borderBottom: `0.5px solid ${COR.borda}` }}>
-                <div>Cliente</div><div>Histórico</div><div>Casa</div><div style={{ textAlign: 'right' }}>Valor</div><div>Recebido em</div>
+                <div>Cliente</div><div>Histórico</div><div>Casa</div><div style={{ textAlign: 'right' }}>Valor</div><div>Recebido em</div>{!semRevisao && <div />}
               </div>
               {linhas.slice(0, limite).map((l, i) => (
                 <div key={i} style={{ display: 'grid', gridTemplateColumns: grid, gap: 10, alignItems: 'center', padding: '9px 4px', borderBottom: '0.5px solid #F0F0EC', fontSize: 13 }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={l.cliente}>{l.cliente || '—'}</div>
-                    <div style={{ fontSize: 11, color: COR.suave }}>{l.descricao}</div>
+                    <div style={{ fontSize: 11, color: COR.suave }}>{l.descricao}{l.corrigida ? ' · área corrigida' : ''}</div>
                   </div>
                   <div style={{ fontSize: 12, color: COR.suave, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={l.historico}>{l.historico}</div>
                   <div>{l.loja}</div>
                   <div style={{ ...num, textAlign: 'right' }}>{fmt(l.valor)}</div>
                   <div style={num}>{fmtData(l.dt_baixa)}</div>
+                  {!semRevisao && <div><NaoEMinha item={l} tipo="receita" bu={bu} mes={mes} /></div>}
                 </div>
               ))}
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', padding: '12px 4px 0', fontSize: 13 }}>
