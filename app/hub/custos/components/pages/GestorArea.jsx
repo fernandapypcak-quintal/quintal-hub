@@ -149,15 +149,15 @@ export default function GestorArea({ areas }) {
         {c.rec > 0 && (
           <div style={{ ...card, flexDirection: 'row', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start' }}>
             <div style={{ flexBasis: '100%', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-              <span style={{ fontSize: 13, fontWeight: 600 }}>Receita × custo da área</span>
-              <span style={{ fontSize: 12, color: COR.suave }}>receita pelo contas a receber (data do recebimento)</span>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>Receitas extras da área</span>
+              <span style={{ fontSize: 12, color: COR.suave }}>rebate, verba e parcerias de marca, fora do faturamento</span>
             </div>
-            {[['Receita', c.rec, c.recA ? `${mesNomeCurto(ant)}: ${fmtK(c.recA)}` : ''], ['Custo', c.pago, ''], ['Receita − custo', c.rec - c.pago, `${Math.round((c.rec - c.pago) / c.rec * 100)}% da receita`]].map(([rot, v, sub], i) => (
+            {[['Custo', c.pago, ''], ['Receitas extras', c.rec, c.recA ? `${mesNomeCurto(ant)}: ${fmtK(c.recA)}` : ''], ['Custo líquido', c.pago - c.rec, c.pago ? `as extras cobrem ${(c.rec / c.pago * 100).toFixed(1).replace('.', ',')}% do custo` : '']].map(([rot, v, sub], i) => (
               <React.Fragment key={rot}>
                 {i > 0 && <span aria-hidden="true" style={{ fontSize: 22, color: COR.fraco, alignSelf: 'center' }}>{i === 1 ? '−' : '='}</span>}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <span style={{ fontSize: 12, color: i === 2 ? COR.texto : COR.suave, fontWeight: i === 2 ? 600 : 400 }}>{rot}</span>
-                  <span style={{ ...num, fontSize: i === 2 ? 26 : 22, fontWeight: i === 2 ? 600 : 400, color: i === 2 && v < 0 ? '#9A3C06' : COR.texto }}>{fmtK(v)}</span>
+                  <span style={{ ...num, fontSize: i === 2 ? 26 : 22, fontWeight: i === 2 ? 600 : 400, color: i === 1 ? '#4F6B14' : COR.texto }}>{fmtK(v)}</span>
                   {sub && <span style={{ fontSize: 11, color: COR.suave }}>{sub}</span>}
                 </div>
               </React.Fragment>
@@ -301,7 +301,7 @@ export function ListasArea({ bu, mes, semRevisao = false, mesPrevisto = '', nota
         ) : (
           <div role="tablist" style={{ display: 'flex', gap: 4, background: '#F4F4EF', padding: 3, borderRadius: 9, flexWrap: 'wrap' }}>
             <button role="tab" aria-selected={aba === 'pagos'} onClick={() => { setAba('pagos'); setLimite(100) }} style={tab('pagos')}>Pagamentos de {mesNome(mes)}</button>
-            {temReceita && <button role="tab" aria-selected={aba === 'receitas'} onClick={() => { setAba('receitas'); setLimite(100) }} style={tab('receitas')}>Receitas de {mesNome(mes)}</button>}
+            {temReceita && <button role="tab" aria-selected={aba === 'receitas'} onClick={() => { setAba('receitas'); setLimite(100) }} style={tab('receitas')}>Receitas extras de {mesNome(mes)}</button>}
             {notasAte && <button role="tab" aria-selected={aba === 'apagar'} onClick={() => { setAba('apagar'); setLimite(100) }} style={tab('apagar')}>Notas a pagar em {mesNome(notasAte)}</button>}
             <button role="tab" aria-selected={aba === 'abertas'} onClick={() => { setAba('abertas'); setLimite(100) }} style={tab('abertas')}>Notas não pagas (últimos 40 dias)</button>
           </div>
@@ -309,7 +309,7 @@ export function ListasArea({ bu, mes, semRevisao = false, mesPrevisto = '', nota
       </div>
       <div style={{ fontSize: 13, background: COR.fundo, borderRadius: 8, padding: '10px 12px', lineHeight: 1.5 }}>
         {aba === 'receitas'
-          ? `Tudo que a área recebeu em ${mesNome(mes)}, pelo relatório de contas a receber (data do recebimento). Eventos corporativos podem ser recebidos antes da data do evento.${semRevisao ? '' : ' Se algum recebimento não for da área, clique em "Não é da minha área" e escolha a área certa (ou "Não é receita").'}`
+          ? `O que a área recebeu a mais em ${mesNome(mes)}, fora do faturamento: rebate e bonificação de fornecedor, verba e parcerias de marca (contas a receber, data do recebimento).${semRevisao ? '' : ' Se algum recebimento não for da área, clique em "Não é da minha área" e escolha a área certa (ou "Não é receita").'}`
           : aba === 'apagar'
           ? `As notas que compõem o "Notas a pagar" da projeção: já emitidas e em aberto, com previsão de pagamento até o fim de ${mesNome(notasAte)}, inclusive as que já passaram da data. Pela ordem da previsão. Em laranja: a data já passou e o pagamento ainda não apareceu nas contas pagas.`
           : mesPrevisto
@@ -480,7 +480,7 @@ function ListaReceitas({ bu, mes, semRevisao = false }) {
       </div>
       {c.carregando ? <Carregando texto="Buscando receitas…" />
         : c.erro ? <Erro texto={c.erro} onTentar={c.tentarDeNovo} />
-        : !linhas.length ? <Vazio>Nenhuma receita da área nesse mês.</Vazio>
+        : !linhas.length ? <Vazio>Nenhuma receita extra da área nesse mês.</Vazio>
         : (
           <div style={{ overflowX: 'auto' }}>
             <div style={{ minWidth: semRevisao ? 720 : 900 }}>

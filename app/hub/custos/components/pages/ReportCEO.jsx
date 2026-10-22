@@ -142,9 +142,10 @@ function ReportFechado({ mesFixo } = {}) {
   const gridAreas = 'minmax(150px, 1.4fr) 104px 76px 104px 116px 110px minmax(170px, 1.8fr)'
   // v27.10: receita (contas a receber) por área
   const RC = nfResumo.receita || []
-  const recMes = soma(RC, x => x.mes === mes && x.bu !== 'Fora'), recAnt = soma(RC, x => x.mes === ant && x.bu !== 'Fora')
-  const recFora = soma(RC, x => x.mes === mes && x.bu === 'Fora')
-  const temReceita = RC.some(x => x.mes === mes)
+  // v27.14: só receitas EXTRAS (rebate, verba, parceria) — faturamento e "fora" não entram
+  const ehExtra = bu => !['Fora', 'Faturamento', 'Revisar'].includes(bu)
+  const recMes = soma(RC, x => x.mes === mes && ehExtra(x.bu)), recAnt = soma(RC, x => x.mes === ant && ehExtra(x.bu))
+  const temReceita = recMes > 0
 
   return (
     <div className="report-ceo" style={{ padding: '20px 20px 48px', display: 'flex', flexDirection: 'column', gap: 22, maxWidth: 1080, width: '100%', boxSizing: 'border-box', margin: '0 auto' }}>
@@ -209,36 +210,35 @@ function ReportFechado({ mesFixo } = {}) {
       {temReceita && (
         <section aria-labelledby="ceo-rec" style={{ ...card, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div>
-            <h2 id="ceo-rec" style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Receita × custo</h2>
-            <div style={{ fontSize: 12, color: COR.suave, marginTop: 3, lineHeight: 1.5 }}>Receita pelo contas a receber (data do recebimento) contra o custo das áreas (data do pagamento). Não é lucro: impostos, aplicações e movimentos entre empresas ficam fora dos dois lados.</div>
+            <h2 id="ceo-rec" style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Receitas extras das áreas</h2>
+            <div style={{ fontSize: 12, color: COR.suave, marginTop: 3, lineHeight: 1.5 }}>O que as áreas trazem a mais, fora do faturamento: rebate e bonificação de fornecedor, verba e parcerias de marca. Abatem do custo das áreas.</div>
           </div>
           <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-            {[['Receita', recMes, recAnt ? `${pctSinal(varPct(recMes, recAnt))} vs ${mesNome(ant)}` : ''], ['Custo das áreas', pagoK[1], ''], ['Receita − custo', recMes - pagoK[1], recMes ? `${Math.round((recMes - pagoK[1]) / recMes * 100)}% da receita` : '']].map(([rot, v, sub], i) => (
+            {[['Custo das áreas', pagoK[1], ''], ['Receitas extras', recMes, recAnt ? `${mesNome(ant)}: ${fmtK(recAnt)}` : ''], ['Custo líquido', pagoK[1] - recMes, pagoK[1] ? `as extras cobrem ${(recMes / pagoK[1] * 100).toFixed(1).replace('.', ',')}% do custo` : '']].map(([rot, v, sub], i) => (
               <React.Fragment key={rot}>
                 {i > 0 && <span aria-hidden="true" style={{ fontSize: 22, color: COR.fraco, alignSelf: 'center' }}>{i === 1 ? '−' : '='}</span>}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <span style={{ fontSize: 12, color: i === 2 ? COR.texto : COR.suave, fontWeight: i === 2 ? 600 : 400 }}>{rot}</span>
-                  <span style={{ ...num, fontSize: i === 2 ? 28 : 22, fontWeight: i === 2 ? 600 : 400, color: i === 2 && v < 0 ? '#9A3C06' : COR.texto }}>{fmtK(v)}</span>
+                  <span style={{ ...num, fontSize: i === 2 ? 28 : 22, fontWeight: i === 2 ? 600 : 400, color: i === 1 ? '#4F6B14' : COR.texto }}>{fmtK(v)}</span>
                   {sub && <span style={{ fontSize: 11, color: COR.suave }}>{sub}</span>}
                 </div>
               </React.Fragment>
             ))}
           </div>
-          {recFora > 0 && <div style={{ fontSize: 12, color: COR.suave }}>Fora da receita: {fmtK(recFora)} em resgates, aplicações, transferências, rateio holding, repasses e royalties entre empresas.</div>}
         </section>
       )}
 
       <section aria-labelledby="ceo-areas" style={{ ...card, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div>
           <h2 id="ceo-areas" style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Áreas</h2>
-          <div style={{ fontSize: 12, color: COR.suave, marginTop: 3, maxWidth: 720, lineHeight: 1.5 }}>O que cada área pagou no mês, a receita que é dela (contas a receber), a diferença entre os dois e as notas dos últimos 40 dias ainda não pagas. Áreas de apoio (Compras, Pessoal, Administrativo…) quase não têm receita própria: o custo delas sustenta a receita das casas. Em destaque, variações acima de 10%. Clique numa área pra ver o detalhe.</div>
+          <div style={{ fontSize: 12, color: COR.suave, marginTop: 3, maxWidth: 720, lineHeight: 1.5 }}>O que cada área pagou no mês, as receitas extras que ela trouxe (rebate, verba, parceria de marca), o custo líquido e as notas dos últimos 40 dias ainda não pagas. Em destaque, variações acima de 10%. Clique numa área pra ver o detalhe.</div>
         </div>
         <div style={{ overflowX: 'auto' }}>
           <div style={{ minWidth: 940 }}>
             <div style={{ display: 'grid', gridTemplateColumns: gridAreas, gap: 10, fontSize: 12, color: COR.suave, padding: '6px 4px', borderBottom: `0.5px solid ${COR.borda}` }}>
               <div>Área</div><div style={{ textAlign: 'right' }}>Pago</div>
               <div style={{ textAlign: 'right' }}>vs {mesISOLabel(ant).split('/')[0].toLowerCase()}</div>
-              <div style={{ textAlign: 'right' }}>Receita</div><div style={{ textAlign: 'right' }}>Receita − custo</div>
+              <div style={{ textAlign: 'right' }}>Receitas extras</div><div style={{ textAlign: 'right' }}>Custo líquido</div>
               <div style={{ textAlign: 'right' }}>Notas não pagas (40 dias)</div><div>Leitura</div>
             </div>
             {r.areas.map(a => (
@@ -249,8 +249,8 @@ function ReportFechado({ mesFixo } = {}) {
                 </button>
                 <div style={{ ...num, textAlign: 'right' }}>{fmtK(a.p)}</div>
                 <div style={{ ...num, textAlign: 'right', color: corVar(a.vp), fontWeight: a.vp !== null && Math.abs(a.vp) > 10 ? 600 : 400 }}>{pctSinal(a.vp)}</div>
-                <div style={{ ...num, textAlign: 'right' }}>{a.rec ? fmtK(a.rec) : '—'}</div>
-                <div style={{ ...num, textAlign: 'right', fontWeight: a.rec ? 600 : 400, color: !a.rec ? COR.fraco : a.rec - a.p < 0 ? '#9A3C06' : '#4F6B14' }}>{a.rec ? fmtK(a.rec - a.p) : '—'}</div>
+                <div style={{ ...num, textAlign: 'right', color: a.rec ? '#4F6B14' : COR.fraco }}>{a.rec ? fmtK(a.rec) : '—'}</div>
+                <div style={{ ...num, textAlign: 'right', fontWeight: a.rec ? 600 : 400, color: a.rec ? COR.texto : COR.fraco }}>{a.rec ? fmtK(a.p - a.rec) : '—'}</div>
                 <div style={{ ...num, textAlign: 'right' }}>{a.ab ? fmtK(a.ab) : '—'}</div>
                 <div style={{ fontSize: 12, color: COR.suave, lineHeight: 1.4 }}>{a.leitura}</div>
               </div>
@@ -260,7 +260,7 @@ function ReportFechado({ mesFixo } = {}) {
               <div style={{ ...num, textAlign: 'right' }}>{fmtK(pagoK[1])}</div>
               <div style={{ ...num, textAlign: 'right' }}>{pctSinal(vp)}</div>
               <div style={{ ...num, textAlign: 'right' }}>{recMes ? fmtK(recMes) : '—'}</div>
-              <div style={{ ...num, textAlign: 'right' }}>{recMes ? fmtK(recMes - pagoK[1]) : '—'}</div>
+              <div style={{ ...num, textAlign: 'right' }}>{recMes ? fmtK(pagoK[1] - recMes) : '—'}</div>
               <div style={{ ...num, textAlign: 'right' }}>{fmtK(r.abertoTot)}</div><div />
             </div>
           </div>
