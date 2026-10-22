@@ -28,7 +28,7 @@ import {
   calcularResultadoUnidade,
   calcularResultadoGerente,
   pontuarUnidade,
-  compararUnidades,
+  compararPorMetasBatidas,
   TIPO_AGREGACAO,
 } from '@/lib/metas/scoring'
 import { loadData, buscarTipo } from '@/app/hub/faturamento/data/loader'
@@ -255,9 +255,10 @@ export function MetasDataProvider({ children, allowedLojas = '*', isAdmin = fals
     })
   }, [gruposVisiveis, manuaisPorMes, faturamentoRealPorMes, faturamentoMetaPorMes, anoMes])
 
-  // Ranking de Unidades (substitui Consolidado + Top 5) — todas as 10
-  // unidades (inclui Santo André, que não tem gerente), cada uma com a
-  // PRÓPRIA pontuação. Só pra quem tem acesso total (admin/diretor).
+  // Visão por Unidade (substitui Consolidado + Top 5) — todas as 10
+  // unidades (inclui Santo André, que não tem gerente), com bateu/não
+  // bateu por indicador. Unidade NÃO tem pontuação — ordena por nº de
+  // metas batidas. Só pra quem tem acesso total (admin/diretor).
   const rankingUnidades = useMemo(() => {
     if (allowedLojas !== '*') return null
     const gerentePorUnidade = {}
@@ -275,7 +276,7 @@ export function MetasDataProvider({ children, allowedLojas = '*', isAdmin = fals
       }
     })
 
-    return lista.sort(compararUnidades).map((u, i) => ({ ...u, posicao: i + 1 }))
+    return lista.sort(compararPorMetasBatidas)
   }, [allowedLojas, UNIDADES_TOP5_CRITICAS, manuaisPorMes, faturamentoRealPorMes, faturamentoMetaPorMes, anoMes])
 
   const salvarIndicador = useCallback(async (row) => {
