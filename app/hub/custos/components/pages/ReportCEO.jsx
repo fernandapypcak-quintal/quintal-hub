@@ -4,6 +4,7 @@ import { fmtK, fmtData, mesAnteriorISO, mesISOLabel, mesNome, mesNomeCurto } fro
 import { COR, num, Vazio, SemDadosNF, botaoSecundario } from '../ui/nf.jsx'
 import { ListasArea } from './GestorArea.jsx'
 import CaixaTotal from '../ui/CaixaTotal.jsx'
+import NotasEmAberto from '../ui/NotasEmAberto.jsx'
 import Projecao, { calcularProjecao, opcoesDeMes } from '../ui/Projecao.jsx'
 
 // v27.2 — Report do mês pro CEO: o grupo inteiro numa página, com
@@ -410,6 +411,15 @@ export default function ReportCEO() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {/* v27.17: notas em aberto por área × mês de pagamento — não depende do filtro de mês */}
+      <div style={{ padding: '20px 20px 0', maxWidth: 1180, width: '100%', boxSizing: 'border-box', margin: '0 auto' }}>
+        <NotasEmAberto aPagarMes={nfResumo.a_pagar_mes || []} mesAtual={mesAtual} corBU={corBU}
+          bus={(busConfig.length ? busConfig.map(b => b.bu) : [...new Set((nfResumo.a_pagar_mes || []).map(x => x.bu))]).filter(b => grupoBU(b) !== 'Fora dos totais')}
+          renderDetalhe={(bu, m, ehAtual) => (
+            <ListasArea key={bu + m} bu={bu} mes={mesAtual} mesPrevisto={ehAtual ? '' : m} notasAte={ehAtual ? mesAtual : ''} abaInicial={ehAtual ? 'apagar' : 'abertas'} semRevisao />
+          )} />
+      </div>
+
       <div className="no-print" style={{ padding: '20px 20px 0', maxWidth: 1180, width: '100%', boxSizing: 'border-box', margin: '0 auto', display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 14, color: COR.suave }}>Mês

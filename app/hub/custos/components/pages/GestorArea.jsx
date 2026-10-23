@@ -5,6 +5,7 @@ import { fmt, fmtK, fmtData, mesAnteriorISO, mesISOLabel, mesNome, mesNomeCurto 
 import { COR, num, Busca, Carregando, Erro, Vazio, useCarga, botaoSecundario, exportarExcel, BotaoExportar } from '../ui/nf.jsx'
 import DRECustos from '../ui/DRECustos.jsx'
 import Projecao, { calcularProjecao, opcoesDeMes } from '../ui/Projecao.jsx'
+import NotasEmAberto from '../ui/NotasEmAberto.jsx'
 
 // v27.3 — "Minha área": tudo pelo MÊS DO PAGAMENTO. O que a área pagou (com
 // e sem nota), fixo e variável, de onde veio a diferença, a lista de
@@ -109,6 +110,14 @@ export default function GestorArea({ areas }) {
   return (
     <div style={{ padding: '20px 20px 48px', display: 'flex', flexDirection: 'column', gap: 22, maxWidth: 1180, width: '100%', boxSizing: 'border-box', margin: '0 auto' }}>
       {barraFiltros}
+
+      {g.mes_atual && (
+        <NotasEmAberto aPagarMes={g.a_pagar_mes || []} mesAtual={g.mes_atual} bus={[bu]}
+          titulo={`Notas em aberto de ${bu} por mês de pagamento`}
+          renderDetalhe={(b, m, ehAtual) => (
+            <ListasArea key={b + m} bu={b} mes={g.mes_atual} mesPrevisto={ehAtual ? '' : m} notasAte={ehAtual ? g.mes_atual : ''} abaInicial={ehAtual ? 'apagar' : 'abertas'} />
+          )} />
+      )}
 
       {tipoSel !== 'fechado' && g.mes_atual && (
         <Projecao proj={calcularProjecao({ pago: g.pago, aPagarMes: g.a_pagar_mes || [], mesAtual: g.mes_atual, mesAlvo: mesSel, bus: [bu], receita: g.receita || [] })} baixasAte={g.baixas_ate}
