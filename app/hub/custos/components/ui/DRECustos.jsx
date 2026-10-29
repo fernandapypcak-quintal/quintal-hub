@@ -79,7 +79,7 @@ export default function DRECustos({ bu = '', comSeletor = false }) {
 
   const linha = (n, nivel, chave, temFilhos) => {
     const tot = n.v.pagoAtual + n.v.aPagar
-    const vr = varTxt(n.v[arv.m2], n.v[arv.m1])   // último mês fechado vs anterior
+    const vr = varTxt(tot, n.v[arv.m2])   // v27.17: mês atual (pago + a pagar) vs mês anterior
     const estaAberto = temFilhos && aberto(chave, nivel)
     const Tag = temFilhos ? 'button' : 'div'
     return (
@@ -136,7 +136,7 @@ export default function DRECustos({ bu = '', comSeletor = false }) {
                 <div style={{ textAlign: 'right' }}>{mesISOLabel(arv.mAtual)} pago</div>
                 <div style={{ textAlign: 'right' }}>{mesISOLabel(arv.mAtual)} a pagar</div>
                 <div style={{ textAlign: 'right', color: COR.texto, fontWeight: 600 }}>{mesISOLabel(arv.mAtual)} total</div>
-                <div style={{ textAlign: 'right' }}>{mesISOLabel(arv.m2).split('/')[0]} vs {mesISOLabel(arv.m1).split('/')[0].toLowerCase()}</div>
+                <div style={{ textAlign: 'right' }}>{mesISOLabel(arv.mAtual).split('/')[0]} vs {mesISOLabel(arv.m2).split('/')[0].toLowerCase()}</div>
               </div>
               {arv.lista.map(b => {
                 const kb = b.nome
@@ -162,7 +162,7 @@ export default function DRECustos({ bu = '', comSeletor = false }) {
                 )
               })}
               {(() => {
-                const g = arv.geral, tot = g.pagoAtual + g.aPagar, vr = varTxt(g[arv.m2], g[arv.m1])
+                const g = arv.geral, tot = g.pagoAtual + g.aPagar, vr = varTxt(tot, g[arv.m2])
                 return (
                   <div style={{ display: 'grid', gridTemplateColumns: grid, gap: 10, padding: '12px 4px 4px', fontSize: 13, fontWeight: 700, borderTop: `1.5px solid ${COR.texto}` }}>
                     <div>= Custo total</div>
@@ -178,7 +178,7 @@ export default function DRECustos({ bu = '', comSeletor = false }) {
       {arv && (
         <div style={{ fontSize: 12, color: COR.suave, lineHeight: 1.5 }}>
           {c.dados.baixas_ate ? `Pagamentos arquivados até ${fmtData(c.dados.baixas_ate)}. ` : ''}
-          "A pagar" são notas já emitidas e em aberto com previsão de pagamento até o fim de {mesNome(arv.mAtual)}, incluindo as que já passaram da data (vencimento do TOTVS ou prazo médio do fornecedor). Notas que ainda não chegaram não aparecem. A variação compara os dois últimos meses fechados, porque o mês atual ainda está em andamento.
+          "A pagar" são notas já emitidas e em aberto com previsão de pagamento até o fim de {mesNome(arv.mAtual)}, incluindo as que já passaram da data (vencimento do TOTVS ou prazo médio do fornecedor). Notas que ainda não chegaram não aparecem. A variação compara o mês atual (pago + a pagar) com o mês anterior; como o mês está em andamento, ela muda até o fechamento.
         </div>
       )}
     </section>
