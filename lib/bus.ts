@@ -16,10 +16,8 @@ export const AREAS_CUSTOS = [
   'Jurídico',
   'Inventário',
   'Kids',
-  'TI',
   'Diretoria',
   'Holding',
-  'RH',
 ] as const
 
 export type AreaCustos = typeof AREAS_CUSTOS[number]
