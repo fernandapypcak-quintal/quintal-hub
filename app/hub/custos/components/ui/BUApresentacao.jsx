@@ -2,7 +2,6 @@ import React, { useState } from 'react'
 import { loadLancamentos, registrarLancamento, excluirLancamento } from '../../data/loader.js'
 import { fmt, fmtK, mesNome, mesAnteriorISO } from '../../utils.js'
 import { COR, num, useCarga, botaoSecundario, Carregando, Erro, Vazio, exportarExcel, BotaoExportar } from './nf.jsx'
-import { filtrarVisaoPessoal } from '../../data/visaoPessoal.js'
 
 // v27.19 — BU da área: o que ela gastou × o que ela gerou.
 // Gasto: custo nos relatórios (contas pagas) + pessoal da área (informado pelo gestor).
@@ -29,11 +28,11 @@ export function calcularBU({ bu, mes, pago, receita, lancamentos }) {
 }
 
 // ── Minha área: blocos + lançamentos editáveis ───────────────
-export default function BUApresentacao({ bu, mes, pago, receita, editavel = true, visaoPessoal = 'Todos', onVisaoPessoal }) {
+export default function BUApresentacao({ bu, mes, pago, receita, editavel = true }) {
   const c = useCarga(() => loadLancamentos(bu), [bu])
   const [form, setForm] = useState(null)
   const [msg, setMsg] = useState('')
-  const r = calcularBU({ bu, mes, pago: filtrarVisaoPessoal(pago, visaoPessoal), receita, lancamentos: c.dados || [] })
+  const r = calcularBU({ bu, mes, pago, receita, lancamentos: c.dados || [] })
   const nomeMes = mesNome(mes)
 
   const linhaValor = (rot, v, sub, cor) => (
@@ -61,7 +60,7 @@ export default function BUApresentacao({ bu, mes, pago, receita, editavel = true
   return (
     <section aria-labelledby="bu-tit" style={{ background: '#fff', border: `0.5px solid ${COR.borda}`, borderRadius: 12, padding: 18, display: 'flex', flexDirection: 'column', gap: 14, breakInside: 'avoid' }}>
       <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}><h2 id="bu-tit" style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>BU {bu} · {nomeMes}</h2>{onVisaoPessoal && <label style={{ display: 'flex', gap: 7, alignItems: 'center', fontSize: 12, color: COR.suave }}>Visão de pessoal <select value={visaoPessoal} onChange={e => onVisaoPessoal(e.target.value)} style={{ ...botaoSecundario, padding: '6px 9px', fontSize: 12 }}><option>Todos</option><option>Pessoas</option><option>RH</option></select></label>}</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}><h2 id="bu-tit" style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>BU {bu} · {nomeMes}</h2></div>
         <div style={{ fontSize: 12, color: COR.suave, marginTop: 3, lineHeight: 1.5 }}>O que a área gastou e o que ela gerou no mês. Os valores dos relatórios entram sozinhos; pessoal da área, receita gerada e economia são informados pela área aqui embaixo.</div>
       </div>
 
