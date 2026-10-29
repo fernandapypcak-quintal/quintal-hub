@@ -302,6 +302,32 @@ export async function registrarObsNF({ chaveNF, bu, fornecedor, documento, valor
   } catch (e) { return false }
 }
 
+// v27.17 — fornecedores da área (6 meses), pra revisão do gestor
+export async function loadFornecedoresBU(bu) {
+  const d = await fetchComParametros({ tipo: 'fornecedores_bu', bu })
+  return Array.isArray(d) ? d.map(r => ({ ...r, pago: Number(r.pago || 0), valor_notas: Number(r.valor_notas || 0) })) : []
+}
+
+// v27.19 — lançamentos do gestor: pessoal da área, receita gerada, economia
+export async function loadLancamentos(bu) {
+  const p = { tipo: 'lancamentos' }
+  if (bu) p.bu = bu
+  const d = await fetchComParametros(p)
+  return Array.isArray(d) ? d.map(r => ({ ...r, valor: Number(r.valor || 0), qtd: Number(r.qtd || 0) })) : []
+}
+export async function registrarLancamento({ bu, mes, tipo, indicador, valor, qtd, obs }) {
+  try {
+    const d = await fetchComParametros({ tipo: 'registrar_lancamento', bu, mes, tipo_lanc: tipo, indicador: indicador || '', valor: String(valor), qtd: String(qtd || ''), obs: obs || '' }, 20000)
+    return d && d.ok ? { ok: true } : { erro: (d && d.erro) || 'Não foi possível salvar.' }
+  } catch (e) { return { erro: 'Não foi possível salvar.' } }
+}
+export async function excluirLancamento({ id, bu }) {
+  try {
+    const d = await fetchComParametros({ tipo: 'registrar_excluir_lancamento', id, bu }, 20000)
+    return !!(d && d.ok)
+  } catch (e) { return false }
+}
+
 // Tela de conciliação. mes: '2026-09' (vazio = tudo)
 export async function loadConciliacao(mes) {
   const p = { tipo: 'conciliacao' }
