@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from 'react'
 import { AREAS_CUSTOS } from '@/lib/bus'
-import { loadGestor, loadNFLista, loadPagamentosBU, loadReceitasLista, reportarDivergenciaBU, registrarObsNF } from '../../data/loader.js'
+import { loadGestor, loadNFLista, loadPagamentosBU, loadReceitasLista, loadFornecedoresBU, reportarDivergenciaBU, registrarObsNF } from '../../data/loader.js'
 import { fmt, fmtK, fmtData, mesAnteriorISO, mesISOLabel, mesNome, mesNomeCurto } from '../../utils.js'
 import { COR, num, Busca, Carregando, Erro, Vazio, useCarga, botaoSecundario, exportarExcel, BotaoExportar } from '../ui/nf.jsx'
 import DRECustos from '../ui/DRECustos.jsx'
 import Projecao, { calcularProjecao, opcoesDeMes } from '../ui/Projecao.jsx'
 import NotasEmAberto from '../ui/NotasEmAberto.jsx'
+import BUApresentacao from '../ui/BUApresentacao.jsx'
 
 // v27.3 — "Minha área": tudo pelo MÊS DO PAGAMENTO. O que a área pagou (com
 // e sem nota), fixo e variável, de onde veio a diferença, a lista de
@@ -228,6 +229,10 @@ export default function GestorArea({ areas }) {
 
       </>}
 
+      {tipoSel !== 'futuro' && (
+        <BUApresentacao key={bu + (tipoSel === 'fechado' ? mes : g.mes_atual)} bu={bu} mes={tipoSel === 'fechado' ? mes : g.mes_atual} pago={g.pago} receita={g.receita || []} />
+      )}
+
       <DRECustos key={bu} bu={bu} />
 
       <ListasArea key={bu + mesSel + focoLista.n} bu={bu} mes={tipoSel === 'fechado' ? mes : g.mes_atual}
@@ -310,6 +315,7 @@ export function ListasArea({ bu, mes, semRevisao = false, mesPrevisto = '', nota
         ) : (
           <div role="tablist" style={{ display: 'flex', gap: 4, background: '#F4F4EF', padding: 3, borderRadius: 9, flexWrap: 'wrap' }}>
             <button role="tab" aria-selected={aba === 'pagos'} onClick={() => { setAba('pagos'); setLimite(100) }} style={tab('pagos')}>Pagamentos de {mesNome(mes)}</button>
+            {!semRevisao && <button role="tab" aria-selected={aba === 'fornecedores'} onClick={() => { setAba('fornecedores'); setLimite(100) }} style={tab('fornecedores')}>Fornecedores da área</button>}
             {temReceita && <button role="tab" aria-selected={aba === 'receitas'} onClick={() => { setAba('receitas'); setLimite(100) }} style={tab('receitas')}>Receitas extras de {mesNome(mes)}</button>}
             {notasAte && <button role="tab" aria-selected={aba === 'apagar'} onClick={() => { setAba('apagar'); setLimite(100) }} style={tab('apagar')}>Notas a pagar em {mesNome(notasAte)}</button>}
             <button role="tab" aria-selected={aba === 'abertas'} onClick={() => { setAba('abertas'); setLimite(100) }} style={tab('abertas')}>Notas não pagas (últimos 40 dias)</button>
@@ -317,7 +323,9 @@ export function ListasArea({ bu, mes, semRevisao = false, mesPrevisto = '', nota
         )}
       </div>
       <div style={{ fontSize: 13, background: COR.fundo, borderRadius: 8, padding: '10px 12px', lineHeight: 1.5 }}>
-        {aba === 'receitas'
+        {aba === 'fornecedores'
+          ? 'Todos os fornecedores que caíram na sua área nos últimos 6 meses (pagamentos e notas). Se algum não for da área, clique em "Não é da minha área": a correção vale pro fornecedor inteiro, em todos os meses e nas próximas notas.'
+          : aba === 'receitas'
           ? `O que a área recebeu a mais em ${mesNome(mes)}, fora do faturamento: rebate e bonificação de fornecedor, verba e parcerias de marca (contas a receber, data do recebimento).${semRevisao ? '' : ' Se algum recebimento não for da área, clique em "Não é da minha área" e escolha a área certa (ou "Não é receita").'}`
           : aba === 'apagar'
           ? `As notas que compõem o "Notas a pagar" da projeção: já emitidas e em aberto, com previsão de pagamento até o fim de ${mesNome(notasAte)}, inclusive as que já passaram da data. Pela ordem da previsão. Em laranja: a data já passou e o pagamento ainda não apareceu nas contas pagas.`
@@ -327,7 +335,7 @@ export function ListasArea({ bu, mes, semRevisao = false, mesPrevisto = '', nota
           ? `Tudo que a área pagou em ${mesNome(mes)}, pela data do pagamento. Quando o pagamento tem nota fiscal, aparece o número e a data em que a nota entrou (muitas vezes no mês anterior). Aluguel, cartão, folha e impostos não têm nota, e isso é normal.`
           : 'Notas da área que entraram nos últimos 40 dias e ainda não foram pagas, pela ordem da previsão de pagamento (o que vence primeiro aparece primeiro). A previsão é o vencimento do TOTVS ou, quando ele não vem, o prazo médio de pagamento do fornecedor. Em laranja: a data já passou e o pagamento ainda não apareceu nas contas pagas.'}
       </div>
-      {aba === 'receitas' ? <ListaReceitas bu={bu} mes={mes} semRevisao={semRevisao} /> : <>
+      {aba === 'fornecedores' ? <ListaFornecedores bu={bu} /> : aba === 'receitas' ? <ListaReceitas bu={bu} mes={mes} semRevisao={semRevisao} /> : <>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'space-between' }}>
         <Busca valor={busca} onChange={v => { setBusca(v); setLimite(100) }} placeholder="Buscar fornecedor, conta ou número da nota" />
         <BotaoExportar onClick={exportar} desabilitado={!linhas.length} />
@@ -407,7 +415,9 @@ function NaoEMinha({ item, tipo, bu, mes }) {
   )
   const enviar = async () => {
     setEstado('enviando')
-    const ok = await reportarDivergenciaBU(tipo === 'receita'
+    const ok = await reportarDivergenciaBU(tipo === 'fornecedor'
+      ? { origem: 'fornecedor', fornecedor: item.fornecedor, codFor: item.cod_for, descricao: `Fornecedor inteiro (${item.contas || 'todas as contas'})`, buAtual: bu, buSugerido: area, mes: mesISOLabel(String(item.ultimo || '').substring(0, 7)), loja: '', valor: item.pago + item.valor_notas }
+      : tipo === 'receita'
       ? { origem: 'receita', chave: item.chave, fornecedor: item.cliente, descricao: item.descricao, buAtual: bu, buSugerido: area, mes: mesISOLabel(String(item.dt_baixa || '').substring(0, 7)), loja: item.loja, valor: item.valor }
       : tipo === 'nota'
       ? { origem: 'nota', fornecedor: item.fornecedor, codFor: item.cod_for, descricao: `NF ${item.documento}`, buAtual: bu, buSugerido: area, mes: mesISOLabel(String(item.dt_dig || '').substring(0, 7)), loja: item.unidade, valor: item.valor }
@@ -427,6 +437,59 @@ function NaoEMinha({ item, tipo, bu, mes }) {
         {estado === 'enviando' ? 'Enviando…' : estado === 'erro' ? 'Tentar de novo' : 'Enviar'}
       </button>
     </div>
+  )
+}
+
+// v27.17 — fornecedores da área (6 meses) pra revisão do gestor
+function ListaFornecedores({ bu }) {
+  const [busca, setBusca] = useState('')
+  const [limite, setLimite] = useState(100)
+  const c = useCarga(() => loadFornecedoresBU(bu), [bu])
+  const b = busca.trim().toUpperCase()
+  const linhas = (c.dados || []).filter(l => !b || [l.fornecedor, l.contas].some(v => String(v || '').toUpperCase().includes(b)))
+  const exportar = () => exportarExcel(`${bu} - fornecedores (6 meses)`, [
+    { titulo: 'Fornecedor', valor: l => l.fornecedor, largura: 42 },
+    { titulo: 'Contas', valor: l => l.contas, largura: 36 },
+    { titulo: 'Pago (6 meses)', valor: l => l.pago, tipo: 'num', largura: 16 },
+    { titulo: 'Pagamentos', valor: l => l.pagamentos, tipo: 'num', formato: '0', largura: 12 },
+    { titulo: 'Notas (6 meses)', valor: l => l.valor_notas, tipo: 'num', largura: 16 },
+    { titulo: 'Qtd notas', valor: l => l.notas, tipo: 'num', formato: '0', largura: 10 },
+    { titulo: 'Último movimento', valor: l => l.ultimo, tipo: 'data', largura: 16 },
+  ], linhas, 'Fornecedores')
+  const grid = 'minmax(220px, 2fr) minmax(140px, 1.2fr) 120px 120px 100px 190px'
+  return (
+    <>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'space-between' }}>
+        <Busca valor={busca} onChange={v => { setBusca(v); setLimite(100) }} placeholder="Buscar fornecedor ou conta" />
+        <BotaoExportar onClick={exportar} desabilitado={!linhas.length} />
+      </div>
+      {c.carregando ? <Carregando texto="Buscando fornecedores…" />
+        : c.erro ? <Erro texto={c.erro} onTentar={c.tentarDeNovo} />
+        : !linhas.length ? <Vazio>Nenhum fornecedor.</Vazio>
+        : (
+          <div style={{ overflowX: 'auto' }}>
+            <div style={{ minWidth: 900 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: grid, gap: 10, fontSize: 12, color: COR.suave, padding: '6px 4px', borderBottom: `0.5px solid ${COR.borda}` }}>
+                <div>Fornecedor</div><div>Contas</div><div style={{ textAlign: 'right' }}>Pago (6 meses)</div><div style={{ textAlign: 'right' }}>Notas (6 meses)</div><div>Último</div><div />
+              </div>
+              {linhas.slice(0, limite).map((l, i) => (
+                <div key={l.fornecedor + i} style={{ display: 'grid', gridTemplateColumns: grid, gap: 10, alignItems: 'center', padding: '9px 4px', borderBottom: '0.5px solid #F0F0EC', fontSize: 13 }}>
+                  <div style={{ ...elipse }} title={l.fornecedor}>{l.fornecedor}</div>
+                  <div style={{ ...elipse, fontSize: 12, color: COR.suave }} title={l.contas}>{l.contas || '—'}</div>
+                  <div style={{ ...num, textAlign: 'right' }}>{l.pago ? fmt(l.pago) : '—'}<div style={{ fontSize: 11, color: COR.suave }}>{l.pagamentos ? `${l.pagamentos} pagto.` : ''}</div></div>
+                  <div style={{ ...num, textAlign: 'right' }}>{l.valor_notas ? fmt(l.valor_notas) : '—'}<div style={{ fontSize: 11, color: COR.suave }}>{l.notas ? `${l.notas} notas` : ''}</div></div>
+                  <div style={num}>{fmtData(l.ultimo)}</div>
+                  <div><NaoEMinha item={l} tipo="fornecedor" bu={bu} mes="" /></div>
+                </div>
+              ))}
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', padding: '12px 4px 0', fontSize: 13 }}>
+                <span style={{ color: COR.suave }}>{linhas.length.toLocaleString('pt-BR')} fornecedores</span>
+                {linhas.length > limite && <button onClick={() => setLimite(x => x + 200)} style={botaoSecundario}>Mostrar mais {Math.min(200, linhas.length - limite)}</button>}
+              </div>
+            </div>
+          </div>
+        )}
+    </>
   )
 }
 

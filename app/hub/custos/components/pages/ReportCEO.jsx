@@ -5,6 +5,7 @@ import { COR, num, Vazio, SemDadosNF, botaoSecundario } from '../ui/nf.jsx'
 import { ListasArea } from './GestorArea.jsx'
 import CaixaTotal from '../ui/CaixaTotal.jsx'
 import NotasEmAberto from '../ui/NotasEmAberto.jsx'
+import { BUsDoMes } from '../ui/BUApresentacao.jsx'
 import Projecao, { calcularProjecao, opcoesDeMes } from '../ui/Projecao.jsx'
 
 // v27.2 — Report do mês pro CEO: o grupo inteiro numa página, com
@@ -277,6 +278,10 @@ function ReportFechado({ mesFixo } = {}) {
           </div>
         )}
       </section>
+
+      <BUsDoMes mes={mes} pago={nfResumo.pago || []} corBU={corBU}
+        receita={(nfResumo.receita || []).filter(x => !['Fora', 'Faturamento', 'Revisar'].includes(x.bu))}
+        bus={(busConfig.length ? busConfig.map(b => b.bu) : [...new Set((nfResumo.pago || []).map(x => x.bu))]).filter(b => grupoBU(b) !== 'Fora dos totais' && b !== 'Revisar')} />
 
       {r.cats.length > 0 && (
         <section aria-labelledby="ceo-tipo" style={{ ...card, display: 'flex', flexDirection: 'column', gap: 12 }}>
