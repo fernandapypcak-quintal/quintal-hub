@@ -106,7 +106,7 @@ export default function DRECustos({ bu = '', comSeletor = false }) {
         <div>
           <h2 id="dre-tit" style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>DRE de custos{!comSeletor && bu ? `: ${bu}` : ''}</h2>
           <div style={{ fontSize: 12, color: COR.suave, marginTop: 3, lineHeight: 1.5, maxWidth: 760 }}>
-            Custo fixo + variável pago por mês. No mês atual: o que já foi pago + as notas em aberto com previsão de pagamento no mês = total previsto. Clique na área pra abrir os tipos de gasto, e no tipo pra abrir os fornecedores.
+            Custo fixo + variável pago por mês, incluindo a folha informada pelas áreas quando esse custo não aparece no financeiro. No mês atual, notas em aberto com previsão de pagamento também entram no total previsto. Clique na área para abrir os tipos de gasto e no tipo para abrir os fornecedores.
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
