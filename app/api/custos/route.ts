@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     // Gestor de área (access.bus = lista) só chama os endpoints da página
     // "Minha área", e sempre de uma área dele.
     if (access.bus !== '*') {
-      const PERMITIDOS = ['gestor', 'nf_lista', 'pagamentos_bu', 'registrar_divergencia_bu', 'registrar_obs_nf', 'bus', 'dre', 'receitas_lista']
+      const PERMITIDOS = ['gestor', 'nf_lista', 'pagamentos_bu', 'registrar_divergencia_bu', 'registrar_obs_nf', 'bus', 'dre', 'receitas_lista', 'fornecedores_bu', 'lancamentos', 'registrar_lancamento', 'registrar_excluir_lancamento']
       if (!PERMITIDOS.includes(tipo)) return NextResponse.json({ erro: 'Acesso negado' }, { status: 403 })
       const areaPedida = tipo === 'registrar_divergencia_bu' ? searchParams.get('bu_atual') : searchParams.get('bu')
       if (tipo !== 'bus' && (!areaPedida || !access.bus.includes(areaPedida))) {
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
       }
     } else if (access.lojas !== '*') {
       // Acesso restrito por loja: nada dos dados do grupo inteiro (notas por área)
-      const DO_GRUPO = ['gestor', 'nf_lista', 'pagamentos_bu', 'nf_resumo', 'conciliacao', 'pagamentos_fora', 'dre', 'receitas_lista', 'receitas_resumo']
+      const DO_GRUPO = ['gestor', 'nf_lista', 'pagamentos_bu', 'nf_resumo', 'conciliacao', 'pagamentos_fora', 'dre', 'receitas_lista', 'receitas_resumo', 'fornecedores_bu', 'lancamentos']
       if (DO_GRUPO.includes(tipo)) return NextResponse.json({ erro: 'Acesso negado' }, { status: 403 })
     }
 
