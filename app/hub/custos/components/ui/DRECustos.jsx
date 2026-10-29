@@ -41,7 +41,7 @@ function montarArvore(d) {
   return { lista, geral, m0, m1, m2, mAtual }
 }
 
-export default function DRECustos({ bu = '', comSeletor = false, visaoPessoal = 'Todos', onVisaoPessoal }) {
+export default function DRECustos({ bu = '', comSeletor = false, visaoPessoal = 'Todos', onVisaoPessoal = undefined }) {
   const [area, setArea] = useState('Todas')
   const alvo = comSeletor ? area : bu
   const c = useCarga(() => loadDRE({ bu: alvo }), [alvo])
