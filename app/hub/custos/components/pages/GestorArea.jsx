@@ -7,6 +7,7 @@ import DRECustos from '../ui/DRECustos.jsx'
 import Projecao, { calcularProjecao, opcoesDeMes } from '../ui/Projecao.jsx'
 import NotasEmAberto from '../ui/NotasEmAberto.jsx'
 import BUApresentacao from '../ui/BUApresentacao.jsx'
+import { filtrarVisaoPessoal } from '../../data/visaoPessoal.js'
 
 // v27.3 — "Minha área": tudo pelo MÊS DO PAGAMENTO. O que a área pagou (com
 // e sem nota), fixo e variável, de onde veio a diferença, a lista de
@@ -28,6 +29,8 @@ function ChipVar({ p, mesAnt }) {
 export default function GestorArea({ areas }) {
   const lista = areas && areas.length ? areas : [...AREAS_CUSTOS]
   const [bu, setBu] = useState(lista[0])
+  const [visaoPessoal, setVisaoPessoal] = useState('Todos')
+  const ehBUDoPessoal = /pessoal/i.test(bu)
   const [mesEscolhido, setMesEscolhido] = useState('')
   const [focoLista, setFocoLista] = useState({ aba: '', n: 0 })   // clique em "Notas a pagar" abre a lista certa
   const verNotasAPagar = () => {
@@ -52,7 +55,7 @@ export default function GestorArea({ areas }) {
     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
       {lista.length > 1 && (
         <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, color: COR.suave }}>Área
-          <select value={bu} onChange={e => setBu(e.target.value)} style={{ ...botaoSecundario, padding: '7px 10px', fontSize: 13 }}>
+          <select value={bu} onChange={e => { setBu(e.target.value); setVisaoPessoal('Todos') }} style={{ ...botaoSecundario, padding: '7px 10px', fontSize: 13 }}>
             {lista.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
         </label>
@@ -121,7 +124,7 @@ export default function GestorArea({ areas }) {
       )}
 
       {tipoSel !== 'fechado' && g.mes_atual && (
-        <Projecao proj={calcularProjecao({ pago: g.pago, aPagarMes: g.a_pagar_mes || [], mesAtual: g.mes_atual, mesAlvo: mesSel, bus: [bu], receita: g.receita || [] })} baixasAte={g.baixas_ate}
+        <Projecao visaoPessoal={ehBUDoPessoal ? visaoPessoal : 'Todos'} onVisaoPessoal={ehBUDoPessoal ? setVisaoPessoal : undefined} proj={calcularProjecao({ pago: ehBUDoPessoal ? filtrarVisaoPessoal(g.pago, visaoPessoal) : g.pago, aPagarMes: ehBUDoPessoal ? filtrarVisaoPessoal(g.a_pagar_mes || [], visaoPessoal) : (g.a_pagar_mes || []), mesAtual: g.mes_atual, mesAlvo: mesSel, bus: [bu], receita: g.receita || [] })} baixasAte={g.baixas_ate}
           onNotas={tipoSel === 'atual' ? verNotasAPagar : undefined} />
       )}
 
@@ -230,10 +233,10 @@ export default function GestorArea({ areas }) {
       </>}
 
       {tipoSel !== 'futuro' && (
-        <BUApresentacao key={bu + (tipoSel === 'fechado' ? mes : g.mes_atual)} bu={bu} mes={tipoSel === 'fechado' ? mes : g.mes_atual} pago={g.pago} receita={g.receita || []} />
+        <BUApresentacao key={bu + (tipoSel === 'fechado' ? mes : g.mes_atual)} bu={bu} mes={tipoSel === 'fechado' ? mes : g.mes_atual} pago={ehBUDoPessoal ? filtrarVisaoPessoal(g.pago, visaoPessoal) : g.pago} receita={g.receita || []} visaoPessoal={ehBUDoPessoal ? visaoPessoal : 'Todos'} onVisaoPessoal={ehBUDoPessoal ? setVisaoPessoal : undefined} />
       )}
 
-      <DRECustos key={bu} bu={bu} />
+      <DRECustos key={bu} bu={bu} visaoPessoal={ehBUDoPessoal ? visaoPessoal : 'Todos'} onVisaoPessoal={ehBUDoPessoal ? setVisaoPessoal : undefined} />
 
       <ListasArea key={bu + mesSel + focoLista.n} bu={bu} mes={tipoSel === 'fechado' ? mes : g.mes_atual}
         mesPrevisto={tipoSel === 'futuro' ? mesSel : ''} notasAte={tipoSel === 'atual' ? g.mes_atual : ''} abaInicial={focoLista.aba}
