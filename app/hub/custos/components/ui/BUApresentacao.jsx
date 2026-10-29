@@ -45,10 +45,23 @@ export default function BUApresentacao({ bu, mes, pago, receita, editavel = true
   const [carregandoGastos, setCarregandoGastos] = useState(false)
   const [erroGastos, setErroGastos] = useState('')
   const [visaoPessoal, setVisaoPessoal] = useState('Todos')
+  const [categoriasAbertas, setCategoriasAbertas] = useState({})
+  const [fornecedoresAbertos, setFornecedoresAbertos] = useState({})
   const r = calcularBU({ bu, mes, pago, receita, lancamentos: c.dados || [] })
   const nomeMes = mesNome(mes)
   const gastosVisiveis = bu === 'Pessoal' && visaoPessoal !== 'Todos' ? gastos.filter(g => ehGrupoPessoal(g) === visaoPessoal) : gastos
   const tiposDisponiveis = bu === 'Pessoal' ? TIPOS_BASE.filter(t => t !== 'Pessoal da área') : TIPOS_BASE
+  const gruposCategoria = Object.values((gastosVisiveis || []).reduce((acc, g) => {
+    const categoria = String(g.categoria || 'Sem categoria').trim() || 'Sem categoria'
+    const fornecedor = String(g.fornecedor || 'Fornecedor não identificado').trim() || 'Fornecedor não identificado'
+    if (!acc[categoria]) acc[categoria] = { nome: categoria, total: 0, itens: [], fornecedores: {} }
+    acc[categoria].total += Number(g.valor) || 0
+    acc[categoria].itens.push(g)
+    if (!acc[categoria].fornecedores[fornecedor]) acc[categoria].fornecedores[fornecedor] = { nome: fornecedor, total: 0, itens: [] }
+    acc[categoria].fornecedores[fornecedor].total += Number(g.valor) || 0
+    acc[categoria].fornecedores[fornecedor].itens.push(g)
+    return acc
+  }, {})).sort((a, b) => b.total - a.total)
 
   useEffect(() => {
     setMostrarGastos(false)
@@ -56,6 +69,8 @@ export default function BUApresentacao({ bu, mes, pago, receita, editavel = true
     setGastosCarregadosPara('')
     setErroGastos('')
     setVisaoPessoal('Todos')
+    setCategoriasAbertas({})
+    setFornecedoresAbertos({})
   }, [bu, mes])
 
   const alternarGastos = async () => {
@@ -103,6 +118,13 @@ export default function BUApresentacao({ bu, mes, pago, receita, editavel = true
       <div>
         <h2 id="bu-tit" style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>BU {bu} · {nomeMes}</h2>
         <div style={{ fontSize: 12, color: COR.suave, marginTop: 3, lineHeight: 1.5 }}>O que a área gastou e gerou no mês. Os custos dos relatórios entram automaticamente; quando a folha da área não estiver mapeada no financeiro, informe-a aqui para somar ao custo e ao DRE. Na BU Pessoal, a folha já vem consolidada do financeiro.</div>
+        {bu === 'Pessoal' && (
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 12, padding: '10px 12px', border: `1px solid ${COR.borda}`, borderRadius: 9, background: '#FCFCFA' }}>
+            <strong style={{ fontSize: 12, marginRight: 4 }}>Visão da BU Pessoal:</strong>
+            {['Todos', 'Pessoas', 'RH'].map(v => <button key={v} type="button" onClick={() => { setVisaoPessoal(v); if (!mostrarGastos) { setMostrarGastos(true); if (gastosCarregadosPara !== `${bu}|${mes}`) alternarGastos() } }} aria-pressed={visaoPessoal === v} style={{ ...botaoSecundario, padding: '6px 12px', fontSize: 12, background: visaoPessoal === v ? '#2B4C7E' : '#fff', color: visaoPessoal === v ? '#fff' : COR.texto, borderColor: visaoPessoal === v ? '#2B4C7E' : COR.borda }}>{v}</button>)}
+            <span style={{ fontSize: 11, color: COR.suave }}>Pessoas: folha, benefícios e encargos · RH: treinamento, desenvolvimento e estrutura da área.</span>
+          </div>
+        )}
       </div>
 
       {c.carregando && !c.dados ? <Carregando texto="Carregando lançamentos…" /> : c.erro ? <Erro texto={c.erro} onTentar={c.tentarDeNovo} /> : (
@@ -118,29 +140,46 @@ export default function BUApresentacao({ bu, mes, pago, receita, editavel = true
             {mostrarGastos && (
               <div style={{ marginTop: 8, padding: 12, border: `0.5px solid ${COR.borda}`, borderRadius: 8, background: '#FCFCFA' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', marginBottom: 8 }}>
-                  <strong style={{ fontSize: 12 }}>Gastos detalhados · {nomeMes}</strong>
+                  <strong style={{ fontSize: 12 }}>Gastos por categoria · {nomeMes}</strong>
                   <span style={{ ...num, fontSize: 12 }}>{fmtK(gastosVisiveis.reduce((s, g) => s + (Number(g.valor) || 0), 0))}</span>
                 </div>
-                {bu === 'Pessoal' && (
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-                    {['Todos', 'Pessoas', 'RH'].map(v => <button key={v} type="button" onClick={() => setVisaoPessoal(v)} style={{ ...botaoSecundario, padding: '5px 10px', fontSize: 12, background: visaoPessoal === v ? '#2B4C7E' : '#fff', color: visaoPessoal === v ? '#fff' : COR.texto, borderColor: visaoPessoal === v ? '#2B4C7E' : COR.borda }}>{v}</button>)}
-                  </div>
-                )}
-                {carregandoGastos ? <div style={{ fontSize: 12, color: COR.suave }}>Carregando gastos…</div> : erroGastos ? <div style={{ fontSize: 12, color: COR.alerta }}>{erroGastos}</div> : !gastosVisiveis.length ? <Vazio>Nenhum pagamento detalhado encontrado para esta visão e mês.</Vazio> : (
-                  <div style={{ overflowX: 'auto' }}>
-                    <div style={{ minWidth: 540 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(150px, 1.2fr) minmax(160px, 1.5fr) 100px 90px', gap: 8, padding: '5px 0', borderBottom: `1px solid ${COR.borda}`, fontSize: 11, color: COR.suave }}>
-                        <div>Fornecedor</div><div>Descrição</div><div>Categoria</div><div style={{ textAlign: 'right' }}>Valor pago</div>
-                      </div>
-                      {gastosVisiveis.map((g, i) => (
-                        <div key={`${g.dt_baixa || ''}-${g.fornecedor || ''}-${g.valor || 0}-${i}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(150px, 1.2fr) minmax(160px, 1.5fr) 100px 90px', gap: 8, padding: '7px 0', borderBottom: '0.5px solid #F0F0EC', fontSize: 12, alignItems: 'start' }}>
-                          <div>{g.fornecedor || '—'}<div style={{ fontSize: 10, color: COR.suave }}>{g.loja || ''}{g.nf_documento ? ` · NF ${g.nf_documento}` : ''}</div></div>
-                          <div>{g.descricao || '—'}<div style={{ fontSize: 10, color: COR.suave }}>{g.dt_baixa || ''}</div></div>
-                          <div>{g.categoria || '—'}</div>
-                          <div style={{ ...num, textAlign: 'right', whiteSpace: 'nowrap' }}>{fmt(g.valor)}</div>
+                {carregandoGastos ? <div style={{ fontSize: 12, color: COR.suave }}>Carregando gastos…</div> : erroGastos ? <div style={{ fontSize: 12, color: COR.alerta }}>{erroGastos}</div> : !gruposCategoria.length ? <Vazio>Nenhum pagamento detalhado encontrado para esta visão e mês.</Vazio> : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                    {gruposCategoria.map(grupo => {
+                      const catKey = `${bu}|${mes}|${grupo.nome}`
+                      const aberto = !!categoriasAbertas[catKey]
+                      const fornecedores = Object.values(grupo.fornecedores).sort((a, b) => b.total - a.total)
+                      return (
+                        <div key={catKey} style={{ border: `1px solid ${COR.borda}`, borderRadius: 8, background: '#fff', overflow: 'hidden' }}>
+                          <button type="button" onClick={() => setCategoriasAbertas(v => ({ ...v, [catKey]: !v[catKey] }))} aria-expanded={aberto} style={{ width: '100%', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto auto', gap: 10, alignItems: 'center', textAlign: 'left', padding: '10px 11px', border: 0, background: aberto ? '#F5F7EC' : '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: COR.texto }}>{grupo.nome}<span style={{ display: 'block', fontSize: 10, color: COR.suave, fontWeight: 400 }}>{grupo.itens.length} lançamento(s) · {fornecedores.length} fornecedor(es)</span></span>
+                            <span style={{ ...num, fontSize: 12, fontWeight: 600 }}>{fmtK(grupo.total)}</span><span aria-hidden="true" style={{ color: COR.suave }}>{aberto ? '−' : '+'}</span>
+                          </button>
+                          {aberto && <div style={{ padding: '5px 9px 9px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {fornecedores.map(f => {
+                              const fornKey = `${catKey}|${f.nome}`
+                              const fornAberto = !!fornecedoresAbertos[fornKey]
+                              return <div key={fornKey} style={{ border: `1px solid #F0F0EC`, borderRadius: 6, overflow: 'hidden' }}>
+                                <button type="button" onClick={() => setFornecedoresAbertos(v => ({ ...v, [fornKey]: !v[fornKey] }))} aria-expanded={fornAberto} style={{ width: '100%', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto auto', gap: 8, alignItems: 'center', textAlign: 'left', padding: '8px 9px', border: 0, background: '#FCFCFA', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                  <span style={{ fontSize: 11, fontWeight: 500 }}>{f.nome}<span style={{ display: 'block', fontSize: 10, color: COR.suave, fontWeight: 400 }}>{f.itens.length} nota(s)/pagamento(s)</span></span>
+                                  <span style={{ ...num, fontSize: 11 }}>{fmtK(f.total)}</span><span aria-hidden="true" style={{ color: COR.suave }}>{fornAberto ? '−' : '+'}</span>
+                                </button>
+                                {fornAberto && <div style={{ padding: '0 9px 7px', overflowX: 'auto' }}>
+                                  <div style={{ minWidth: 430 }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(130px, 1fr) minmax(140px, 1.3fr) 85px', gap: 8, padding: '5px 0', borderBottom: `1px solid ${COR.borda}`, fontSize: 10, color: COR.suave }}><div>Descrição / unidade / NF</div><div>Data do pagamento</div><div style={{ textAlign: 'right' }}>Valor</div></div>
+                                    {f.itens.sort((a, b) => String(b.dt_baixa || '').localeCompare(String(a.dt_baixa || ''))).map((g, i) => <div key={`${g.dt_baixa || ''}-${g.nf_documento || ''}-${g.descricao || ''}-${i}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(130px, 1fr) minmax(140px, 1.3fr) 85px', gap: 8, padding: '7px 0', borderBottom: '0.5px solid #F0F0EC', fontSize: 11, alignItems: 'start' }}>
+                                      <div>{g.descricao || '—'}<div style={{ fontSize: 10, color: COR.suave }}>{[g.loja, g.nf_documento ? `NF ${g.nf_documento}` : ''].filter(Boolean).join(' · ') || '—'}</div></div>
+                                      <div>{g.dt_baixa || '—'}<div style={{ fontSize: 10, color: COR.suave }}>{g.tipo || ''}</div></div>
+                                      <div style={{ ...num, textAlign: 'right', whiteSpace: 'nowrap' }}>{fmt(g.valor)}</div>
+                                    </div>)}
+                                  </div>
+                                </div>}
+                              </div>
+                            })}
+                          </div>}
                         </div>
-                      ))}
-                    </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>
