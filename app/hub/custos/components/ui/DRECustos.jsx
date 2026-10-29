@@ -3,6 +3,7 @@ import { AREAS_CUSTOS } from '@/lib/bus'
 import { loadDRE } from '../../data/loader.js'
 import { fmtK, fmtData, mesISOLabel, mesNome, mesNomeCurto } from '../../utils.js'
 import { COR, num, Carregando, Erro, Vazio, useCarga, botaoSecundario, exportarExcel, BotaoExportar } from './nf.jsx'
+import { filtrarVisaoPessoal } from '../../data/visaoPessoal.js'
 
 // v27.7 — DRE de custos: área > tipo de gasto > fornecedor.
 // Colunas: 3 meses fechados + mês atual (pago até agora + notas a pagar no mês = total).
@@ -40,14 +41,14 @@ function montarArvore(d) {
   return { lista, geral, m0, m1, m2, mAtual }
 }
 
-export default function DRECustos({ bu = '', comSeletor = false }) {
+export default function DRECustos({ bu = '', comSeletor = false, visaoPessoal = 'Todos', onVisaoPessoal }) {
   const [area, setArea] = useState('Todas')
   const alvo = comSeletor ? area : bu
   const c = useCarga(() => loadDRE({ bu: alvo }), [alvo])
   const [abertos, setAbertos] = useState({})
   const [verTodos, setVerTodos] = useState({})
 
-  const arv = useMemo(() => (c.dados && c.dados.meses.length === 4 ? montarArvore(c.dados) : null), [c.dados])
+  const arv = useMemo(() => { if (!c.dados || c.dados.meses.length !== 4) return null; if (!/pessoal/i.test(alvo) || visaoPessoal === 'Todos') return montarArvore(c.dados); const dados = { ...c.dados, pago: filtrarVisaoPessoal(c.dados.pago, visaoPessoal), a_pagar: filtrarVisaoPessoal(c.dados.a_pagar, visaoPessoal) }; return montarArvore(dados) }, [c.dados, alvo, visaoPessoal])
   const toggle = k => setAbertos(a => ({ ...a, [k]: !a[k] }))
   const unicaArea = arv && arv.lista.length === 1
   const aberto = (k, nivel) => (abertos[k] !== undefined ? abertos[k] : nivel === 0 && unicaArea)
@@ -106,10 +107,11 @@ export default function DRECustos({ bu = '', comSeletor = false }) {
         <div>
           <h2 id="dre-tit" style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>DRE de custos{!comSeletor && bu ? `: ${bu}` : ''}</h2>
           <div style={{ fontSize: 12, color: COR.suave, marginTop: 3, lineHeight: 1.5, maxWidth: 760 }}>
-            Custo fixo + variável pago por mês, incluindo a folha informada pelas áreas quando esse custo não aparece no financeiro. No mês atual, notas em aberto com previsão de pagamento também entram no total previsto. Clique na área para abrir os tipos de gasto e no tipo para abrir os fornecedores.
+            Custo fixo + variável pago por mês. No mês atual: o que já foi pago + as notas em aberto com previsão de pagamento no mês = total previsto. Clique na área pra abrir os tipos de gasto, e no tipo pra abrir os fornecedores.
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          {onVisaoPessoal && <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, color: COR.suave }}>Visão de pessoal <select value={visaoPessoal} onChange={e => onVisaoPessoal(e.target.value)} style={{ ...botaoSecundario, padding: '7px 10px', fontSize: 13 }}><option>Todos</option><option>Pessoas</option><option>RH</option></select></label>}
           {comSeletor && (
             <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, color: COR.suave }}>Área
               <select value={area} onChange={e => { setArea(e.target.value); setAbertos({}) }} style={{ ...botaoSecundario, padding: '7px 10px', fontSize: 13 }}>

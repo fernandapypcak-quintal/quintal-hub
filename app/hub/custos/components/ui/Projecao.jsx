@@ -58,7 +58,7 @@ const pct = (a, b) => (b ? (a / b - 1) * 100 : null)
 const pctTxt = p => (p === null ? '—' : `${p > 0 ? '+' : p < 0 ? '−' : ''}${Math.abs(p).toFixed(1).replace('.', ',')}%`)
 const corP = p => (p !== null && p > 10 ? '#9A3C06' : p !== null && p < -10 ? '#4F6B14' : COR.suave)
 
-export default function Projecao({ proj, baixasAte, corBU, titulo, onArea, onNotas }) {
+export default function Projecao({ proj, baixasAte, corBU, titulo, onArea, onNotas, visaoPessoal = 'Todos', onVisaoPessoal }) {
   const t = proj.total
   // mês futuro ainda está incompleto (faltam notas): não compara em %
   const p = proj.futuro ? null : pct(t.proj, t.anterior)
@@ -94,7 +94,7 @@ export default function Projecao({ proj, baixasAte, corBU, titulo, onArea, onNot
               {p !== null && <span style={{ fontSize: 15, fontWeight: 600, color: corP(p), marginLeft: 10 }}>{pctTxt(p)} vs {mesNome(proj.ant)}</span>}
             </h2>
           </div>
-          <div style={{ fontSize: 12, color: COR.suave }}>{baixasAte ? `pagamentos arquivados até ${fmtData(baixasAte)}` : ''}</div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>{onVisaoPessoal && <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: COR.suave }}>Visão de pessoal <select value={visaoPessoal} onChange={e => onVisaoPessoal(e.target.value)} style={{ padding: '6px 9px', borderRadius: 7, border: `0.5px solid ${COR.borda}`, background: '#fff' }}><option>Todos</option><option>Pessoas</option><option>RH</option></select></label>}<div style={{ fontSize: 12, color: COR.suave }}>{baixasAte ? `pagamentos arquivados até ${fmtData(baixasAte)}` : ''}</div></div>
         </div>
 
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
