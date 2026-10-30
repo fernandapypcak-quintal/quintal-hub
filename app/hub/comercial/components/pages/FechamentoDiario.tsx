@@ -90,7 +90,7 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
     function secaoMes(b: BlocoFD) {
       return `<div class="secao-mes">
         <h2>${esc(MESES_LONG[b.mesFechamento-1])}</h2>
-        ${b.mesEmCurso ? `<div class="sub" style="color:#8a7405;">Mês em curso — comparando dia 01 até ontem nos dois anos.</div>` : ''}
+        ${b.mesEmCurso ? `<div class="sub" style="color:#8a7405;">Mês em curso — comparando dia 01 até hoje nos dois anos.</div>` : ''}
         ${blocoAnoHtml(dados!.anoAnterior, b.mesFechamento, b.diasAnterior)}
         ${blocoAnoHtml(dados!.anoAtual, b.mesFechamento, b.diasAtual)}
         <table class="resumo">
@@ -196,7 +196,7 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
       </style>
     </head><body>
       <h1>Geral do ano · Fechamento</h1>
-      <div class="sub">Acumulado de 01/jan até ${esc(fmtDataBR(g.corteData))} (ontem), nos dois anos — comparação de ritmo, dia equivalente.</div>
+      <div class="sub">Acumulado de 01/jan até ${esc(fmtDataBR(g.corteData))} (hoje), nos dois anos — comparação de ritmo, dia equivalente.</div>
       <div class="anos">
         <div><div class="ano-label">${esc(String(dados.anoAnterior))}</div><div class="ano-valor" style="color:#8a8c8f;">${esc(fmt(g.acumuladoAnterior))}</div></div>
         <div><div class="ano-label">${esc(String(dados.anoAtual))}</div><div class="ano-valor" style="color:#185FA5;">${esc(fmt(g.acumuladoAtual))}</div></div>
@@ -238,7 +238,7 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
             <span style={{ fontSize: 15, fontWeight: 700 }}>Geral do ano · Fechamento</span>
             <button onClick={imprimirGeral} style={botaoPill}>🖨 Imprimir</button>
           </div>
-          <div style={{ fontSize: 11, color: '#9a9c9f', marginBottom: 14 }}>Acumulado de 01/jan até {fmtDataBR(dados.geralAno.corteData)} (ontem), nos dois anos — comparação de ritmo, dia equivalente.</div>
+          <div style={{ fontSize: 11, color: '#9a9c9f', marginBottom: 14 }}>Acumulado de 01/jan até {fmtDataBR(dados.geralAno.corteData)} (hoje), nos dois anos — comparação de ritmo, dia equivalente.</div>
           <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'baseline', marginBottom: 16 }}>
             <div>
               <div style={{ fontSize: 11, color: '#9a9c9f' }}>{dados.anoAnterior}</div>
@@ -359,7 +359,7 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
               <div style={{ fontSize: 13, fontWeight: 700, marginBottom: bloco.mesEmCurso ? 2 : 10 }}>{MESES_LONG[bloco.mesFechamento-1]}</div>
               {bloco.mesEmCurso && (
                 <div style={{ fontSize: 11, color: '#8a7405', marginBottom: 10 }}>
-                  Mês em curso — comparando dia 01 até ontem nos dois anos, pra não comparar um mês cheio com um pela metade.
+                  Mês em curso — comparando dia 01 até hoje nos dois anos, pra não comparar um mês cheio com um pela metade.
                 </div>
               )}
               {(() => {
