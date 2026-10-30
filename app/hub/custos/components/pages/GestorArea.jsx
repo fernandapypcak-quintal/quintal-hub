@@ -8,6 +8,7 @@ import Projecao, { calcularProjecao, opcoesDeMes } from '../ui/Projecao.jsx'
 import NotasEmAberto from '../ui/NotasEmAberto.jsx'
 import ResumoBU from '../ui/ResumoBU.jsx'
 import PessoalVisao from '../ui/PessoalVisao.jsx'
+import MaioresGastos from '../ui/MaioresGastos.jsx'
 
 // v27.3 — "Minha área": tudo pelo MÊS DO PAGAMENTO. O que a área pagou (com
 // e sem nota), fixo e variável, de onde veio a diferença, a lista de
@@ -129,6 +130,8 @@ export default function GestorArea({ areas }) {
 
       {/* v27.21: a BU numa linha do tempo (não depende do filtro de mês) */}
       {g.mes_atual && <ResumoBU key={'rbu-' + bu} bu={bu} mesAtual={g.mes_atual} pago={g.pago} aPagarMes={g.a_pagar_mes || []} receita={g.receita || []} />}
+
+      <MaioresGastos key={'mg-' + bu} bu={bu} />
 
       {bu === 'Pessoal' && g.mes_atual && <PessoalVisao pessoalSub={g.pessoal_sub || []} mesAtual={g.mes_atual} />}
 
