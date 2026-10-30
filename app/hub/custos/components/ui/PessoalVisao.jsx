@@ -11,9 +11,19 @@ import { COR, num, useCarga, Carregando } from './nf.jsx'
 const Cap = s => (s ? s[0].toUpperCase() + s.slice(1) : '')
 const soma = (arr, f) => (arr || []).filter(f).reduce((t, x) => t + (x.valor || 0), 0)
 
-export default function PessoalVisao({ pessoalSub, mesAtual }) {
+const CATS_PESSOAS = ['FOLHA', 'ENCARGOS', 'BENEFICIOS', 'BENEFÍCIOS', 'COMISSOES', 'COMISSÕES', 'RESCISAO', 'RESCISÃO']
+
+export default function PessoalVisao({ pessoalSub: subOrig, pagoCat = [], mesAtual }) {
   const ant = mesAnteriorISO(mesAtual)
   const meses = [mesAnteriorISO(ant), ant, mesAtual]
+  // v27.22: mês sem a separação pronta (cache antigo, ou o mês acabou de começar) → monta pelas categorias de Pessoal
+  const pessoalSub = [...(subOrig || [])]
+  meses.forEach(m => {
+    if (pessoalSub.some(x => x.mes === m)) return
+    pagoCat.filter(x => x.bu === 'Pessoal' && x.mes === m).forEach(x => {
+      pessoalSub.push({ mes: m, sub: CATS_PESSOAS.includes(String(x.categoria).toUpperCase()) ? 'Pessoas' : 'RH', categoria: x.categoria, valor: x.valor })
+    })
+  })
   const c = useCarga(() => loadLancamentos('Pessoal', true), [])
 
   const bloco = (sub, explica) => {
@@ -26,7 +36,7 @@ export default function PessoalVisao({ pessoalSub, mesAtual }) {
       <div style={{ flex: '1 1 380px', minWidth: 0 }}>
         <div style={{ display: 'grid', gridTemplateColumns: grid, gap: 8, alignItems: 'end', borderBottom: `1.5px solid ${COR.texto}`, paddingBottom: 6 }}>
           <div><div style={{ fontSize: 14, fontWeight: 600 }}>{sub}</div><div style={{ fontSize: 11, color: COR.suave }}>{explica}</div></div>
-          {meses.map(m => <div key={m} style={{ textAlign: 'right', fontSize: 12, color: m === mesAtual ? '#4F6B14' : COR.suave, fontWeight: 600 }}>{Cap(mesNome(m).substring(0, 3))}{m === mesAtual ? ' (até agora)' : ''}</div>)}
+          {meses.map(m => <div key={m} style={{ textAlign: 'right', fontSize: 12, color: m === mesAtual ? '#4F6B14' : COR.suave, fontWeight: 600, background: m === mesAtual ? '#F4F8EC' : 'transparent', borderRadius: 4, padding: '0 4px' }}>{m === mesAtual && <div style={{ fontSize: 9, letterSpacing: 0.3 }}>MÊS ATUAL</div>}{Cap(mesNome(m).substring(0, 3))}{m === mesAtual ? ' (até agora)' : ''}</div>)}
         </div>
         {cats.map(x => (
           <div key={x.cat} style={{ display: 'grid', gridTemplateColumns: grid, gap: 8, padding: '6px 0', borderBottom: '0.5px solid #F0F0EC', fontSize: 13 }}>
@@ -66,7 +76,7 @@ export default function PessoalVisao({ pessoalSub, mesAtual }) {
           <div style={{ overflowX: 'auto' }}>
             <div style={{ minWidth: 520 }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 1fr) repeat(3, 120px)', gap: 8, fontSize: 12, color: COR.suave, padding: '6px 0', borderBottom: `0.5px solid ${COR.borda}` }}>
-                <div>Área</div>{meses.map(m => <div key={m} style={{ textAlign: 'right' }}>{Cap(mesNome(m))}</div>)}
+                <div>Área</div>{meses.map(m => <div key={m} style={{ textAlign: 'right', color: m === mesAtual ? '#4F6B14' : COR.suave, fontWeight: m === mesAtual ? 600 : 400 }}>{Cap(mesNome(m))}{m === mesAtual ? ' · atual' : ''}</div>)}
               </div>
               {areas.map(a => (
                 <div key={a.bu} style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 1fr) repeat(3, 120px)', gap: 8, padding: '7px 0', borderBottom: '0.5px solid #F0F0EC', fontSize: 13 }}>

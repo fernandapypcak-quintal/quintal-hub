@@ -47,7 +47,8 @@ export default function NotasEmAberto({ aPagarMes, mesAtual, bus, corBU, renderD
             <div style={{ display: 'grid', gridTemplateColumns: grid, gap: 10, fontSize: 12, color: COR.suave, padding: '6px 4px', borderBottom: `0.5px solid ${COR.borda}`, alignItems: 'end' }}>
               <div>{variasAreas ? 'Área' : ''}</div>
               {cols.map(c => (
-                <div key={c.id} style={{ textAlign: 'right' }}>
+                <div key={c.id} style={{ textAlign: 'right', ...(c.id === mesAtual ? { background: '#F4F8EC', borderRadius: 6, padding: '2px 6px' } : {}) }}>
+                  {c.id === mesAtual && <div style={{ display: 'inline-block', fontSize: 10, fontWeight: 700, letterSpacing: 0.3, color: '#fff', background: '#4F6B14', borderRadius: 4, padding: '1px 6px', marginBottom: 2 }}>MÊS ATUAL</div>}
                   <div style={{ color: COR.texto, fontWeight: 600 }}>{c.label}</div>
                   {c.sub && <div style={{ fontSize: 11 }}>{c.sub}</div>}
                 </div>

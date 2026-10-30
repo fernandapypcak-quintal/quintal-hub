@@ -3,7 +3,6 @@ import { AREAS_CUSTOS } from '@/lib/bus'
 import { loadDRE } from '../../data/loader.js'
 import { fmtK, fmtData, mesISOLabel, mesNome, mesNomeCurto } from '../../utils.js'
 import { COR, num, Carregando, Erro, Vazio, useCarga, botaoSecundario, exportarExcel, BotaoExportar } from './nf.jsx'
-import { filtrarVisaoPessoal } from '../../data/visaoPessoal.js'
 
 // v27.7 — DRE de custos: área > tipo de gasto > fornecedor.
 // Colunas: 3 meses fechados + mês atual (pago até agora + notas a pagar no mês = total).
@@ -41,14 +40,14 @@ function montarArvore(d) {
   return { lista, geral, m0, m1, m2, mAtual }
 }
 
-export default function DRECustos({ bu = '', comSeletor = false, visaoPessoal = 'Todos', onVisaoPessoal = undefined }) {
+export default function DRECustos({ bu = '', comSeletor = false }) {
   const [area, setArea] = useState('Todas')
   const alvo = comSeletor ? area : bu
   const c = useCarga(() => loadDRE({ bu: alvo }), [alvo])
   const [abertos, setAbertos] = useState({})
   const [verTodos, setVerTodos] = useState({})
 
-  const arv = useMemo(() => { if (!c.dados || c.dados.meses.length !== 4) return null; if (!/pessoal/i.test(alvo) || visaoPessoal === 'Todos') return montarArvore(c.dados); const dados = { ...c.dados, pago: filtrarVisaoPessoal(c.dados.pago, visaoPessoal), a_pagar: filtrarVisaoPessoal(c.dados.a_pagar, visaoPessoal) }; return montarArvore(dados) }, [c.dados, alvo, visaoPessoal])
+  const arv = useMemo(() => (c.dados && c.dados.meses.length === 4 ? montarArvore(c.dados) : null), [c.dados])
   const toggle = k => setAbertos(a => ({ ...a, [k]: !a[k] }))
   const unicaArea = arv && arv.lista.length === 1
   const aberto = (k, nivel) => (abertos[k] !== undefined ? abertos[k] : nivel === 0 && unicaArea)
@@ -111,7 +110,6 @@ export default function DRECustos({ bu = '', comSeletor = false, visaoPessoal = 
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          {onVisaoPessoal && <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, color: COR.suave }}>Visão de pessoal <select value={visaoPessoal} onChange={e => onVisaoPessoal(e.target.value)} style={{ ...botaoSecundario, padding: '7px 10px', fontSize: 13 }}><option>Todos</option><option>Pessoas</option><option>RH</option></select></label>}
           {comSeletor && (
             <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, color: COR.suave }}>Área
               <select value={area} onChange={e => { setArea(e.target.value); setAbertos({}) }} style={{ ...botaoSecundario, padding: '7px 10px', fontSize: 13 }}>
@@ -135,7 +133,7 @@ export default function DRECustos({ bu = '', comSeletor = false, visaoPessoal = 
                 <div style={{ textAlign: 'right' }}>{mesISOLabel(arv.m0)}</div>
                 <div style={{ textAlign: 'right' }}>{mesISOLabel(arv.m1)}</div>
                 <div style={{ textAlign: 'right' }}>{mesISOLabel(arv.m2)}</div>
-                <div style={{ textAlign: 'right' }}>{mesISOLabel(arv.mAtual)} pago</div>
+                <div style={{ textAlign: 'right', background: '#F4F8EC', borderRadius: 4, padding: '0 4px' }}><div style={{ fontSize: 9, fontWeight: 700, color: '#4F6B14', letterSpacing: 0.3 }}>MÊS ATUAL</div>{mesISOLabel(arv.mAtual)} pago</div>
                 <div style={{ textAlign: 'right' }}>{mesISOLabel(arv.mAtual)} a pagar</div>
                 <div style={{ textAlign: 'right', color: COR.texto, fontWeight: 600 }}>{mesISOLabel(arv.mAtual)} total</div>
                 <div style={{ textAlign: 'right' }}>{mesISOLabel(arv.mAtual).split('/')[0]} vs {mesISOLabel(arv.m2).split('/')[0].toLowerCase()}</div>
