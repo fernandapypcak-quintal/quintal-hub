@@ -129,11 +129,11 @@ export default function GestorArea({ areas }) {
       {seletorArea && <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>{seletorArea}</div>}
 
       {/* v27.21: a BU numa linha do tempo (não depende do filtro de mês) */}
-      {g.mes_atual && <ResumoBU key={'rbu-' + bu} bu={bu} mesAtual={g.mes_atual} pago={g.pago} aPagarMes={g.a_pagar_mes || []} receita={g.receita || []} />}
+      {g.mes_atual && <ResumoBU key={'rbu-' + bu} bu={bu} mesAtual={g.mes_atual} pago={g.pago} aPagarMes={g.a_pagar_mes || []} receita={g.receita || []} entrou={g.entrou || []} semNfComp={g.sem_nf_comp || []} />}
 
       <MaioresGastos key={'mg-' + bu} bu={bu} />
 
-      {bu === 'Pessoal' && g.mes_atual && <PessoalVisao pessoalSub={g.pessoal_sub || []} mesAtual={g.mes_atual} />}
+      {bu === 'Pessoal' && g.mes_atual && <PessoalVisao pessoalSub={g.pessoal_sub || []} pagoCat={g.pago_cat || []} mesAtual={g.mes_atual} />}
 
       {g.mes_atual && (
         <NotasEmAberto aPagarMes={g.a_pagar_mes || []} mesAtual={g.mes_atual} bus={[bu]}
