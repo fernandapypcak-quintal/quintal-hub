@@ -22,10 +22,11 @@ export async function GET(req: NextRequest) {
     // Gestor de área (access.bus = lista) só chama os endpoints da página
     // "Minha área", e sempre de uma área dele.
     if (access.bus !== '*') {
-      const PERMITIDOS = ['gestor', 'nf_lista', 'pagamentos_bu', 'registrar_divergencia_bu', 'registrar_obs_nf', 'bus', 'dre', 'receitas_lista', 'fornecedores_bu', 'lancamentos', 'registrar_lancamento', 'registrar_excluir_lancamento']
+      const PERMITIDOS = ['gestor', 'nf_lista', 'pagamentos_bu', 'registrar_divergencia_bu', 'registrar_obs_nf', 'bus', 'dre', 'receitas_lista', 'fornecedores_bu', 'lancamentos', 'registrar_lancamento', 'registrar_excluir_lancamento', 'report_gestor']
       if (!PERMITIDOS.includes(tipo)) return NextResponse.json({ erro: 'Acesso negado' }, { status: 403 })
       const areaPedida = tipo === 'registrar_divergencia_bu' ? searchParams.get('bu_atual') : searchParams.get('bu')
-      if (tipo !== 'bus' && (!areaPedida || !access.bus.includes(areaPedida))) {
+      // report_gestor: só totais por área, sem detalhe — liberado pra qualquer gestor
+      if (tipo !== 'bus' && tipo !== 'report_gestor' && (!areaPedida || !access.bus.includes(areaPedida))) {
         return NextResponse.json({ erro: 'Acesso negado a essa área' }, { status: 403 })
       }
     } else if (access.lojas !== '*') {
