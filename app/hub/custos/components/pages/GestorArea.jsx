@@ -6,8 +6,8 @@ import { COR, num, Busca, Carregando, Erro, Vazio, useCarga, botaoSecundario, ex
 import DRECustos from '../ui/DRECustos.jsx'
 import Projecao, { calcularProjecao, opcoesDeMes } from '../ui/Projecao.jsx'
 import NotasEmAberto from '../ui/NotasEmAberto.jsx'
-import BUApresentacao from '../ui/BUApresentacao.jsx'
-import { filtrarVisaoPessoal } from '../../data/visaoPessoal.js'
+import ResumoBU from '../ui/ResumoBU.jsx'
+import PessoalVisao from '../ui/PessoalVisao.jsx'
 
 // v27.3 — "Minha área": tudo pelo MÊS DO PAGAMENTO. O que a área pagou (com
 // e sem nota), fixo e variável, de onde veio a diferença, a lista de
@@ -29,8 +29,6 @@ function ChipVar({ p, mesAnt }) {
 export default function GestorArea({ areas }) {
   const lista = areas && areas.length ? areas : [...AREAS_CUSTOS]
   const [bu, setBu] = useState(lista[0])
-  const [visaoPessoal, setVisaoPessoal] = useState('Todos')
-  const ehBUDoPessoal = /pessoal/i.test(bu)
   const [mesEscolhido, setMesEscolhido] = useState('')
   const [focoLista, setFocoLista] = useState({ aba: '', n: 0 })   // clique em "Notas a pagar" abre a lista certa
   const verNotasAPagar = () => {
@@ -51,11 +49,25 @@ export default function GestorArea({ areas }) {
   const mes = tipoSel === 'fechado' ? mesSel : mesPadrao   // mês usado nos blocos de mês fechado
   const ant = mesAnteriorISO(mes)
 
+  const seletorArea = lista.length > 1 && (
+    <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, color: COR.suave }}>Área
+      <select value={bu} onChange={e => setBu(e.target.value)} style={{ ...botaoSecundario, padding: '7px 10px', fontSize: 13 }}>
+        {lista.map(a => <option key={a} value={a}>{a}</option>)}
+      </select>
+    </label>
+  )
+  const seletorMes = meses.length > 0 && (
+    <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, color: COR.suave }}>Mês
+      <select value={mesSel} onChange={e => setMesEscolhido(e.target.value)} style={{ ...botaoSecundario, padding: '7px 10px', fontSize: 13, fontWeight: 600, minWidth: 220 }}>
+        {(opcoes.length ? opcoes : fechados.map(m => ({ mes: m, label: mesNomeCurto(m) }))).map(o => <option key={o.mes} value={o.mes}>{o.label}</option>)}
+      </select>
+    </label>
+  )
   const barraFiltros = (
     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
       {lista.length > 1 && (
         <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, color: COR.suave }}>Área
-          <select value={bu} onChange={e => { setBu(e.target.value); setVisaoPessoal('Todos') }} style={{ ...botaoSecundario, padding: '7px 10px', fontSize: 13 }}>
+          <select value={bu} onChange={e => setBu(e.target.value)} style={{ ...botaoSecundario, padding: '7px 10px', fontSize: 13 }}>
             {lista.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
         </label>
@@ -113,37 +125,28 @@ export default function GestorArea({ areas }) {
 
   return (
     <div style={{ padding: '20px 20px 48px', display: 'flex', flexDirection: 'column', gap: 22, maxWidth: 1180, width: '100%', boxSizing: 'border-box', margin: '0 auto' }}>
-      {barraFiltros}
+      {seletorArea && <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>{seletorArea}</div>}
 
-      <section aria-label="Como usar esta visão" style={{ border: `1px solid ${COR.borda}`, borderRadius: 12, padding: 16, background: '#FAFAF6', display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div style={{ fontSize: 14, fontWeight: 700 }}>Como usar esta visão</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 600 }}>1. Confira os custos</div>
-            <div style={{ fontSize: 12, color: COR.suave, lineHeight: 1.5 }}>“Pago no mês” considera a data do pagamento. Abra as categorias e os fornecedores na DRE para entender de onde vem o valor.</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 600 }}>2. Confira as notas pendentes</div>
-            <div style={{ fontSize: 12, color: COR.suave, lineHeight: 1.5 }}>“Notas não pagas” e “A pagar” são compromissos em aberto; não some esses valores novamente ao total já pago.</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 600 }}>3. Registre o que a área gerou</div>
-            <div style={{ fontSize: 12, color: COR.suave, lineHeight: 1.5 }}>No bloco “BU {bu}”, registre receita extra, economia ou folha complementar. Não registre o faturamento normal da operação como receita extra.</div>
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button type="button" onClick={verNotasAPagar} style={{ ...botaoSecundario, minHeight: 34 }}>Ver notas a pagar</button>
-          <button type="button" onClick={() => document.getElementById('bu-tit')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} style={{ ...botaoSecundario, minHeight: 34 }}>Registrar receita ou economia</button>
-        </div>
-      </section>
+      {/* v27.21: a BU numa linha do tempo (não depende do filtro de mês) */}
+      {g.mes_atual && <ResumoBU key={'rbu-' + bu} bu={bu} mesAtual={g.mes_atual} pago={g.pago} aPagarMes={g.a_pagar_mes || []} receita={g.receita || []} />}
+
+      {bu === 'Pessoal' && g.mes_atual && <PessoalVisao pessoalSub={g.pessoal_sub || []} mesAtual={g.mes_atual} />}
 
       {g.mes_atual && (
         <NotasEmAberto aPagarMes={g.a_pagar_mes || []} mesAtual={g.mes_atual} bus={[bu]}
           titulo={`Notas em aberto de ${bu} por mês de pagamento`}
           renderDetalhe={(b, m, ehAtual) => (
-            <ListasArea key={b + m} bu={b} mes={g.mes_atual} mesPrevisto={ehAtual ? '' : m} notasAte={ehAtual ? g.mes_atual : ''} abaInicial={ehAtual ? 'apagar' : 'abertas'} visaoPessoal={/pessoal/i.test(b) ? visaoPessoal : 'Todos'} />
+            <ListasArea key={b + m} bu={b} mes={g.mes_atual} mesPrevisto={ehAtual ? '' : m} notasAte={ehAtual ? g.mes_atual : ''} abaInicial={ehAtual ? 'apagar' : 'abertas'} />
           )} />
       )}
+
+      <div style={{ borderTop: `0.5px solid ${COR.borda}`, paddingTop: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 600 }}>Detalhe por mês</div>
+          <div style={{ fontSize: 12, color: COR.suave }}>Escolha o mês pra ver de onde vêm os números: o que foi pago, as notas, o que mudou.</div>
+        </div>
+        {seletorMes}
+      </div>
 
       {tipoSel !== 'fechado' && g.mes_atual && (
         <Projecao proj={calcularProjecao({ pago: g.pago, aPagarMes: g.a_pagar_mes || [], mesAtual: g.mes_atual, mesAlvo: mesSel, bus: [bu], receita: g.receita || [] })} baixasAte={g.baixas_ate}
@@ -254,11 +257,7 @@ export default function GestorArea({ areas }) {
 
       </>}
 
-      {tipoSel !== 'futuro' && (
-        <BUApresentacao key={bu + (tipoSel === 'fechado' ? mes : g.mes_atual)} bu={bu} mes={tipoSel === 'fechado' ? mes : g.mes_atual} pago={g.pago} receita={g.receita || []} />
-      )}
-
-      <DRECustos key={bu} bu={bu} visaoPessoal={ehBUDoPessoal ? visaoPessoal : 'Todos'} onVisaoPessoal={ehBUDoPessoal ? setVisaoPessoal : undefined} />
+      <DRECustos key={bu} bu={bu} />
 
       <ListasArea key={bu + mesSel + focoLista.n} bu={bu} mes={tipoSel === 'fechado' ? mes : g.mes_atual}
         mesPrevisto={tipoSel === 'futuro' ? mesSel : ''} notasAte={tipoSel === 'atual' ? g.mes_atual : ''} abaInicial={focoLista.aba}
@@ -274,7 +273,7 @@ const elipse = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowr
 
 // mesPrevisto (mês futuro): mostra só as notas com previsão de pagamento naquele mês
 // notasAte (mês atual): habilita a aba "Notas a pagar em <mês>" (previsão até o fim do mês)
-export function ListasArea({ bu, mes, semRevisao = false, mesPrevisto = '', notasAte = '', abaInicial = '', temReceita = false, visaoPessoal = 'Todos' }) {
+export function ListasArea({ bu, mes, semRevisao = false, mesPrevisto = '', notasAte = '', abaInicial = '', temReceita = false }) {
   const [aba, setAba] = useState(abaInicial || (mesPrevisto ? 'abertas' : 'pagos'))
   const [busca, setBusca] = useState('')
   const [limite, setLimite] = useState(100)
@@ -285,8 +284,7 @@ export function ListasArea({ bu, mes, semRevisao = false, mesPrevisto = '', nota
   const atual = aba === 'pagos' ? pagos : abertas
   const ehNota = aba !== 'pagos'
   const b = busca.trim().toUpperCase()
-  const baseBruta = (atual.dados || []).map(l => ehNota ? { ...l, emAberto: Math.max(0, l.valor - (l.valor_pago || 0)) } : l)
-  const base = /pessoal/i.test(bu) ? filtrarVisaoPessoal(baseBruta, visaoPessoal) : baseBruta
+  const base = (atual.dados || []).map(l => ehNota ? { ...l, emAberto: Math.max(0, l.valor - (l.valor_pago || 0)) } : l)
   const linhas = base
     .filter(l => !b || [l.fornecedor, l.documento, l.nf_documento, l.descricao, l.categoria, l.item_principal].some(v => String(v || '').toUpperCase().includes(b)))
     .sort((x, y) => ehNota ? String(x.prev_pagto || '9').localeCompare(String(y.prev_pagto || '9')) || String(x.dt_dig).localeCompare(String(y.dt_dig)) : y.valor - x.valor)

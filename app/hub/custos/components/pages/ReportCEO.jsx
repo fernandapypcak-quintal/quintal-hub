@@ -5,7 +5,7 @@ import { COR, num, Vazio, SemDadosNF, botaoSecundario } from '../ui/nf.jsx'
 import { ListasArea } from './GestorArea.jsx'
 import CaixaTotal from '../ui/CaixaTotal.jsx'
 import NotasEmAberto from '../ui/NotasEmAberto.jsx'
-import { BUsDoMes } from '../ui/BUApresentacao.jsx'
+import { ResumoBUs } from '../ui/ResumoBU.jsx'
 import Projecao, { calcularProjecao, opcoesDeMes } from '../ui/Projecao.jsx'
 
 // v27.2 — Report do mês pro CEO: o grupo inteiro numa página, com
@@ -279,10 +279,6 @@ function ReportFechado({ mesFixo } = {}) {
         )}
       </section>
 
-      <BUsDoMes mes={mes} pago={nfResumo.pago || []} corBU={corBU}
-        receita={(nfResumo.receita || []).filter(x => !['Fora', 'Faturamento', 'Revisar'].includes(x.bu))}
-        bus={(busConfig.length ? busConfig.map(b => b.bu) : [...new Set((nfResumo.pago || []).map(x => x.bu))]).filter(b => grupoBU(b) !== 'Fora dos totais' && b !== 'Revisar')} />
-
       {r.cats.length > 0 && (
         <section aria-labelledby="ceo-tipo" style={{ ...card, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div>
@@ -416,6 +412,13 @@ export default function ReportCEO() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {/* v27.21: as BUs numa linha do tempo (gastos e receitas) — não depende do filtro de mês */}
+      <div style={{ padding: '20px 20px 0', maxWidth: 1180, width: '100%', boxSizing: 'border-box', margin: '0 auto' }}>
+        <ResumoBUs mesAtual={mesAtual} pago={nfResumo.pago || []} aPagarMes={nfResumo.a_pagar_mes || []} corBU={corBU}
+          receita={(nfResumo.receita || []).filter(x => !['Fora', 'Faturamento', 'Revisar'].includes(x.bu))}
+          bus={(busConfig.length ? busConfig.map(b => b.bu) : [...new Set((nfResumo.pago || []).map(x => x.bu))]).filter(b => grupoBU(b) !== 'Fora dos totais')} />
+      </div>
+
       {/* v27.17: notas em aberto por área × mês de pagamento — não depende do filtro de mês */}
       <div style={{ padding: '20px 20px 0', maxWidth: 1180, width: '100%', boxSizing: 'border-box', margin: '0 auto' }}>
         <NotasEmAberto aPagarMes={nfResumo.a_pagar_mes || []} mesAtual={mesAtual} corBU={corBU}
