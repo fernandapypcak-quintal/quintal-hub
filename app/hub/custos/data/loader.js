@@ -186,6 +186,7 @@ function parseNFResumo(r) {
     pago_cat:     arr(r.pago_cat).map(e => ({ ...e, valor: num(e.valor) })),
     caixa_fora:   arr(r.caixa_fora).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
     a_pagar_mes:  arr(r.a_pagar_mes).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
+    sem_nf_comp:  arr(r.sem_nf_comp).map(e => ({ ...e, valor: num(e.valor) })),
     receita:      arr(r.receita).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
     aberto_desde: r.aberto_desde || '',
     mes_atual:    r.mes_atual || '',
@@ -243,6 +244,7 @@ export async function loadGestor(bu) {
     a_pagar_mes: arr(d.a_pagar_mes).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
     receita: arr(d.receita).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
     pessoal_sub: arr(d.pessoal_sub).map(e => ({ ...e, valor: num(e.valor) })),
+    sem_nf_comp: arr(d.sem_nf_comp).map(e => ({ ...e, valor: num(e.valor) })),
     aberto_desde: d.aberto_desde || '', mes_atual: d.mes_atual || '',
   }
 }
@@ -328,6 +330,21 @@ export async function excluirLancamento({ id, bu }) {
     const d = await fetchComParametros({ tipo: 'registrar_excluir_lancamento', id, bu }, 20000)
     return !!(d && d.ok)
   } catch (e) { return false }
+}
+
+// v27.22 — report do mês pros gestores (só totais por área, sem detalhe)
+export async function loadReportGestor() {
+  const d = await fetchComParametros({ tipo: 'report_gestor' }, 45000)
+  const arr = x => Array.isArray(x) ? x : []
+  const n = e => ({ ...e, valor: Number(e.valor || 0) })
+  return {
+    mes_atual: d.mes_atual || '', baixas_ate: d.baixas_ate || '',
+    pago: arr(d.pago).map(e => ({ ...n(e), valor_com_nf: Number(e.valor_com_nf || 0) })),
+    entrou: arr(d.entrou).map(n), sem_nf_comp: arr(d.sem_nf_comp).map(n),
+    a_pagar_mes: arr(d.a_pagar_mes).map(e => ({ ...n(e), qtd: Number(e.qtd || 0) })),
+    receita: arr(d.receita).map(n), lancamentos: arr(d.lancamentos).map(e => ({ ...n(e), qtd: Number(e.qtd || 0) })),
+    bus: arr(d.bus),
+  }
 }
 
 // Tela de conciliação. mes: '2026-09' (vazio = tudo)
