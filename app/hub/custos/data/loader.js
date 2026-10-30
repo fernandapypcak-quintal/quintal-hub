@@ -242,6 +242,7 @@ export async function loadGestor(bu) {
     aberto: arr(d.aberto).map(e => ({ ...e, valor: num(e.valor), vencido: num(e.vencido), qtd: num(e.qtd), qtd_vencido: num(e.qtd_vencido) })),
     a_pagar_mes: arr(d.a_pagar_mes).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
     receita: arr(d.receita).map(e => ({ ...e, valor: num(e.valor), qtd: num(e.qtd) })),
+    pessoal_sub: arr(d.pessoal_sub).map(e => ({ ...e, valor: num(e.valor) })),
     aberto_desde: d.aberto_desde || '', mes_atual: d.mes_atual || '',
   }
 }
@@ -309,9 +310,10 @@ export async function loadFornecedoresBU(bu) {
 }
 
 // v27.19 — lançamentos do gestor: pessoal da área, receita gerada, economia
-export async function loadLancamentos(bu) {
+export async function loadLancamentos(bu, soPessoal = false) {
   const p = { tipo: 'lancamentos' }
   if (bu) p.bu = bu
+  if (soPessoal) p.so_pessoal = '1'   // BU Pessoal: folha informada por todas as áreas
   const d = await fetchComParametros(p)
   return Array.isArray(d) ? d.map(r => ({ ...r, valor: Number(r.valor || 0), qtd: Number(r.qtd || 0) })) : []
 }
