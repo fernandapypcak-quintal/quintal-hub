@@ -151,6 +151,7 @@ export type PeriodoMes = {
   mes: string; leads: number; won: number; taxaConversao: number
   receitaFechamento: number; receitaCompetencia: number
   pax: number; ticketMedio: number; ticketMedioPax: number; ticketMedioCompetencia: number
+  competenciaEmAberto: boolean; competenciaCorteData: string | null
 }
 export type SerieFaturamento = PeriodoMes & { periodo: string; label: string }
 export type AnoCompleto = { ano: number; meses: (PeriodoMes & { mes: number; label: string })[] }
@@ -290,7 +291,10 @@ export function useFunilProdutividade(filtros: Pick<Filtros, 'unidade' | 'vended
 }
 
 export function usePorLojaDetalhe(filtros: Pick<Filtros, 'unidade' | 'vendedor'>, mesFiltro: string) {
-  const [dados, setDados] = useState<{ mes: string; diaCorte: number | null; ehMesCorrente: boolean; lojas: any[] } | null>(null)
+  const [dados, setDados] = useState<{
+    mes: string; diaCorte: number | null; ehMesCorrente: boolean; lojas: any[]
+    competenciaEmAberto: boolean; competenciaCorteData: string | null
+  } | null>(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
 
@@ -408,6 +412,34 @@ export function useFechamentoDiarioCompetencia(
       .finally(() => setLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtros.unidade, filtros.vendedor, ano, mesesKey, competenciaKey])
+
+  return { dados, loading, erro }
+}
+
+export type LojaCompetenciaAno = { loja: string; totalAtual: number; totalAnterior: number; yoy: number | null }
+export type CompetenciaAnoPorLojaData = {
+  anoAtual: number; anoAnterior: number; lojas: LojaCompetenciaAno[]
+  totalGeralAtual: number; totalGeralAnterior: number; yoyGeral: number | null
+  aviso: string
+}
+
+export function useCompetenciaAnoPorLoja(filtros: Pick<Filtros, 'unidade' | 'vendedor'>, ano: string) {
+  const [dados, setDados] = useState<CompetenciaAnoPorLojaData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [erro, setErro] = useState<string | null>(null)
+
+  useEffect(() => {
+    setLoading(true); setErro(null)
+    const p = new URLSearchParams({ tipo: 'competencia_ano_por_loja', ano })
+    if (filtros.unidade)  p.set('unidade',  filtros.unidade)
+    if (filtros.vendedor) p.set('vendedor', filtros.vendedor)
+    fetch(`${GAS_URL}?${p}`)
+      .then(r => r.json())
+      .then(data => { if (data.erro) throw new Error(data.erro); setDados(data) })
+      .catch(e => setErro(e.message))
+      .finally(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtros.unidade, filtros.vendedor, ano])
 
   return { dados, loading, erro }
 }
