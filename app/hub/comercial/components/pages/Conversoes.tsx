@@ -139,7 +139,7 @@ function exportarExcel(deals: Deal[], inicio: string, fim: string) {
     const teveAditivo = d.teve_aditivo === 'SIM'
     return [
       d.empresa||d.titulo, d.contato, d.unidade_nome, fmtDate(d.data_evento),
-      fmtDate(d.won_time_efetivo || d.won_time),
+      fmtDate(d.won_time),
       teveAditivo ? 'Sim' : 'Não', teveAditivo ? String(parseFloat(String(d.valor_aditivo))||0) : '0',
       String(d.qtd_pessoas||''), String(d.valor||''),
       d.cardapio_nome, d.vendedor, d.forma_pgto_nome,
@@ -180,10 +180,10 @@ export default function Conversoes({ filtros }: { filtros: any }) {
       .finally(() => setLoading(false))
   }
 
-  // Agrupa por won_time_efetivo (fechamento REAL — corrigido quando teve
-  // aditivo; senão é igual ao won_time normal)
+  // Agrupa por won_time bruto — essa tela mostra o dado como está no
+  // Pipedrive, sem a correção de aditivo (ver nota no topo da página).
   const porDia: Record<string, Deal[]> = {}
-  deals.forEach(d => { const dia=String(d.won_time_efetivo||d.won_time||'').substring(0,10); if(!dia)return; if(!porDia[dia])porDia[dia]=[]; porDia[dia].push(d) })
+  deals.forEach(d => { const dia=String(d.won_time||'').substring(0,10); if(!dia)return; if(!porDia[dia])porDia[dia]=[]; porDia[dia].push(d) })
   const dias = Object.keys(porDia).sort((a,b)=>b.localeCompare(a))
 
   const receitaTotal = deals.reduce((s,d)=>s+(parseFloat(String(d.valor||0))||0),0)
@@ -285,6 +285,10 @@ export default function Conversoes({ filtros }: { filtros: any }) {
     <div style={{ padding: '20px' }}>
       {selected && <DealModal deal={selected} onClose={() => setSelected(null)} />}
 
+      <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: '12px 18px', fontSize: 11, color: '#9a9c9f', marginBottom: 16 }}>
+        ℹ️ Fechamento aqui é o dado <strong>bruto do Pipedrive</strong> — sem correção de aditivo. Pra ver com a correção (fechamento = data da assinatura original), use o <strong>Fechamento Diário</strong>.
+      </div>
+
       <PainelProjecaoConversao filtros={filtros} />
 
       {/* Filtros */}
@@ -330,7 +334,7 @@ export default function Conversoes({ filtros }: { filtros: any }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 }}>
             {[
               { label: 'Conversões', value: String(deals.length), sub: `${dias.length} dias`, color: '#3B6D11' },
-              { label: 'Receita (fechamento)', value: fmtBRL(receitaTotal), sub: 'fechamento real no período (sem aditivo)', color: '#185FA5' },
+              { label: 'Receita (fechamento)', value: fmtBRL(receitaTotal), sub: 'won_time bruto do Pipedrive, sem correção de aditivo', color: '#185FA5' },
               { label: 'Ticket médio', value: fmtBRL(deals.length ? receitaTotal/deals.length : 0), color: '#c9855a' },
               { label: 'Total pax', value: paxTotal.toLocaleString('pt-BR'), sub: 'pessoas', color: '#D9B504' },
             ].map(k => (
