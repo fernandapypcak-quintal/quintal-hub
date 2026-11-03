@@ -416,7 +416,8 @@ export function useFechamentoDiarioCompetencia(
   return { dados, loading, erro }
 }
 
-export type LojaCompetenciaAno = { loja: string; totalAtual: number; totalAnterior: number; yoy: number | null }
+export type MesCompetenciaLoja = { mes: number; atual: number; anterior: number }
+export type LojaCompetenciaAno = { loja: string; totalAtual: number; totalAnterior: number; yoy: number | null; porMes: MesCompetenciaLoja[] }
 export type CompetenciaAnoPorLojaData = {
   anoAtual: number; anoAnterior: number; lojas: LojaCompetenciaAno[]
   totalGeralAtual: number; totalGeralAnterior: number; yoyGeral: number | null
