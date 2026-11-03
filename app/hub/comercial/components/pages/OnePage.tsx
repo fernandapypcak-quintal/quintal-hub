@@ -849,12 +849,14 @@ function AditivosDoMes({ filtros, mesFiltro }: { filtros: any; mesFiltro: string
 function PainelCompetenciaAnoPorLoja({ filtros }: { filtros: any }) {
   const anoPadrao = parseInt(filtros.ano) || new Date().getFullYear()
   const [ano, setAno] = useState(anoPadrao)
+  const [lojaAberta, setLojaAberta] = useState<string | null>(null)
   const { dados, loading, erro } = useCompetenciaAnoPorLoja(filtros, String(ano))
 
   if (loading) return null
   if (erro || !dados || !Array.isArray(dados.lojas) || dados.lojas.length === 0) return null
 
   const maxAnterior = Math.max(...dados.lojas.map(l => l.totalAnterior), 1)
+  const MESES_ABREV_LOJA = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
 
   return (
     <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
@@ -879,28 +881,61 @@ function PainelCompetenciaAnoPorLoja({ filtros }: { filtros: any }) {
       {dados.lojas.map((l, i) => {
         const declinando = l.yoy !== null && l.yoy < 0
         const larguraBar = Math.max((l.totalAnterior / maxAnterior) * 100, l.totalAnterior > 0 ? 2 : 0)
+        const aberta = lojaAberta === l.loja
+        const maxMes = Math.max(...l.porMes.map(m => Math.max(m.atual, m.anterior)), 1)
         return (
-          <div key={l.loja} style={{
-            display: 'grid', gridTemplateColumns: '20px 1fr 90px 90px 90px', gap: 10, alignItems: 'center',
-            padding: '8px 6px', borderRadius: 8, marginBottom: 2,
-            background: declinando ? '#fdeef0' : 'transparent',
-          }}>
-            <span style={{ fontSize: 11, color: '#9a9c9f', fontFamily: 'DM Mono, monospace' }}>{String(i+1).padStart(2,'0')}</span>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: declinando ? '#a32d2d' : '#0D0F14', marginBottom: 4 }}>{l.loja}</div>
-              <div style={{ height: 10, background: '#F0F0EC', borderRadius: 5, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${larguraBar}%`, background: declinando ? '#a32d2d' : '#3B6D11', borderRadius: 5 }} />
+          <div key={l.loja}>
+            <div onClick={() => setLojaAberta(aberta ? null : l.loja)} style={{
+              display: 'grid', gridTemplateColumns: '20px 1fr 90px 90px 90px', gap: 10, alignItems: 'center',
+              padding: '8px 6px', borderRadius: 8, marginBottom: 2, cursor: 'pointer',
+              background: declinando ? '#fdeef0' : 'transparent',
+            }}>
+              <span style={{ fontSize: 11, color: '#9a9c9f', fontFamily: 'DM Mono, monospace' }}>{aberta ? '▾' : String(i+1).padStart(2,'0')}</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: declinando ? '#a32d2d' : '#0D0F14', marginBottom: 4 }}>{l.loja}</div>
+                <div style={{ height: 10, background: '#F0F0EC', borderRadius: 5, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${larguraBar}%`, background: declinando ? '#a32d2d' : '#3B6D11', borderRadius: 5 }} />
+                </div>
               </div>
+              <span style={{ fontSize: 12, color: '#9a9c9f', fontFamily: 'DM Mono, monospace', textAlign: 'right' }}>{fmtBRLCompacto(l.totalAnterior)}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'DM Mono, monospace', textAlign: 'right' }}>{fmtBRLCompacto(l.totalAtual)}</span>
+              <span style={{ textAlign: 'right' }}>
+                {l.yoy === null ? <span style={{ fontSize: 11, color: '#c9ccd1' }}>—</span> : (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: l.yoy >= 0 ? '#3B6D11' : '#a32d2d' }}>
+                    {l.yoy >= 0 ? '▲' : '▼'} {Math.abs(l.yoy).toFixed(1)}%
+                  </span>
+                )}
+              </span>
             </div>
-            <span style={{ fontSize: 12, color: '#9a9c9f', fontFamily: 'DM Mono, monospace', textAlign: 'right' }}>{fmtBRLCompacto(l.totalAnterior)}</span>
-            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'DM Mono, monospace', textAlign: 'right' }}>{fmtBRLCompacto(l.totalAtual)}</span>
-            <span style={{ textAlign: 'right' }}>
-              {l.yoy === null ? <span style={{ fontSize: 11, color: '#c9ccd1' }}>—</span> : (
-                <span style={{ fontSize: 11, fontWeight: 700, color: l.yoy >= 0 ? '#3B6D11' : '#a32d2d' }}>
-                  {l.yoy >= 0 ? '▲' : '▼'} {Math.abs(l.yoy).toFixed(1)}%
-                </span>
-              )}
-            </span>
+
+            {aberta && (
+              <div style={{ padding: '6px 6px 16px 34px', overflowX: 'auto' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 110 }}>
+                  {l.porMes.map(m => {
+                    const varMes = m.anterior > 0 ? ((m.atual-m.anterior)/m.anterior)*100 : null
+                    const caindoMes = varMes !== null && varMes < 0
+                    return (
+                      <div key={m.mes} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 44 }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 80 }}>
+                          <div title={`${dados.anoAnterior}: ${fmtBRLCompacto(m.anterior)}`}
+                            style={{ width: 16, height: `${Math.max((m.anterior/maxMes)*80, m.anterior>0?2:0)}px`, background: '#c9ccd1', borderRadius: '2px 2px 0 0' }} />
+                          <div title={`${ano}: ${fmtBRLCompacto(m.atual)}`}
+                            style={{ width: 16, height: `${Math.max((m.atual/maxMes)*80, m.atual>0?2:0)}px`, background: caindoMes ? '#a32d2d' : '#3B6D11', borderRadius: '2px 2px 0 0' }} />
+                        </div>
+                        <span style={{ fontSize: 9, color: '#9a9c9f' }}>{MESES_ABREV_LOJA[m.mes-1]}</span>
+                        <span style={{ fontSize: 9, fontWeight: 700, color: varMes === null ? '#c9ccd1' : (caindoMes ? '#a32d2d' : '#3B6D11') }}>
+                          {varMes === null ? '—' : `${varMes>=0?'+':''}${varMes.toFixed(0)}%`}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#8a8c8f' }}><span style={{ width: 8, height: 8, borderRadius: 2, background: '#c9ccd1', display: 'inline-block' }} />{dados.anoAnterior}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#5a5c5f' }}><span style={{ width: 8, height: 8, borderRadius: 2, background: '#3B6D11', display: 'inline-block' }} />{ano}</span>
+                </div>
+              </div>
+            )}
           </div>
         )
       })}
