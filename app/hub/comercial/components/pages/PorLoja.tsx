@@ -34,15 +34,24 @@ function PainelPorLojaDetalhe({ filtros }: { filtros: any }) {
   if (erro)    return <div style={{ padding: 20, background: '#fdeaea', borderRadius: 10, color: '#a32d2d', fontSize: 13 }}>Erro: {erro}</div>
   if (!dados || !dados.lojas) return null
 
-  const { lojas, diaCorte, ehMesCorrente } = dados
+  const { lojas, diaCorte, ehMesCorrente, competenciaEmAberto, competenciaCorteData } = dados
   const nomesMesesLong = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
   const nomeMes = nomesMesesLong[parseInt(mesFiltro.split('-')[1])-1]
+  function fmtDataCorteBR(iso: string | null) { if (!iso) return '—'; const [,m,d] = iso.split('-'); return `${d}/${m}` }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 20 }}>
+      <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 10, padding: '10px 14px', fontSize: 11, color: '#9a9c9f' }}>
+        ℹ️ Fechamento aqui é o dado bruto do Pipedrive — sem correção de aditivo. Use o Fechamento Diário pra ver com a correção (fechamento = data da assinatura original).
+      </div>
       {ehMesCorrente && diaCorte && (
         <div style={{ background: '#fffbe6', border: '0.5px solid #f0e0a0', borderRadius: 10, padding: '10px 14px', fontSize: 12, color: '#8a7405' }}>
           Comparações YoY cortadas no dia {diaCorte} — {nomeMes}/{mesFiltro.split('-')[0]} vs mesmo período do ano anterior. Tend Fat = projeção do mês cheio no ritmo atual.
+        </div>
+      )}
+      {competenciaEmAberto && (
+        <div style={{ background: '#fffbe6', border: '0.5px solid #f0e0a0', borderRadius: 10, padding: '10px 14px', fontSize: 12, color: '#8a7405' }}>
+          📖 {nomeMes}/{mesFiltro.split('-')[0]} ainda não aconteceu — o "YoY (comp.)" abaixo compara só o que já estava vendido até {fmtDataCorteBR(competenciaCorteData)} nos dois anos, não o total final de {parseInt(mesFiltro.split('-')[0])-1}.
         </div>
       )}
 
@@ -62,7 +71,7 @@ function PainelPorLojaDetalhe({ filtros }: { filtros: any }) {
                   <VarBadge v={l.yoy} />
                 </div>
                 <div>
-                  <div style={{ fontSize: 10, color: '#9a9c9f', marginBottom: 3 }}>YoY (comp.)</div>
+                  <div style={{ fontSize: 10, color: '#9a9c9f', marginBottom: 3 }}>YoY (comp.) {competenciaEmAberto ? `até ${fmtDataCorteBR(competenciaCorteData)}` : ''}</div>
                   <VarBadge v={l.yoyCompetencia} />
                 </div>
                 <div>

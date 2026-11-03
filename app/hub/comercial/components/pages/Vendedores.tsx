@@ -393,7 +393,7 @@ export default function Vendedores({ filtros }: { filtros: any }) {
     <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
       <div style={{ background: '#fffbe6', border: '0.5px solid #f0e0a0', borderRadius: 10, padding: '10px 14px', fontSize: 12, color: '#8a7405' }}>
-        <strong>Campos de data por seção:</strong> Leads/conversão de safra = criação do lead (add_time). Faturamento fechamento/ganhos no mês = won_time. Faturamento competência e comissão = mês de competência do evento (data_evento). Forecast/pipeline = mês do evento (data_evento) dos negócios ainda abertos. {!eventoRealizado && <strong> Mês de competência selecionado ainda não aconteceu — valores são de negócios já ganhos para um evento futuro.</strong>}
+        <strong>Campos de data por seção:</strong> Leads/conversão de safra = criação do lead (add_time). Faturamento fechamento/ganhos no mês = won_time (dado bruto do Pipedrive, sem correção de aditivo — um contrato reaberto e assinado de novo conta na data desse último fechamento, não na da assinatura original; pra ver com a correção, use o Fechamento Diário). Faturamento competência e comissão = mês de competência do evento (data_evento). Forecast/pipeline = mês do evento (data_evento) dos negócios ainda abertos. {!eventoRealizado && <strong> Mês de competência selecionado ainda não aconteceu — valores são de negócios já ganhos para um evento futuro.</strong>}
       </div>
 
       {/* Filtros locais SDR/Closer — agora conectados de verdade na busca, não só no front */}
