@@ -231,6 +231,10 @@ export default function FechamentoDiario({ filtros }: { filtros: any }) {
   return (
     <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1400, margin: '0 auto' }}>
 
+      <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: '12px 18px', fontSize: 11, color: '#9a9c9f' }}>
+        ℹ️ Aqui o fechamento já usa a <strong>correção de aditivo</strong> — um contrato reaberto e assinado de novo depois conta na data da <strong>assinatura original</strong>, não na data do aditivo. Por isso esses números podem não bater com o Resumo, que mostra o dado bruto do Pipedrive (sem essa correção).
+      </div>
+
       {/* Geral do ano */}
       {dados && dados.geralAno && (
         <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
