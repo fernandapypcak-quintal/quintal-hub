@@ -909,28 +909,32 @@ function PainelCompetenciaAnoPorLoja({ filtros }: { filtros: any }) {
             </div>
 
             {aberta && (
-              <div style={{ padding: '6px 6px 16px 34px', overflowX: 'auto' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 110 }}>
+              <div style={{ padding: '10px 6px 18px 34px', overflowX: 'auto' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, height: 160 }}>
                   {l.porMes.map(m => {
                     const varMes = m.anterior > 0 ? ((m.atual-m.anterior)/m.anterior)*100 : null
-                    const caindoMes = varMes !== null && varMes < 0
+                    const alturaBarra = (v: number) => v > 0 ? Math.max((v/maxMes)*90, 8) : 0
                     return (
-                      <div key={m.mes} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 44 }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 80 }}>
-                          <div title={`${dados.anoAnterior}: ${fmtBRLCompacto(m.anterior)}`}
-                            style={{ width: 16, height: `${Math.max((m.anterior/maxMes)*80, m.anterior>0?2:0)}px`, background: '#c9ccd1', borderRadius: '2px 2px 0 0' }} />
-                          <div title={`${ano}: ${fmtBRLCompacto(m.atual)}`}
-                            style={{ width: 16, height: `${Math.max((m.atual/maxMes)*80, m.atual>0?2:0)}px`, background: caindoMes ? '#a32d2d' : '#3B6D11', borderRadius: '2px 2px 0 0' }} />
+                      <div key={m.mes} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 54 }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 90 }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end' }}>
+                            <span style={{ fontSize: 9, color: '#9a9c9f', fontFamily: 'DM Mono, monospace', marginBottom: 2, whiteSpace: 'nowrap' }}>{m.anterior > 0 ? fmtBRLCompacto(m.anterior) : ''}</span>
+                            <div style={{ width: 18, height: `${alturaBarra(m.anterior)}px`, background: '#c9ccd1', borderRadius: '2px 2px 0 0' }} />
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end' }}>
+                            <span style={{ fontSize: 9, fontWeight: 700, color: '#3B6D11', fontFamily: 'DM Mono, monospace', marginBottom: 2, whiteSpace: 'nowrap' }}>{m.atual > 0 ? fmtBRLCompacto(m.atual) : ''}</span>
+                            <div style={{ width: 18, height: `${alturaBarra(m.atual)}px`, background: '#3B6D11', borderRadius: '2px 2px 0 0' }} />
+                          </div>
                         </div>
-                        <span style={{ fontSize: 9, color: '#9a9c9f' }}>{MESES_ABREV_LOJA[m.mes-1]}</span>
-                        <span style={{ fontSize: 9, fontWeight: 700, color: varMes === null ? '#c9ccd1' : (caindoMes ? '#a32d2d' : '#3B6D11') }}>
+                        <span style={{ fontSize: 10, color: '#9a9c9f', fontWeight: 600 }}>{MESES_ABREV_LOJA[m.mes-1]}</span>
+                        <span style={{ fontSize: 9, fontWeight: 700, color: varMes === null ? '#c9ccd1' : (varMes < 0 ? '#a32d2d' : '#3B6D11') }}>
                           {varMes === null ? '—' : `${varMes>=0?'+':''}${varMes.toFixed(0)}%`}
                         </span>
                       </div>
                     )
                   })}
                 </div>
-                <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+                <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#8a8c8f' }}><span style={{ width: 8, height: 8, borderRadius: 2, background: '#c9ccd1', display: 'inline-block' }} />{dados.anoAnterior}</span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#5a5c5f' }}><span style={{ width: 8, height: 8, borderRadius: 2, background: '#3B6D11', display: 'inline-block' }} />{ano}</span>
                 </div>
