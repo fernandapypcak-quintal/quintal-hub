@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useOnePage, useAditivos } from '../../useComercial'
+import { useOnePage, useAditivos, useCompetenciaAnoPorLoja } from '../../useComercial'
 
 function fmtBRLCompacto(v: number) {
   if (!v && v !== 0) return '—'
@@ -20,6 +20,12 @@ function delta(atual: number, ant: number) {
   if (!ant) return null
   const pct = ((atual - ant) / ant * 100)
   return { pct: Math.abs(pct).toFixed(1), up: atual >= ant }
+}
+
+function fmtDataBR(iso: string | null | undefined) {
+  if (!iso) return '—'
+  const [a,m,d] = iso.split('-')
+  return `${d}/${m}`
 }
 
 function fmtVariacao(atual: number, anterior: number) {
@@ -118,12 +124,12 @@ function ModalComparacaoMeses({ titulo, campoData, mesNum, anoAtual, anoAnterior
       const dd = String(hoje.getDate()).padStart(2,'0')
       const corte = `${ano}-${mm}-${dd}`
       return deals.filter(d => {
-        const fechamento = d.won_time_efetivo || d.won_time
+        const fechamento = d.won_time
         return !!fechamento && String(fechamento).substring(0,10) <= corte
       })
     }
     return deals.filter(d => {
-      const dia = parseInt(String(d.won_time_efetivo || d.won_time||'').substring(8,10))
+      const dia = parseInt(String(d.won_time||'').substring(8,10))
       return !dia || dia <= diaCorte
     })
   }
@@ -633,7 +639,7 @@ function GraficoAnual({ titulo, campo, anos, corAtual, corAnterior, mesAtualNum,
         if (precisaCorte(i)) {
           const corte = `${bloco.ano}-${mmCorte}-${ddCorte}`
           deals = todosDeals.filter((d: DealResumo) => {
-            const fechamento = d.won_time_efetivo || d.won_time
+            const fechamento = d.won_time
             return !!fechamento && String(fechamento).substring(0,10) <= corte
           })
         }
@@ -831,6 +837,86 @@ function AditivosDoMes({ filtros, mesFiltro }: { filtros: any; mesFiltro: string
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// Competência do ANO TODO, por loja — complementa o gráfico mês a mês com
+// uma visão única de "o que está caindo ou crescendo" no ano, loja por
+// loja. Mesmo corte justo do gráfico anual (mês em curso/futuro corta os
+// dois anos na mesma data), dado bruto (sem aditivo), ano independente do
+// filtro geral da página.
+function PainelCompetenciaAnoPorLoja({ filtros }: { filtros: any }) {
+  const anoPadrao = parseInt(filtros.ano) || new Date().getFullYear()
+  const [ano, setAno] = useState(anoPadrao)
+  const { dados, loading, erro } = useCompetenciaAnoPorLoja(filtros, String(ano))
+
+  if (loading) return null
+  if (erro || !dados || !Array.isArray(dados.lojas) || dados.lojas.length === 0) return null
+
+  const maxAnterior = Math.max(...dados.lojas.map(l => l.totalAnterior), 1)
+
+  return (
+    <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap', gap: 10 }}>
+        <span style={{ fontSize: 15, fontWeight: 700 }}>Competência do ano · por loja</span>
+        <select value={ano} onChange={e => setAno(parseInt(e.target.value))}
+          style={{ padding: '6px 10px', borderRadius: 20, border: '0.5px solid #E8E8E2', background: '#fff', fontSize: 12, fontWeight: 600, color: '#5a5c5f', cursor: 'pointer' }}>
+          {Array.from({ length: 9 }, (_, i) => new Date().getFullYear() - i).map(a => <option key={a} value={a}>{a}</option>)}
+        </select>
+      </div>
+      <div style={{ fontSize: 11, color: '#9a9c9f', marginBottom: 16 }}>
+        {ano} x {dados.anoAnterior} — meses em curso/futuros comparados até a mesma data nos dois anos. Dado bruto do Pipedrive, sem correção de aditivo.
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '20px 1fr 90px 90px 90px', gap: 10, fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', marginBottom: 8 }}>
+        <span /><span />
+        <span style={{ textAlign: 'right' }}>{dados.anoAnterior}</span>
+        <span style={{ textAlign: 'right' }}>{ano}</span>
+        <span style={{ textAlign: 'right' }}>Var.</span>
+      </div>
+
+      {dados.lojas.map((l, i) => {
+        const declinando = l.yoy !== null && l.yoy < 0
+        const larguraBar = Math.max((l.totalAnterior / maxAnterior) * 100, l.totalAnterior > 0 ? 2 : 0)
+        return (
+          <div key={l.loja} style={{
+            display: 'grid', gridTemplateColumns: '20px 1fr 90px 90px 90px', gap: 10, alignItems: 'center',
+            padding: '8px 6px', borderRadius: 8, marginBottom: 2,
+            background: declinando ? '#fdeef0' : 'transparent',
+          }}>
+            <span style={{ fontSize: 11, color: '#9a9c9f', fontFamily: 'DM Mono, monospace' }}>{String(i+1).padStart(2,'0')}</span>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: declinando ? '#a32d2d' : '#0D0F14', marginBottom: 4 }}>{l.loja}</div>
+              <div style={{ height: 10, background: '#F0F0EC', borderRadius: 5, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${larguraBar}%`, background: declinando ? '#a32d2d' : '#3B6D11', borderRadius: 5 }} />
+              </div>
+            </div>
+            <span style={{ fontSize: 12, color: '#9a9c9f', fontFamily: 'DM Mono, monospace', textAlign: 'right' }}>{fmtBRLCompacto(l.totalAnterior)}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'DM Mono, monospace', textAlign: 'right' }}>{fmtBRLCompacto(l.totalAtual)}</span>
+            <span style={{ textAlign: 'right' }}>
+              {l.yoy === null ? <span style={{ fontSize: 11, color: '#c9ccd1' }}>—</span> : (
+                <span style={{ fontSize: 11, fontWeight: 700, color: l.yoy >= 0 ? '#3B6D11' : '#a32d2d' }}>
+                  {l.yoy >= 0 ? '▲' : '▼'} {Math.abs(l.yoy).toFixed(1)}%
+                </span>
+              )}
+            </span>
+          </div>
+        )
+      })}
+
+      <div style={{ display: 'grid', gridTemplateColumns: '20px 1fr 90px 90px 90px', gap: 10, alignItems: 'center', padding: '10px 6px 0', marginTop: 4, borderTop: '2px solid #0D0F14' }}>
+        <span /><span style={{ fontSize: 13, fontWeight: 700 }}>Total</span>
+        <span style={{ fontSize: 12, fontFamily: 'DM Mono, monospace', textAlign: 'right' }}>{fmtBRLCompacto(dados.totalGeralAnterior)}</span>
+        <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'DM Mono, monospace', textAlign: 'right' }}>{fmtBRLCompacto(dados.totalGeralAtual)}</span>
+        <span style={{ textAlign: 'right' }}>
+          {dados.yoyGeral === null ? <span style={{ fontSize: 11, color: '#c9ccd1' }}>—</span> : (
+            <span style={{ fontSize: 11, fontWeight: 700, color: dados.yoyGeral >= 0 ? '#3B6D11' : '#a32d2d' }}>
+              {dados.yoyGeral >= 0 ? '▲' : '▼'} {Math.abs(dados.yoyGeral).toFixed(1)}%
+            </span>
+          )}
+        </span>
+      </div>
     </div>
   )
 }
@@ -1085,7 +1171,15 @@ export default function OnePage({ filtros }: { filtros: any }) {
       {/* ── Faturamento: competência x fechamento (destaque) ──── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
         <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: '16px 18px', borderTop: '3px solid #97A624' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Faturamento · Competência</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Faturamento · Competência</div>
+            {atual.competenciaEmAberto && (
+              <span title={`Mês ainda não aconteceu — comparações cortadas em ${fmtDataBR(atual.competenciaCorteData)} nos dois anos, pra ser justo`}
+                style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: '#fdf3d9', color: '#8a6d1a' }}>
+                📖 Em aberto
+              </span>
+            )}
+          </div>
           <div style={{ fontSize: 26, fontWeight: 800, fontFamily: 'DM Mono, monospace', color: '#3B6D11', lineHeight: 1, marginBottom: 8 }}>{fmtBRLCompacto(atual.receitaCompetencia)}</div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
             <DeltaTag atual={atual.receitaCompetencia} ant={mesAnterior.receitaCompetencia} label="vs mês ant." />
@@ -1093,6 +1187,8 @@ export default function OnePage({ filtros }: { filtros: any }) {
           </div>
           {tendencia.ehMesCorrente ? (
             <div style={{ fontSize: 11, color: '#9a9c9f' }}>Tendência do mês: <strong style={{ color: '#3B6D11' }}>{fmtBRLCompacto(tendencia.projecaoCompetencia)}</strong></div>
+          ) : atual.competenciaEmAberto ? (
+            <div style={{ fontSize: 11, color: '#9a9c9f' }}>Eventos de {nomeMesAtual.toLowerCase()} — comparado até {fmtDataBR(atual.competenciaCorteData)} nos dois anos</div>
           ) : (
             <div style={{ fontSize: 11, color: '#9a9c9f' }}>Eventos que acontecem em {nomeMesAtual.toLowerCase()}</div>
           )}
@@ -1227,6 +1323,10 @@ export default function OnePage({ filtros }: { filtros: any }) {
         </div>
       )}
 
+      <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: '12px 18px', fontSize: 11, color: '#9a9c9f' }}>
+        ℹ️ Fechamento aqui é o dado <strong>bruto do Pipedrive</strong> — sem correção de aditivo. Se um contrato foi reaberto e assinado de novo depois, ele conta na data desse último fechamento, não na data da assinatura original. Pra ver com a correção de aditivo (fechamento = data da assinatura original), use o <strong>Fechamento Diário</strong>.
+      </div>
+
       {/* ── Faturamento por Competência: ano atual x ano anterior ── */}
       <GraficoAnual
         titulo={`Faturamento por Competência · ${anos.atual.ano} x ${anos.anterior.ano}`}
@@ -1237,6 +1337,9 @@ export default function OnePage({ filtros }: { filtros: any }) {
         mesAtualNum={parseInt(atual.mes.split('-')[1])}
         filtros={filtros}
       />
+
+      {/* ── Competência do ano todo, por loja ─────────────────── */}
+      <PainelCompetenciaAnoPorLoja filtros={filtros} />
 
       {/* ── Faturamento por Fechamento: ano atual x ano anterior ─── */}
       <GraficoAnual
