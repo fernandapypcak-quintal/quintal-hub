@@ -94,7 +94,7 @@ export function SeloFaixa({ faixa, temMeta = true }: { faixa: number; temMeta?: 
   return <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: c.bg, color: c.fg, whiteSpace: 'nowrap' }}>Faixa {faixa}</span>
 }
 
-function Barra({ total, faixas }: { total: number; faixas: number[] }) {
+export function Barra({ total, faixas }: { total: number; faixas: number[] }) {
   const topo = Math.max(total, faixas[faixas.length - 1] || 0) * 1.08 || 1
   return (
     <div style={{ position: 'relative', height: 14, background: '#F1F1EC', borderRadius: 99, minWidth: 120 }}>

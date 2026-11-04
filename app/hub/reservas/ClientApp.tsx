@@ -19,12 +19,14 @@ import Operadores from './abas/Operadores'
 import OcasioesStatus from './abas/OcasioesStatus'
 import Calendario from './abas/Calendario'
 import PorCasa from './abas/PorCasa'
+import MetasPorCasa from './abas/MetasPorCasa'
 
-type Aba = 'resumo' | 'operadores' | 'ocasioes' | 'calendario' | 'casas'
-type Base = 'criacao' | 'semana' | 'reserva'
+type Aba = 'resumo' | 'operadores' | 'metas' | 'ocasioes' | 'calendario' | 'casas'
+type Base = 'criacao' | 'semana' | 'reserva' | 'meta'
 const ABAS: { id: Aba; icon: string; label: string; curto: string; base: Base }[] = [
   { id: 'resumo', icon: '🏠', label: 'Resumo', curto: 'Resumo', base: 'criacao' },
   { id: 'operadores', icon: '🧑‍💼', label: 'Operadores', curto: 'Operad.', base: 'criacao' },
+  { id: 'metas', icon: '🎯', label: 'Metas por casa', curto: 'Metas', base: 'meta' },
   { id: 'ocasioes', icon: '🎉', label: 'Ocasiões e status', curto: 'Ocasiões', base: 'criacao' },
   { id: 'calendario', icon: '📅', label: 'Calendário', curto: 'Agenda', base: 'reserva' },
   { id: 'casas', icon: '🏪', label: 'Por casa', curto: 'Casas', base: 'reserva' },
@@ -47,7 +49,7 @@ const selectStyle: React.CSSProperties = {
 }
 const opt: React.CSSProperties = { color: '#0D0F14' }
 
-function Sidebar({ aba, onAba }: { aba: Aba; onAba: (a: Aba) => void }) {
+function Sidebar({ abas, aba, onAba }: { abas: typeof ABAS; aba: Aba; onAba: (a: Aba) => void }) {
   return (
     <aside style={{ width: 220, background: '#fff', borderRight: '0.5px solid #E8E8E2', display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ padding: '16px 18px', borderBottom: '0.5px solid #E8E8E2', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -58,9 +60,9 @@ function Sidebar({ aba, onAba }: { aba: Aba; onAba: (a: Aba) => void }) {
         </div>
       </div>
       <nav style={{ padding: '12px 8px', flex: 1 }}>
-        {ABAS.map((p, i) => (
+        {abas.map((p, i) => (
           <div key={p.id}>
-            {(i === 0 || p.base === 'reserva' && ABAS[i - 1].base !== 'reserva') && (
+            {(i === 0 || p.base === 'reserva' && abas[i - 1].base !== 'reserva') && (
               <div style={{ fontSize: 10, color: '#9a9c9f', padding: i === 0 ? '0 14px 4px' : '12px 14px 4px', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                 {i === 0 ? 'Por data de criação' : 'Por data da reserva'}
               </div>
@@ -84,10 +86,10 @@ function Sidebar({ aba, onAba }: { aba: Aba; onAba: (a: Aba) => void }) {
   )
 }
 
-function BottomNav({ aba, onAba }: { aba: Aba; onAba: (a: Aba) => void }) {
+function BottomNav({ abas, aba, onAba }: { abas: typeof ABAS; aba: Aba; onAba: (a: Aba) => void }) {
   return (
     <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '0.5px solid #E8E8E2', display: 'flex', zIndex: 50 }}>
-      {ABAS.map(p => (
+      {abas.map(p => (
         <button key={p.id} onClick={() => onAba(p.id)}
           style={{ flex: 1, padding: '10px 0', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, fontSize: 10, fontFamily: 'inherit', color: aba === p.id ? '#97A624' : '#9a9c9f', fontWeight: aba === p.id ? 600 : 400 }}>
           <span style={{ fontSize: 18 }}>{p.icon}</span>{p.curto}
@@ -97,7 +99,8 @@ function BottomNav({ aba, onAba }: { aba: Aba; onAba: (a: Aba) => void }) {
   )
 }
 
-export default function ReservasClientApp() {
+export default function ReservasClientApp({ podeVerMetas = false }: { podeVerMetas?: boolean }) {
+  const abas = ABAS.filter(a => a.id !== 'metas' || podeVerMetas)
   const [versao, setVersao] = useState(0)
   const { config, erro } = useConfig(versao)
   const [aba, setAba] = useState<Aba>('resumo')
@@ -114,7 +117,7 @@ export default function ReservasClientApp() {
     grupos: (ORIGENS.find(o => o.id === origem) || ORIGENS[0]).grupos,
     unidades: unidade ? [unidade] : [],
   }), [origem, unidade])
-  const abaAtual = ABAS.find(a => a.id === aba) || ABAS[0]
+  const abaAtual = abas.find(a => a.id === aba) || abas[0]
   const atualizar = () => { limparCache(); setVersao(v => v + 1) }
   const at = config?.atualizado || ''
 
@@ -126,6 +129,7 @@ export default function ReservasClientApp() {
       {erro && <Aviso>{erro}</Aviso>}
       {aba === 'resumo' && <Resumo config={config} filtros={filtros} periodo={periodo} grao={grao} setGrao={setGrao} hoje={hoje} />}
       {aba === 'operadores' && <Operadores config={config} filtros={filtros} periodo={periodo} hoje={hoje} />}
+      {aba === 'metas' && podeVerMetas && <MetasPorCasa config={config} hoje={hoje} />}
       {aba === 'ocasioes' && <OcasioesStatus config={config} filtros={filtros} periodo={periodo} />}
       {aba === 'calendario' && <Calendario config={config} filtros={filtros} hoje={hoje} />}
       {aba === 'casas' && <PorCasa config={config} filtros={filtros} hoje={hoje} />}
@@ -140,7 +144,7 @@ export default function ReservasClientApp() {
   return (
     <div className="flex h-screen overflow-hidden bg-surface-base">
       <div className="hidden lg:flex">
-        <Sidebar aba={aba} onAba={setAba} />
+        <Sidebar abas={abas} aba={aba} onAba={setAba} />
       </div>
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
@@ -160,7 +164,7 @@ export default function ReservasClientApp() {
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>Reservas · {abaAtual.label}</div>
               <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)' }}>
-                Quintal do Espeto · Get In · {abaAtual.base === 'criacao' ? 'por data de criação' : abaAtual.base === 'semana' ? 'por semana (seg a dom), data de criação' : 'por data da reserva'}
+                Quintal do Espeto · Get In · {abaAtual.base === 'criacao' ? 'por data de criação' : abaAtual.base === 'semana' ? 'por semana (seg a dom), data de criação' : abaAtual.base === 'meta' ? 'metas por casa, data de criação' : 'por data da reserva'}
                 {at ? ` · atualizado ${dataCurta(at.slice(0, 10))} às ${at.slice(11, 16)}` : ''}
               </div>
             </div>
@@ -180,7 +184,7 @@ export default function ReservasClientApp() {
                 )}
               </>
             )}
-            {abaAtual.base !== 'semana' && (
+            {abaAtual.base !== 'semana' && abaAtual.base !== 'meta' && (
               <>
                 <select value={origem} onChange={e => setOrigem(e.target.value)} style={selectStyle}>
                   {ORIGENS.map(o => <option key={o.id} value={o.id} style={opt}>{o.label}</option>)}
@@ -213,7 +217,7 @@ export default function ReservasClientApp() {
       </div>
 
       <div className="lg:hidden">
-        <BottomNav aba={aba} onAba={setAba} />
+        <BottomNav abas={abas} aba={aba} onAba={setAba} />
       </div>
     </div>
   )

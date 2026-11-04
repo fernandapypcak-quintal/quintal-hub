@@ -7,5 +7,8 @@ export default async function ReservasPage() {
   if (!access) redirect('/login')
   if (!hasDashboardAccess(access, 'reservas')) redirect('/hub')
 
-  return <ReservasClientApp />
+  // Aba "Metas por casa": liberação à parte (sub-permissão 'reservas-metas' na tela de admin)
+  const podeVerMetas = access.isAdmin || hasDashboardAccess(access, 'reservas-metas')
+
+  return <ReservasClientApp podeVerMetas={podeVerMetas} />
 }
