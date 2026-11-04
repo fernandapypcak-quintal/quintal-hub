@@ -86,7 +86,8 @@ function compactar(t: GasTabela, permitida: (u: string) => boolean) {
 export async function GET(req: NextRequest) {
   const access = await getUserAccess()
   if (!access) return NextResponse.json({ ok: false, erro: 'Não autenticado' }, { status: 401 })
-  if (!hasDashboardAccess(access, 'reservas')) return NextResponse.json({ ok: false, erro: 'Acesso negado' }, { status: 403 })
+  // também atende a página Metas por casa (/hub/reservas-metas), que tem permissão própria
+  if (!hasDashboardAccess(access, 'reservas') && !hasDashboardAccess(access, 'reservas-metas')) return NextResponse.json({ ok: false, erro: 'Acesso negado' }, { status: 403 })
   if (!GAS_URL || !GAS_KEY) {
     return NextResponse.json({ ok: false, erro: 'RESERVAS_GAS_URL / RESERVAS_GAS_KEY não configuradas na Vercel' }, { status: 500 })
   }
