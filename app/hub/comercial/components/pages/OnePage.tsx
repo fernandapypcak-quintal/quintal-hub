@@ -861,14 +861,14 @@ function PainelCompetenciaAnoPorLoja({ filtros }: { filtros: any }) {
   return (
     <div style={{ background: '#fff', border: '0.5px solid #E8E8E2', borderRadius: 14, padding: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap', gap: 10 }}>
-        <span style={{ fontSize: 15, fontWeight: 700 }}>Competência do ano · por loja</span>
+        <span style={{ fontSize: 15, fontWeight: 700 }}>Competência Jan-{MESES_ABREV_LOJA[dados.mesAtualRealNum-1]} · por loja</span>
         <select value={ano} onChange={e => setAno(parseInt(e.target.value))}
           style={{ padding: '6px 10px', borderRadius: 20, border: '0.5px solid #E8E8E2', background: '#fff', fontSize: 12, fontWeight: 600, color: '#5a5c5f', cursor: 'pointer' }}>
           {Array.from({ length: 9 }, (_, i) => new Date().getFullYear() - i).map(a => <option key={a} value={a}>{a}</option>)}
         </select>
       </div>
       <div style={{ fontSize: 11, color: '#9a9c9f', marginBottom: 16 }}>
-        {ano} x {dados.anoAnterior} — meses em curso/futuros comparados até a mesma data nos dois anos. Dado bruto do Pipedrive, sem correção de aditivo.
+        {ano} x {dados.anoAnterior}, acumulado até {MESES_ABREV_LOJA[dados.mesAtualRealNum-1]} — mesmo recorte do "Acumulado" do gráfico acima. Mês atual cortado na mesma data nos dois anos. Dado bruto do Pipedrive, sem correção de aditivo.
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '20px 1fr 90px 90px 90px', gap: 10, fontSize: 10, fontWeight: 700, color: '#9a9c9f', textTransform: 'uppercase', marginBottom: 8 }}>
