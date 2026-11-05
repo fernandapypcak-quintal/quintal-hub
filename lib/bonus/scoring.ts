@@ -279,7 +279,13 @@ function agregarPeriodo(meses: string[], porMes: Record<string, DadosMesIndicado
   temProjecao: boolean // true = pelo menos 1 mês usado nesta conta está marcado como projeção (não é fechamento real)
   detalheMeses: DetalheMeses
 } {
-  const entradas = meses.map((m) => porMes[m]).filter((e): e is DadosMesIndicador => e != null)
+  // Só entram na conta os meses com Real lançado. Meses que existem na base
+  // mas ainda estão vazios (ex: Nov/Dez com só Meta preenchida) NÃO podem
+  // derrubar o acumulado pra média simples — antes isso acontecia e o NPS
+  // aparecia 83,7% (média) em vez de 86,4% (acumulado do sistema de NPS).
+  const entradas = meses
+    .map((m) => porMes[m])
+    .filter((e): e is DadosMesIndicador => e != null && e.real != null)
   const todasComVolume = entradas.length > 0 && entradas.every(
     (e) => e.numerador != null && e.denominador != null && e.denominador !== 0
   )
