@@ -1,14 +1,14 @@
 // lib/bonus/scoring.ts
 //
-// Meta de Bônus — parte COLETIVA (70% do bônus total; os outros 30% são
-// individuais e não entram aqui). Diferente do módulo de Metas Regionais
+// Meta de Bônus — parte COLETIVA (80% do bônus total; os outros 20% são
+// individuais — 2 metas de 10% por gerente — e não entram aqui). Diferente do módulo de Metas Regionais
 // (que é bateu/não bateu), aqui cada indicador tem 3 faixas de meta —
 // Meta cheia / Meta 80% / Meta 60% — e paga uma fração do peso conforme
 // a faixa que o Real alcançar.
 //
 //   CMV             -> peso 0,10 — custo, menor é melhor
 //   Custo c/ Pessoal -> peso 0,10 — custo, menor é melhor
-//   LOL (Margem)    -> peso 0,40 — margem, maior é melhor
+//   LOL (Margem)    -> peso 0,50 — margem, maior é melhor
 //   NPS             -> peso 0,10 — maior é melhor
 //
 // Faixas:
@@ -18,7 +18,8 @@
 //     limiares decrescem: Meta (mais alto) > Meta 80% > Meta 60% (mais baixo)
 //
 // Pontos do indicador = peso * fração da faixa batida (1 / 0,8 / 0,6 / 0)
-// Pontuação total = soma dos pontos, sobre o peso coletivo total (0,70)
+// Pontuação total = soma dos pontos, sobre o peso coletivo total (0,80)
+// Como os pesos já são % do bônus TOTAL, pontosTotais = % do bônus total garantido.
 
 export type IndicadorBonusKey = 'cmv' | 'custo_pessoal' | 'lol_margem' | 'nps'
 export type DirecaoBonus = 'menor_melhor' | 'maior_melhor'
@@ -45,7 +46,7 @@ export const INDICADORES_BONUS: IndicadorBonusConfig[] = [
     objetivo: '-2% em relação ao ROB 2025',
   },
   {
-    key: 'lol_margem', label: 'LOL (Margem)', peso: 0.40, direcao: 'maior_melhor',
+    key: 'lol_margem', label: 'LOL (Margem)', peso: 0.50, direcao: 'maior_melhor',
     fonte: 'DRE',
     objetivo: '+2% em relação ao ROB 2025',
   },
@@ -56,7 +57,12 @@ export const INDICADORES_BONUS: IndicadorBonusConfig[] = [
   },
 ]
 
-export const PESO_COLETIVO_TOTAL = INDICADORES_BONUS.reduce((soma, i) => soma + i.peso, 0) // 0.70
+export const PESO_COLETIVO_TOTAL = INDICADORES_BONUS.reduce((soma, i) => soma + i.peso, 0) // 0.80
+
+// Parte individual — avaliada fora deste painel. Só pra exibição da composição.
+export const METAS_INDIVIDUAIS_QTD = 2
+export const PESO_POR_META_INDIVIDUAL = 0.10
+export const PESO_INDIVIDUAL_TOTAL = METAS_INDIVIDUAIS_QTD * PESO_POR_META_INDIVIDUAL // 0.20
 
 export interface LinhaBonusInput {
   indicador: IndicadorBonusKey

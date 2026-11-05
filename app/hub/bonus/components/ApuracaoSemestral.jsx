@@ -12,6 +12,7 @@
 import { CheckCircle2, AlertTriangle, XCircle, Info, ArrowDown, LineChart, ChevronDown, ChevronUp } from 'lucide-react'
 import { useState } from 'react'
 import MiniTabelaMeses from './MiniTabelaMeses'
+import ComposicaoBonus, { fmtPctBonus } from './ComposicaoBonus'
 
 const MESES_LABEL = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
@@ -62,9 +63,7 @@ function resumoPeriodo(indicadores, chave) {
 }
 
 function HeroPeriodo({ titulo, subtitulo, resultado, lancados, total, indicadores, chave }) {
-  const pct = resultado.percentualAtingido * 100
   const fechado = lancados >= total
-  const cor = pct >= 70 ? '#059669' : pct >= 40 ? '#D97706' : '#E11D48'
   const chaveProjecao = chave === 's1' ? 's1TemProjecao' : 's2TemProjecao'
   const algumaProjecao = indicadores.some((i) => i[chaveProjecao])
 
@@ -80,12 +79,12 @@ function HeroPeriodo({ titulo, subtitulo, resultado, lancados, total, indicadore
       </div>
       <p className="text-sm text-zinc-400 mb-4">{subtitulo}</p>
 
-      <p className="text-6xl font-bold text-brand-black leading-none mb-1" style={{ color: cor }}>
-        {pct.toFixed(0)}%
-      </p>
-      <p className="text-sm text-zinc-500 mb-4">do bônus coletivo garantido até aqui</p>
+      <ComposicaoBonus
+        itens={indicadores.map((i) => ({ config: i.config, resultado: i[chave] }))}
+        pontosTotais={resultado.pontosTotais}
+      />
 
-      <p className="text-sm text-zinc-600">{resumoPeriodo(indicadores, chave)}</p>
+      <p className="text-sm text-zinc-600 mt-4">{resumoPeriodo(indicadores, chave)}</p>
 
       {algumaProjecao && (
         <p className="flex items-center gap-1.5 text-xs text-blue-600 bg-blue-50 rounded-lg px-2.5 py-1.5 mt-3">
@@ -186,6 +185,9 @@ function BlocoPeriodo({
         </p>
       )}
 
+      <p className="text-xs text-zinc-600 mt-1">
+        Garantiu <span className="font-semibold">{fmtPctBonus(resultado.pontos)}</span> de {fmtPctBonus(resultado.config.peso, 0)} do bônus total
+      </p>
       <p className="text-xs text-zinc-400 mt-1">dados de {mesesLancados}/{totalMeses} meses</p>
       <DetalheMesesLinha detalheMeses={detalheMeses} />
 
@@ -232,7 +234,7 @@ function CardIndicador({ item, resultadosPorMes }) {
             Precisamos: <span className="text-zinc-500">{config.objetivo}</span> · Fonte: {config.fonte}
           </p>
         </div>
-        <span className="text-sm text-zinc-400 shrink-0 ml-3">peso {(config.peso * 100).toFixed(0)}% do bônus coletivo</span>
+        <span className="text-sm text-zinc-400 shrink-0 ml-3">vale {(config.peso * 100).toFixed(0)}% do bônus total</span>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -23,7 +23,7 @@ export default function Home() {
       <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-xl font-semibold text-brand-black">Meta de Bônus</h1>
-          <p className="text-xs text-zinc-400 font-mono">Coletiva — 70% do bônus total</p>
+          <p className="text-xs text-zinc-400 font-mono">Coletiva — 80% do bônus total · Individual 20% (2 metas × 10%) fica fora deste painel</p>
         </div>
         <input
           type="number"

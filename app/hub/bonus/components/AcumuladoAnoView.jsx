@@ -10,6 +10,7 @@ import { useState } from 'react'
 import { CheckCircle2, AlertTriangle, XCircle, Info, LineChart, ChevronDown, ChevronUp } from 'lucide-react'
 import { FAIXA_LABEL } from '@/lib/bonus/scoring'
 import MiniTabelaMeses from './MiniTabelaMeses'
+import ComposicaoBonus, { fmtPctBonus } from './ComposicaoBonus'
 
 const MESES_ANO_LISTA = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
 
@@ -101,7 +102,10 @@ function LinhaIndicador({ item, resultadosPorMes }) {
             Precisamos: <span className="text-zinc-500">{config.objetivo}</span> · Fonte: {config.fonte}
           </p>
         </div>
-        <span className="text-sm text-zinc-400 shrink-0 ml-3">peso {(config.peso * 100).toFixed(0)}%</span>
+        <div className="text-right shrink-0 ml-3">
+          <p className="text-sm text-zinc-400">vale {(config.peso * 100).toFixed(0)}% do bônus total</p>
+          <p className="text-sm text-zinc-600">garantiu <span className="font-semibold">{fmtPctBonus(resultado.pontos)}</span></p>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-end gap-6 mb-2">
@@ -165,9 +169,7 @@ function LinhaIndicador({ item, resultadosPorMes }) {
 }
 
 export default function AcumuladoAnoView({ resultadoAcumuladoAno, resultadosPorMes }) {
-  const { ano, indicadores, pontosTotais, pesoTotalColetivo, percentualAtingido, mesesLancados } = resultadoAcumuladoAno
-  const pct = percentualAtingido * 100
-  const cor = pct >= 70 ? '#059669' : pct >= 40 ? '#D97706' : '#E11D48'
+  const { ano, indicadores, pontosTotais, mesesLancados } = resultadoAcumuladoAno
 
   return (
     <div className="flex flex-col gap-4">
@@ -179,13 +181,13 @@ export default function AcumuladoAnoView({ resultadoAcumuladoAno, resultadosPorM
         </p>
       </div>
 
-      <div className="rounded-2xl border border-surface-border bg-white p-6 shadow-card max-w-sm">
+      <div className="rounded-2xl border border-surface-border bg-white p-6 shadow-card max-w-xl">
         <p className="text-sm font-semibold text-zinc-500 uppercase tracking-wide mb-1">Placar do ano</p>
         <p className="text-xs text-zinc-400 mb-3">dados de {mesesLancados}/12 meses</p>
-        <p className="text-6xl font-bold leading-none" style={{ color: cor }}>{pct.toFixed(0)}%</p>
-        <p className="text-sm text-zinc-500 mt-2">
-          {pontosTotais.toFixed(3).replace('.', ',')} / {pesoTotalColetivo.toFixed(2).replace('.', ',')} pts do bônus coletivo
-        </p>
+        <ComposicaoBonus
+          itens={indicadores.map((i) => ({ config: i.config, resultado: i.resultado }))}
+          pontosTotais={pontosTotais}
+        />
       </div>
 
       <div className="flex flex-col gap-3">
