@@ -33,7 +33,7 @@ type GasConfig = GasResp & {
   metas?: { mes: string; faixas: number[]; desafio: number | null }[]
   metasSemanais?: { inicio: string; operador: string; base: number; pcts: number[] }[]
   escala?: { mes: string; semana: number; operador: string; dias: string[] }[]
-  operadores?: { nome: string; chaves: string[]; time: string }[]
+  operadores?: { nome: string; chaves: string[]; time: string; inicio?: string; fim?: string }[]
   saude?: { gatilhos: string[]; ultimaExecucao: string; ultimaRevisao60: string; ultimoErro: { quando: string; funcao: string; msg: string } | null }
 }
 

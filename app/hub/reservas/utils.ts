@@ -19,7 +19,7 @@ export type Linha = {
 export type Meta = { mes: string; faixas: number[]; desafio: number | null }
 export type MetaSemanal = { inicio: string; operador: string; base: number; pcts: number[] }
 export type Escala = { mes: string; semana: number; operador: string; dias: string[] }
-export type OperadorCad = { nome: string; chaves: string[]; time: string }
+export type OperadorCad = { nome: string; chaves: string[]; time: string; inicio?: string; fim?: string }
 export type Saude = {
   gatilhos: string[]; ultimaExecucao: string; ultimaRevisao60: string
   ultimoErro: { quando: string; funcao: string; msg: string } | null
@@ -227,6 +227,21 @@ export function nomePadrao(c: Pick<Config, 'operadores'>, nome: string) {
   const k = normNome(nome)
   const o = (c.operadores || []).find(x => normNome(x.nome) === k || x.chaves.includes(k))
   return o ? o.nome : nome.trim()
+}
+
+// Vigência no time de reservas (aba OPERADORES: inicio / fim). Pode ter mais de uma linha por operadora.
+// Sem cadastro ou sem datas = sem restrição.
+export function vigenciasReservas(c: Pick<Config, 'operadores'>, nome: string) {
+  const alvo = normNome(nomePadrao(c, nome))
+  return (c.operadores || [])
+    .filter(o => normNome(o.nome) === alvo && normNome(o.time || 'Reservas') === 'RESERVAS')
+    .map(o => ({ ini: o.inicio || '0000-00-00', fim: o.fim || '9999-99-99' }))
+}
+// Dias (da lista) em que a operadora estava no time; sem cadastro devolve a lista inteira
+export function diasNaVigencia(c: Pick<Config, 'operadores'>, nome: string, dias: string[]) {
+  const v = vigenciasReservas(c, nome)
+  if (!v.length) return dias
+  return dias.filter(d => v.some(x => d >= x.ini && d <= x.fim))
 }
 
 // Escala da semana (nº da semana do mês): Map<nome padrão, dias>

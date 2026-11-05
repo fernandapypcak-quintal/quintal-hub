@@ -3,12 +3,15 @@
 // Meta semanal do time de reservas (bônus) — aba Operadores.
 // Cada operadora é medida nos DIAS DA ESCALA dela naquela semana (aba ESCALA: mes | semana | operador | dias).
 // Sem escala cadastrada, vale a semana do calendário (1–7, 8–14, 15–21, 22–28, 29–fim).
+// Vigência (aba OPERADORES: inicio / fim): só contam os dias em que a operadora estava no time.
+//   Semana inteira fora da vigência = some da tabela e da meta do time.
+//   Semana em que entrou/saiu = conta os dias trabalhados, com meta proporcional (cheia a partir de 5 dias).
 // Conta as reservas CRIADAS pela operadora nesses dias (as mesmas que entram na meta do mês), em todas as casas.
 // Meta: aba METAS_SEMANAIS (meta base × % da faixa). Meta do time = soma das metas das operadoras.
 
 import { useMemo, useState } from 'react'
 import {
-  type Config, type Linha, DIAS_SEMANA, addMeses, dataCurta, diaSemana, escalaDaSemana, listaDias, metaSemanalDe,
+  type Config, type Linha, DIAS_SEMANA, addMeses, dataCurta, diaSemana, diasNaVigencia, escalaDaSemana, listaDias, metaSemanalDe,
   n0, n1, nomeMes, pct, primeiroDia, semanaAnterior, semanaDoMes, semanaSeguinte, useLinhas,
 } from '../utils'
 import { Aviso, C, Secao, Spinner, botao, card, pill, td, tdNum, th, thNum } from '../ui'
@@ -23,6 +26,7 @@ type Res = {
   op: string; dias: string[]; temEscala: boolean; porDia: Map<string, number>; total: number
   meta: ReturnType<typeof metaSemanalDe>; faixa: number; falta: number | null; ating: number | null
   restantes: number; mes: number; semanasBonus: number; semanasFechadas: number
+  cortada: boolean; vigIni: string; vigFim: string
 }
 
 const faixaDe = (total: number, faixas: number[]) => faixas.filter(f => total >= f).length
@@ -32,12 +36,17 @@ const faltaDe = (total: number, faixas: number[]) => { const p = faixas.find(f =
 function resultado(doTime: Linha[], config: Config, op: string, ini: string, hoje: string) {
   const sem = semanaDoMes(ini)
   const esc = escalaDaSemana(config, ini.slice(0, 7), sem.numero).get(op)
-  const dias = esc || listaDias(sem.ini, sem.fim)
+  const base = esc || listaDias(sem.ini, sem.fim)
+  const dias = diasNaVigencia(config, op, base)
+  const cortada = dias.length < base.length
   const set = new Set(dias)
   const daOp = doTime.filter(r => r.o === op)
   const total = daOp.filter(r => set.has(r.dc)).length
-  const meta = metaSemanalDe(config.metasSemanais, op, sem.ini, esc ? esc.length : undefined, config)
-  return { dias, temEscala: !!esc, total, meta, encerrada: dias[dias.length - 1] < hoje, daOp }
+  // fora do time a semana inteira: sem meta, não aparece
+  const meta = dias.length
+    ? metaSemanalDe(config.metasSemanais, op, sem.ini, esc || cortada ? dias.length : undefined, config)
+    : null
+  return { dias, temEscala: !!esc, cortada, ativa: dias.length > 0, total, meta, encerrada: !!dias.length && dias[dias.length - 1] < hoje, daOp }
 }
 
 function calcular(linhas: Linha[], config: Config, semana: string, hoje: string) {
@@ -56,6 +65,7 @@ function calcular(linhas: Linha[], config: Config, semana: string, hoje: string)
 
   const res: Res[] = ops.map(op => {
     const r = resultado(doTime, config, op, semana, hoje)
+    if (!r.ativa) return null
     const porDia = new Map<string, number>()
     r.daOp.filter(x => x.dc >= (r.dias[0] < sem.ini ? r.dias[0] : sem.ini)).forEach(x => porDia.set(x.dc, (porDia.get(x.dc) || 0) + 1))
     // semanas do mês já encerradas com bônus (cada uma pela escala daquela semana)
@@ -66,8 +76,9 @@ function calcular(linhas: Linha[], config: Config, semana: string, hoje: string)
       ating: r.meta ? r.total / r.meta.faixas[0] : null, restantes: r.dias.filter(d => d >= hoje).length,
       mes: r.daOp.filter(x => x.dc.startsWith(mes)).length,
       semanasBonus: fechadas.filter(x => x.meta && faixaDe(x.total, x.meta.faixas) > 0).length, semanasFechadas: fechadas.length,
-    }
-  }).filter(r => r.mes > 0 || r.temEscala).sort((a, b) => b.total - a.total || b.mes - a.mes)
+      cortada: r.cortada, vigIni: r.dias[0], vigFim: r.dias[r.dias.length - 1],
+    } as Res
+  }).filter((r): r is Res => !!r && (r.mes > 0 || r.temEscala)).sort((a, b) => b.total - a.total || b.mes - a.mes)
 
   // colunas: todos os dias de escala da semana (ou a semana do calendário)
   const colunas = Array.from(new Set(res.flatMap(r => r.dias).concat(listaDias(sem.ini, sem.fim)))).sort()
@@ -129,7 +140,7 @@ export default function MetaSemanal({ config, hoje }: { config: Config; hoje: st
     const XLSX = await import('xlsx')
     const linhas = res.map(r => ({
       Semana: `Semana ${sem.numero} de ${mesNome}`, Operadora: r.op,
-      'Dias contados': r.dias.map(d => d.slice(8, 10)).join('-') + (r.temEscala ? '' : ' (semana do calendário)'),
+      'Dias contados': r.dias.map(d => d.slice(8, 10)).join('-') + (r.temEscala ? '' : r.cortada ? ' (vigência no time)' : ' (semana do calendário)'),
       'Reservas nos dias': r.total, 'Meta base': r.meta?.base ?? '',
       ...Object.fromEntries((r.meta?.faixas || []).map((f, i) => [`Faixa ${i + 1} (${r.meta!.pcts[i]}%${r.meta!.curta ? ' proporcional' : ''})`, f])),
       Atingimento: r.ating !== null ? +r.ating.toFixed(4) : '', 'Faixa atingida': r.meta ? (r.faixa || 'Abaixo') : 'Sem meta',
@@ -178,7 +189,7 @@ export default function MetaSemanal({ config, hoje }: { config: Config; hoje: st
                 <td style={{ ...td, fontWeight: 600, whiteSpace: 'nowrap' }}>
                   {r.op}
                   <div style={{ fontSize: 10.5, color: C.suave, fontWeight: 400 }}>
-                    {r.temEscala ? `escala ${r.dias.map(d => d.slice(8, 10)).join('-')}` : 'sem escala (calendário)'}{r.meta?.propria ? ' · meta própria' : ''}
+                    {r.temEscala ? `escala ${r.dias.map(d => d.slice(8, 10)).join('-')}` : r.cortada ? `no time de ${dataCurta(r.vigIni)} a ${dataCurta(r.vigFim)}` : 'sem escala (calendário)'}{r.meta?.propria ? ' · meta própria' : ''}
                   </div>
                 </td>
                 {colunas.map(d => {
