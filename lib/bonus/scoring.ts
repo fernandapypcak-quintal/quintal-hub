@@ -487,3 +487,65 @@ export function calcularAcumuladoAno(
     mesesLancados: Math.min(...indicadores.map((i) => i.mesesLancados)),
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// Pagamento em SALÁRIOS — política PLR 2026 (80% coletivo / 20% individual)
+//
+//   1) Cada indicador coletivo paga pela FAIXA que bateu (meta cheia = 100%
+//      do peso, faixa 80% = 80%, faixa 60% = 60%, abaixo = 0).
+//   2) Atingimento total do período = coletivo (até 80%) + individuais
+//      (até 20%, 2 metas de 10% — apuradas fora deste painel).
+//   3) Corte: abaixo de 60% de atingimento TOTAL, o período não paga nada.
+//      A partir de 60%: salários = atingimento total × salários do período.
+//   4) Semestres: até 2 salários cada. Ano (Jan-Dez acumulado): até 4
+//      salários; paga a diferença entre o valor do ano e o que já foi pago
+//      nos semestres. Se o ano der menos, ninguém devolve (acerto = 0).
+//
+// Como as individuais não estão neste painel, o cálculo é mostrado em
+// CENÁRIOS: 0, 1 ou 2 metas individuais batidas.
+// ═══════════════════════════════════════════════════════════════════════
+
+export const SALARIOS_POR_SEMESTRE = 2
+export const SALARIOS_ANO = SALARIOS_POR_SEMESTRE * 2
+export const CORTE_MINIMO_TOTAL = 0.6
+
+const arred = (v: number) => Math.round(v * 10000) / 10000
+
+/** Salários de um período, aplicando o corte de 60% sobre o atingimento total. */
+export function salariosDoPeriodo(atingimentoTotal: number, salariosMax: number): number {
+  const a = Math.min(arred(atingimentoTotal), 1)
+  return a >= CORTE_MINIMO_TOTAL ? a * salariosMax : 0
+}
+
+export interface CenarioBonus {
+  individuais: number // quantas metas individuais batidas (0..METAS_INDIVIDUAIS_QTD)
+  atingimentoS1: number
+  atingimentoS2: number
+  atingimentoAno: number
+  salariosS1: number
+  salariosS2: number
+  salariosAno: number // valor do ano (até 4), antes de descontar os semestres
+  acertoAno: number // pago no fechamento = max(0, ano − S1 − S2)
+  totalAno: number // S1 + S2 + acerto
+}
+
+/**
+ * @param coletivoS1/S2/Ano  pontos coletivos do período (fração do bônus total, 0..0,80)
+ */
+export function calcularCenarios(coletivoS1: number, coletivoS2: number, coletivoAno: number): CenarioBonus[] {
+  return Array.from({ length: METAS_INDIVIDUAIS_QTD + 1 }, (_, k) => {
+    const ind = k * PESO_POR_META_INDIVIDUAL
+    const atingimentoS1 = arred(coletivoS1 + ind)
+    const atingimentoS2 = arred(coletivoS2 + ind)
+    const atingimentoAno = arred(coletivoAno + ind)
+    const salariosS1 = salariosDoPeriodo(atingimentoS1, SALARIOS_POR_SEMESTRE)
+    const salariosS2 = salariosDoPeriodo(atingimentoS2, SALARIOS_POR_SEMESTRE)
+    const salariosAno = salariosDoPeriodo(atingimentoAno, SALARIOS_ANO)
+    const acertoAno = Math.max(0, salariosAno - salariosS1 - salariosS2)
+    return {
+      individuais: k, atingimentoS1, atingimentoS2, atingimentoAno,
+      salariosS1, salariosS2, salariosAno, acertoAno,
+      totalAno: salariosS1 + salariosS2 + acertoAno,
+    }
+  })
+}

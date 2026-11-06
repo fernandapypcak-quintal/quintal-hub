@@ -15,7 +15,10 @@ import {
   PESO_INDIVIDUAL_TOTAL,
   METAS_INDIVIDUAIS_QTD,
   PESO_POR_META_INDIVIDUAL,
+  SALARIOS_POR_SEMESTRE,
 } from '@/lib/bonus/scoring'
+
+const fmtSal = (v) => v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })
 
 const COR_FAIXA = {
   meta: '#059669',
@@ -39,7 +42,8 @@ export function fmtPctBonus(v, digits = 1) {
 }
 
 // itens: [{ config, resultado }] — resultado = ResultadoIndicadorBonus (faixa, fracao, pontos)
-export default function ComposicaoBonus({ itens, pontosTotais }) {
+export default function ComposicaoBonus({ itens, pontosTotais, salariosBase = SALARIOS_POR_SEMESTRE, apenasLinhas = false }) {
+  if (apenasLinhas) return <LinhasIndicadores itens={itens} />
   return (
     <div>
       {/* Número principal */}
@@ -50,6 +54,10 @@ export default function ComposicaoBonus({ itens, pontosTotais }) {
           <p className="text-xs text-zinc-400">de {fmtPctBonus(PESO_COLETIVO_TOTAL, 0)} possíveis no coletivo</p>
         </div>
       </div>
+      <p className="mt-3 text-sm text-zinc-600">
+        = <span className="font-semibold text-brand-black tabular-nums">{fmtSal(pontosTotais * salariosBase)} salário{pontosTotais * salariosBase === 1 ? '' : 's'}</span>
+        <span className="text-zinc-400"> de {fmtSal(PESO_COLETIVO_TOTAL * salariosBase)} possíveis no coletivo ({salariosBase} no total com as individuais)</span>
+      </p>
 
       {/* Barra: cada segmento = peso do indicador no bônus total */}
       <div className="flex w-full gap-1 mt-5">
@@ -73,6 +81,14 @@ export default function ComposicaoBonus({ itens, pontosTotais }) {
         />
       </div>
 
+      <LinhasIndicadores itens={itens} comIndividual />
+    </div>
+  )
+}
+
+function LinhasIndicadores({ itens, comIndividual = false }) {
+  return (
+    <>
       {/* Linhas: indicador · faixa · garantido / vale */}
       <div className="mt-4 divide-y divide-surface-border">
         {itens.map(({ config, resultado }) => (
@@ -92,6 +108,7 @@ export default function ComposicaoBonus({ itens, pontosTotais }) {
             </span>
           </div>
         ))}
+        {comIndividual && (
         <div className="flex items-center justify-between py-2 text-sm">
           <span className="flex items-center gap-2 text-zinc-400">
             <span className="w-2 h-2 rounded-full border border-dashed border-zinc-400" />
@@ -102,7 +119,8 @@ export default function ComposicaoBonus({ itens, pontosTotais }) {
             <span className="w-24 text-right tabular-nums text-zinc-400">— / {fmtPctBonus(PESO_INDIVIDUAL_TOTAL, 0)}</span>
           </span>
         </div>
+        )}
       </div>
-    </div>
+    </>
   )
 }

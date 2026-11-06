@@ -12,7 +12,7 @@
 import { CheckCircle2, AlertTriangle, XCircle, Info, ArrowDown, LineChart, ChevronDown, ChevronUp } from 'lucide-react'
 import { useState } from 'react'
 import MiniTabelaMeses from './MiniTabelaMeses'
-import ComposicaoBonus, { fmtPctBonus } from './ComposicaoBonus'
+import { fmtPctBonus } from './ComposicaoBonus'
 
 const MESES_LABEL = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
@@ -51,48 +51,6 @@ const FAIXA_INFO = {
   meta_60:     { texto: 'Bateu a faixa de 60%',     cor: 'text-amber-700',   bg: 'bg-amber-50',   Icon: AlertTriangle, iconCor: '#D97706' },
   nao_atingiu: { texto: 'Não bateu nenhuma faixa',  cor: 'text-rose-700',    bg: 'bg-rose-50',    Icon: XCircle, iconCor: '#E11D48' },
   pendente:    { texto: 'Ainda sem dados',          cor: 'text-zinc-500',    bg: 'bg-zinc-100',   Icon: Info, iconCor: '#A1A1AA' },
-}
-
-function resumoPeriodo(indicadores, chave) {
-  const validos = indicadores.filter((i) => i[chave].faixa !== 'pendente')
-  if (validos.length === 0) return 'Ainda não há dados suficientes pra apurar este período.'
-  const bateram = validos.filter((i) => i[chave].faixa !== 'nao_atingiu').length
-  if (bateram === validos.length) return `Todos os ${validos.length} indicadores já apurados bateram pelo menos uma faixa da meta.`
-  if (bateram === 0) return `Nenhum dos ${validos.length} indicadores já apurados bateu a meta ainda.`
-  return `${bateram} de ${validos.length} indicadores já apurados bateram pelo menos uma faixa da meta.`
-}
-
-function HeroPeriodo({ titulo, subtitulo, resultado, lancados, total, indicadores, chave }) {
-  const fechado = lancados >= total
-  const chaveProjecao = chave === 's1' ? 's1TemProjecao' : 's2TemProjecao'
-  const algumaProjecao = indicadores.some((i) => i[chaveProjecao])
-
-  return (
-    <div className="flex-1 min-w-[280px] rounded-2xl border border-surface-border bg-white p-6 shadow-card">
-      <div className="flex items-center justify-between mb-1">
-        <p className="text-sm font-semibold text-zinc-500 uppercase tracking-wide">{titulo}</p>
-        <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-          fechado ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
-        }`}>
-          {fechado ? 'Fechado' : `Dados de ${lancados} de ${total} meses`}
-        </span>
-      </div>
-      <p className="text-sm text-zinc-400 mb-4">{subtitulo}</p>
-
-      <ComposicaoBonus
-        itens={indicadores.map((i) => ({ config: i.config, resultado: i[chave] }))}
-        pontosTotais={resultado.pontosTotais}
-      />
-
-      <p className="text-sm text-zinc-600 mt-4">{resumoPeriodo(indicadores, chave)}</p>
-
-      {algumaProjecao && (
-        <p className="flex items-center gap-1.5 text-xs text-blue-600 bg-blue-50 rounded-lg px-2.5 py-1.5 mt-3">
-          <LineChart size={12} /> Este número inclui pelo menos um mês projetado, não fechado.
-        </p>
-      )}
-    </div>
-  )
 }
 
 function fmtReais(v) {
@@ -222,8 +180,8 @@ function CardIndicador({ item, resultadosPorMes }) {
   const isLol = config.key === 'lol_margem'
 
   const fraseConexao = recuperandoS1
-    ? 'Não bateu no 1º semestre — isso não muda o número do 2º semestre (ele continua só Jul-Dez). A chance de recuperar aparece na aba "Acumulado do Ano".'
-    : 'Bateu no 1º semestre — o 2º semestre segue avaliado à parte, normalmente.'
+    ? 'Não bateu no 1º semestre. Se o acumulado de Jan a Dez bater uma faixa, o 1º semestre é compensado no fechamento do ano (veja a aba "Resumo").'
+    : 'Bateu no 1º semestre. O 2º semestre é apurado à parte, e o fechamento do ano ainda pode melhorar a faixa dos dois.'
 
   return (
     <div className="rounded-2xl border border-surface-border bg-white p-5 shadow-card">
@@ -312,35 +270,13 @@ export default function ApuracaoSemestral({ resultadoAnual, resultadosPorMes }) 
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h2 className="text-2xl font-bold text-brand-black">Apuração do Bônus — {ano}</h2>
+        <h2 className="text-2xl font-bold text-brand-black">Indicadores por semestre — {ano}</h2>
         <p className="text-sm text-zinc-500 mt-1">
-          1º e 2º semestre são fotos independentes — cada um só conta os próprios 6 meses.
-          Se um indicador não bateu meta no 1º semestre, ele não "estraga" o 2º nem se mistura com ele:
-          a chance de recuperação aparece na visão <strong>Acumulado do Ano</strong> (Jan-Dez), que é onde
-          os 12 meses entram juntos na mesma conta.
+          Resultado de cada indicador em cada semestre: o Real do período (soma dos valores ÷ soma da base),
+          a faixa que bateu e quanto isso vale no bônus. O resumo em salários está na aba <strong>Resumo</strong>.
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-4">
-        <HeroPeriodo
-          titulo="1º Semestre"
-          subtitulo="Jan-Jun/2026"
-          resultado={s1}
-          lancados={lancadosS1}
-          total={6}
-          indicadores={indicadores}
-          chave="s1"
-        />
-        <HeroPeriodo
-          titulo="2º Semestre"
-          subtitulo="Jul-Dez/2026"
-          resultado={s2}
-          lancados={lancadosS2}
-          total={totalS2}
-          indicadores={indicadores}
-          chave="s2"
-        />
-      </div>
 
       <div className="flex flex-col gap-3">
         {indicadores.map((item) => (

@@ -6,24 +6,26 @@ import { useBonusData } from '../../hooks/useBonusData'
 import ApuracaoSemestral from '../ApuracaoSemestral'
 import AcumuladoAnoView from '../AcumuladoAnoView'
 import TabelaMensal from '../TabelaMensal'
+import RegraBonus from '../RegraBonus'
 import TendenciaBonus from '../TendenciaBonus'
 
 const ABAS = [
-  { id: 'semestre', label: 'Semestre (oficial)' },
-  { id: 'ano', label: 'Acumulado do Ano' },
+  { id: 'resumo', label: 'Resumo' },
+  { id: 'semestre', label: 'Indicadores por semestre' },
+  { id: 'ano', label: 'Indicadores no ano' },
   { id: 'mes', label: 'Mês a mês' },
 ]
 
 export default function Home() {
   const { anoMes, setAnoMes, resultadosPorMes, resultadoAnual, resultadoAcumuladoAno, loading, error } = useBonusData()
-  const [aba, setAba] = useState('semestre')
+  const [aba, setAba] = useState('resumo')
 
   return (
     <div className="p-6 md:p-8 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-xl font-semibold text-brand-black">Meta de Bônus</h1>
-          <p className="text-xs text-zinc-400 font-mono">Coletiva — 80% do bônus total · Individual 20% (2 metas × 10%) fica fora deste painel</p>
+          <p className="text-xs text-zinc-400 font-mono">2 salários por semestre · até 4 no ano · coletivo 80% + individuais 20%</p>
         </div>
         <input
           type="number"
@@ -53,12 +55,16 @@ export default function Home() {
 
       {!loading && !error && (
         <>
+          {aba === 'resumo' && (
+            <RegraBonus resultadoAnual={resultadoAnual} resultadoAcumuladoAno={resultadoAcumuladoAno} />
+          )}
+
           {aba === 'semestre' && (
             <ApuracaoSemestral resultadoAnual={resultadoAnual} resultadosPorMes={resultadosPorMes} />
           )}
 
           {aba === 'ano' && (
-            <AcumuladoAnoView resultadoAcumuladoAno={resultadoAcumuladoAno} resultadosPorMes={resultadosPorMes} />
+            <AcumuladoAnoView resultadoAcumuladoAno={resultadoAcumuladoAno} resultadoAnual={resultadoAnual} resultadosPorMes={resultadosPorMes} />
           )}
 
           {aba === 'mes' && (

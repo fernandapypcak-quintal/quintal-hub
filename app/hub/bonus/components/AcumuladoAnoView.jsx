@@ -8,9 +8,9 @@
 
 import { useState } from 'react'
 import { CheckCircle2, AlertTriangle, XCircle, Info, LineChart, ChevronDown, ChevronUp } from 'lucide-react'
-import { FAIXA_LABEL } from '@/lib/bonus/scoring'
+import { FAIXA_LABEL, SALARIOS_ANO } from '@/lib/bonus/scoring'
 import MiniTabelaMeses from './MiniTabelaMeses'
-import ComposicaoBonus, { fmtPctBonus } from './ComposicaoBonus'
+import { fmtSal } from './RegraBonus'
 
 const MESES_ANO_LISTA = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
 
@@ -102,10 +102,7 @@ function LinhaIndicador({ item, resultadosPorMes }) {
             Precisamos: <span className="text-zinc-500">{config.objetivo}</span> · Fonte: {config.fonte}
           </p>
         </div>
-        <div className="text-right shrink-0 ml-3">
-          <p className="text-sm text-zinc-400">vale {(config.peso * 100).toFixed(0)}% do bônus total</p>
-          <p className="text-sm text-zinc-600">garantiu <span className="font-semibold">{fmtPctBonus(resultado.pontos)}</span></p>
-        </div>
+        <span className="text-sm text-zinc-400 shrink-0 ml-3">vale {(config.peso * 100).toFixed(0)}% · até {fmtSal(config.peso * SALARIOS_ANO)} sal. no ano</span>
       </div>
 
       <div className="flex flex-wrap items-end gap-6 mb-2">
@@ -168,27 +165,21 @@ function LinhaIndicador({ item, resultadosPorMes }) {
   )
 }
 
-export default function AcumuladoAnoView({ resultadoAcumuladoAno, resultadosPorMes }) {
-  const { ano, indicadores, pontosTotais, mesesLancados } = resultadoAcumuladoAno
+
+
+export default function AcumuladoAnoView({ resultadoAcumuladoAno, resultadoAnual, resultadosPorMes }) {
+  const { ano, indicadores, mesesLancados } = resultadoAcumuladoAno
 
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h2 className="text-2xl font-bold text-brand-black">Acumulado do Ano — {ano}</h2>
+        <h2 className="text-2xl font-bold text-brand-black">Indicadores no ano — {ano}</h2>
         <p className="text-sm text-zinc-500 mt-1">
-          Visão de acompanhamento: acumulado Jan-Dez corrido, sem a regra de recuperação por semestre.
-          Útil pra ver a tendência do ano sem misturar com a mecânica de pagamento do bônus.
+          Acumulado de Jan a Dez de cada indicador (soma dos valores ÷ soma da base) e a faixa que bateu no ano.
+          É esse resultado que entra no quadrinho "Acumulado do Ano" da aba <strong>Resumo</strong>.
         </p>
       </div>
 
-      <div className="rounded-2xl border border-surface-border bg-white p-6 shadow-card max-w-xl">
-        <p className="text-sm font-semibold text-zinc-500 uppercase tracking-wide mb-1">Placar do ano</p>
-        <p className="text-xs text-zinc-400 mb-3">dados de {mesesLancados}/12 meses</p>
-        <ComposicaoBonus
-          itens={indicadores.map((i) => ({ config: i.config, resultado: i.resultado }))}
-          pontosTotais={pontosTotais}
-        />
-      </div>
 
       <div className="flex flex-col gap-3">
         {indicadores.map((item) => (
