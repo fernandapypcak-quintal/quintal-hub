@@ -37,14 +37,15 @@ export type FonteReal =
  * De onde vem a META:
  *  - manual          → lançada na aba Admin (mesma chave do indicador)
  *  - fixa            → mesmo número para todas as casas
- *  - faturamento     → planilha de metas do Faturamento (total da casa)
+ *  - faturamento     → metas do Faturamento (tela Metas / planilha): total da casa,
+ *                       ou só salão (canal CASA) / só delivery (canal DELIVERY)
  *  - reducaoMesAnterior → real do mês anterior × (1 − pct)
  * Uma meta lançada manualmente no Admin sempre tem prioridade.
  */
 export type FonteMeta =
   | { tipo: 'manual' }
   | { tipo: 'fixa'; valor: number }
-  | { tipo: 'faturamento' }
+  | { tipo: 'faturamento'; canal?: 'CASA' | 'DELIVERY' }
   | { tipo: 'reducaoMesAnterior'; pct: number }
   | { tipo: 'nenhuma' }
 
@@ -153,15 +154,13 @@ export const VIGENCIAS_PADRAO: VigenciaMetas[] = [
       },
       {
         key: 'fat_delivery', label: 'Faturamento delivery', curto: 'Delivery', formato: 'moeda', peso: 10, direcao: 'maior', agregacao: 'soma',
-        real: { tipo: 'faturamento', canal: 'DELIVERY' }, meta: { tipo: 'manual' },
-        descricao: 'Faturamento realizado do canal Delivery vs meta.',
-        pendente: 'Meta por canal ainda não enviada: lance no Admin enquanto isso.',
+        real: { tipo: 'faturamento', canal: 'DELIVERY' }, meta: { tipo: 'faturamento', canal: 'DELIVERY' },
+        descricao: 'Faturamento realizado do canal Delivery vs meta de delivery (tela Metas do Faturamento).',
       },
       {
         key: 'fat_salao', label: 'Faturamento salão', curto: 'Salão', formato: 'moeda', peso: 10, direcao: 'maior', agregacao: 'soma',
-        real: { tipo: 'faturamento', canal: 'CASA' }, meta: { tipo: 'manual' },
-        descricao: 'Faturamento realizado do canal Casa (salão) vs meta.',
-        pendente: 'Meta por canal ainda não enviada: lance no Admin enquanto isso.',
+        real: { tipo: 'faturamento', canal: 'CASA' }, meta: { tipo: 'faturamento', canal: 'CASA' },
+        descricao: 'Faturamento realizado do canal Casa (salão) vs meta de salão (tela Metas do Faturamento).',
       },
       {
         key: 'perdas', label: 'Desconto, estorno e desperdício', curto: 'Desc./Est.', formato: 'moeda', peso: 20, direcao: 'menor', agregacao: 'soma',
@@ -242,7 +241,9 @@ export function validarVigencia(v: VigenciaMetas): string[] {
     if (!['manual', 'fixa', 'faturamento', 'reducaoMesAnterior', 'nenhuma'].includes(m?.tipo)) erros.push(`${nome}: origem da meta inválida.`)
     if (m?.tipo === 'fixa' && !Number.isFinite(m.valor)) erros.push(`${nome}: informe o valor da meta fixa.`)
     if (m?.tipo === 'reducaoMesAnterior' && !(Number.isFinite(m.pct) && m.pct >= 0 && m.pct < 1)) erros.push(`${nome}: % de redução deve ser entre 0 e 99.`)
-    if (m?.tipo === 'faturamento' && !(i.real?.tipo === 'faturamento' && !i.real.canal)) erros.push(`${nome}: meta da planilha de faturamento só vale para faturamento total.`)
+    if (m?.tipo === 'faturamento' && !(i.real?.tipo === 'faturamento' && (i.real.canal || null) === (m.canal || null))) {
+      erros.push(`${nome}: a meta do Faturamento precisa ser do mesmo canal do realizado.`)
+    }
   })
   const soma = (v.indicadores || []).reduce((s, i) => s + (Number(i.peso) || 0), 0)
   if (soma !== 100) erros.push(`Os pesos somam ${soma} pts: precisam somar 100.`)

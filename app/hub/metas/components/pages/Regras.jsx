@@ -50,7 +50,7 @@ const ORIGENS_META = [
   { id: 'manual', label: 'Lançada no Input Manual (por casa)' },
   { id: 'fixa', label: 'Fixa, igual para todas as casas' },
   { id: 'reducaoMesAnterior', label: 'Redução vs mês anterior' },
-  { id: 'faturamento', label: 'Planilha de metas do Faturamento' },
+  { id: 'faturamento', label: 'Metas do Faturamento (mesmo canal do realizado)' },
 ]
 
 // ---- pedaços de formulário -------------------------------------------
@@ -104,13 +104,17 @@ function IndicadorCard({ ind, onChange, onRemover, travado }) {
     }
     if (id === 'fat_total' || id === 'fat_casa' || id === 'fat_delivery') patch.direcao = 'maior'
     if (id === 'perdas') patch.direcao = 'menor'
-    if (ind.meta.tipo === 'faturamento' && id !== 'fat_total') patch.meta = { tipo: 'manual' }
+    if (ind.meta.tipo === 'faturamento') {
+      // meta do Faturamento acompanha o canal do realizado; se o realizado deixou de ser faturamento, volta pra manual
+      patch.meta = id.startsWith('fat_') ? (op.real.canal ? { tipo: 'faturamento', canal: op.real.canal } : { tipo: 'faturamento' }) : { tipo: 'manual' }
+    }
     set(patch)
   }
 
   function mudarOrigemMeta(id) {
     if (id === 'fixa') set({ meta: { tipo: 'fixa', valor: ind.meta.valor ?? 0 } })
     else if (id === 'reducaoMesAnterior') set({ meta: { tipo: 'reducaoMesAnterior', pct: ind.meta.pct ?? 0.1 } })
+    else if (id === 'faturamento') set({ meta: ind.real.canal ? { tipo: 'faturamento', canal: ind.real.canal } : { tipo: 'faturamento' } })
     else set({ meta: { tipo: id } })
   }
 
@@ -195,7 +199,7 @@ function IndicadorCard({ ind, onChange, onRemover, travado }) {
         <div className="col-span-12 sm:col-span-4">
           <label className={labelCls}>Meta</label>
           <select className={inputCls} value={ind.meta.tipo === 'nenhuma' ? 'manual' : ind.meta.tipo} disabled={travado} onChange={(e) => mudarOrigemMeta(e.target.value)}>
-            {ORIGENS_META.filter((o) => o.id !== 'faturamento' || origemRealId(ind.real) === 'fat_total').map((o) => (
+            {ORIGENS_META.filter((o) => o.id !== 'faturamento' || ind.real.tipo === 'faturamento').map((o) => (
               <option key={o.id} value={o.id}>{o.label}</option>
             ))}
           </select>

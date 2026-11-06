@@ -115,19 +115,41 @@ async function getFaturamentoReal() {
   return _cacheFatReal
 }
 
-/** { 'YYYY-MM': { unitId: meta } } */
+/** { 'YYYY-MM': { unitId: { total, CASA, DELIVERY } } } — CASA/DELIVERY só se a meta foi separada por canal */
 let _cacheFatMeta = null
 async function getFaturamentoMeta() {
   if (!_cacheFatMeta) {
     try {
       const { json } = await buscarTipo('metas', 'metas')
       const idx = {}
+      const num = (v) => (v === '' || v == null || Number.isNaN(parseFloat(v)) ? null : parseFloat(v))
       ;(json.metas || []).forEach((m) => {
         const id = unitIdFromString(m.Loja)
         if (!id || !m.Ano_Mes) return
         idx[m.Ano_Mes] ??= {}
-        idx[m.Ano_Mes][id] = parseFloat(m.Meta) || 0
+        idx[m.Ano_Mes][id] = { total: num(m.Meta) ?? 0, CASA: num(m.Meta_Salao), DELIVERY: num(m.Meta_Delivery) }
       })
+
+      // Meta por canal (salão/delivery) direto da planilha Quintal Dashboard, via
+      // /api/faturamento/metas — a cópia publicada (CSV) pode não levar essas colunas.
+      // Se a gravação ainda não estiver configurada, segue só com o total do CSV.
+      try {
+        const res = await fetch('/api/faturamento/metas', { cache: 'no-store' }).then((r) => r.json())
+        ;(res.metas || []).forEach((m) => {
+          const id = unitIdFromString(m.Loja)
+          if (!id || !m.Ano_Mes) return
+          idx[m.Ano_Mes] ??= {}
+          const atual = idx[m.Ano_Mes][id] || { total: 0, CASA: null, DELIVERY: null }
+          idx[m.Ano_Mes][id] = {
+            total: num(m.Meta) ?? atual.total,
+            CASA: num(m.Meta_Salao) ?? atual.CASA,
+            DELIVERY: num(m.Meta_Delivery) ?? atual.DELIVERY,
+          }
+        })
+      } catch (e) {
+        console.warn('[Metas] meta por canal indisponível:', e.message)
+      }
+
       _cacheFatMeta = idx
     } catch (e) {
       console.error('[Metas] erro ao buscar meta de faturamento:', e.message)
@@ -183,8 +205,11 @@ function metaDoMes(cfg, dados, anoMes, unidade) {
   switch (cfg.meta.tipo) {
     case 'fixa':
       return cfg.meta.valor
-    case 'faturamento':
-      return dados.fatMeta[anoMes]?.[unidade] ?? null
+    case 'faturamento': {
+      const m = dados.fatMeta[anoMes]?.[unidade]
+      if (!m) return null
+      return cfg.meta.canal ? m[cfg.meta.canal] ?? null : m.total
+    }
     case 'reducaoMesAnterior': {
       const anterior = realDoMes(cfg, dados, mesAnterior(anoMes), unidade)
       if (anterior == null) return null

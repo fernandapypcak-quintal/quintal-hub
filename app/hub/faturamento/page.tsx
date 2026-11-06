@@ -7,5 +7,10 @@ export default async function FaturamentoPage() {
   if (!access) redirect('/login')
   if (!hasDashboardAccess(access, 'faturamento')) redirect('/hub')
 
-  return <FaturamentoClientApp allowedLojas={access.lojas} />
+  return (
+    <FaturamentoClientApp
+      allowedLojas={access.lojas}
+      podeEditarMetas={access.isAdmin || hasDashboardAccess(access, 'faturamento-metas')}
+    />
+  )
 }

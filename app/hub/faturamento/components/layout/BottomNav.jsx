@@ -1,6 +1,6 @@
 // src/components/layout/BottomNav.jsx
 // Navegação inferior para mobile
-import { LayoutDashboard, TrendingUp, Calendar, Store, Table2, Zap, ArrowLeftRight } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, Calendar, Store, Table2, Zap, ArrowLeftRight, Target } from 'lucide-react';
 
 const NAV = [
   { id: 'hoje',     label: 'Hoje',      icon: Zap },
@@ -12,11 +12,12 @@ const NAV = [
   { id: 'history',  label: 'Histórico',  icon: Table2 },
 ];
 
-export default function BottomNav({ activePage, onPageChange }) {
+export default function BottomNav({ activePage, onPageChange, podeEditarMetas = false }) {
+  const itens = podeEditarMetas ? [...NAV, { id: 'metas', label: 'Metas', icon: Target }] : NAV;
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-surface-border
       flex items-stretch h-16 shadow-lg">
-      {NAV.map(item => {
+      {itens.map(item => {
         const Icon = item.icon;
         const active = activePage === item.id;
         return (

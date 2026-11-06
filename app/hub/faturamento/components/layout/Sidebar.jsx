@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import {
   LayoutDashboard, TrendingUp, CalendarRange, Calendar,
-  Store, Table2, ChevronLeft, ChevronRight, Zap, ArrowLeftRight
+  Store, Table2, ChevronLeft, ChevronRight, Zap, ArrowLeftRight, Target
 } from 'lucide-react';
 
 const NAV = [
@@ -15,7 +15,8 @@ const NAV = [
   { id: 'history',  label: 'Histórico',    icon: Table2 },
 ];
 
-export default function Sidebar({ activePage, onPageChange }) {
+export default function Sidebar({ activePage, onPageChange, podeEditarMetas = false }) {
+  const itens = podeEditarMetas ? [...NAV, { id: 'metas', label: 'Metas', icon: Target }] : NAV;
   const [collapsed, setCollapsed] = useState(false);
   return (
     <aside className={`relative flex flex-col bg-surface-card border-r border-surface-border transition-all duration-300 shrink-0 ${collapsed ? 'w-16' : 'w-56'}`} style={{minHeight:'100vh'}}>
@@ -39,7 +40,7 @@ export default function Sidebar({ activePage, onPageChange }) {
         {!collapsed && (
           <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-widest px-3 pb-2">Analytics</p>
         )}
-        {NAV.map(item => {
+        {itens.map(item => {
           const Icon = item.icon;
           const active = activePage === item.id;
           return (

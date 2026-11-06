@@ -19,6 +19,7 @@ import Weekly from './components/pages/Weekly'
 import Stores from './components/pages/Stores'
 import History from './components/pages/History'
 import ComparableDays from './components/pages/ComparableDays'
+import MetasEditor from './components/pages/MetasEditor'
 import LoadingScreen, { ErrorScreen } from './components/ui/LoadingScreen'
 import Link from 'next/link'
 
@@ -30,12 +31,13 @@ const PAGES: Record<string, React.ComponentType> = {
   comparable: ComparableDays,
   stores: Stores,
   history: History,
+  metas: MetasEditor,
 }
 
-function Dashboard() {
+function Dashboard({ podeEditarMetas }: { podeEditarMetas: boolean }) {
   const [activePage, setActivePage] = useState('overview')
   const { loading, error } = useFilters()
-  const PageComponent = PAGES[activePage] || Overview
+  const PageComponent = (activePage === 'metas' && !podeEditarMetas ? Overview : PAGES[activePage]) || Overview
 
   if (loading) return <LoadingScreen message="Carregando faturamento..." />
   if (error) return <ErrorScreen error={error} />
@@ -45,7 +47,7 @@ function Dashboard() {
     <div className="flex h-screen overflow-hidden bg-surface-base">
       {/* Sidebar — só em telas grandes */}
       <div className="hidden lg:flex">
-        <Sidebar activePage={activePage} onPageChange={setActivePage} />
+        <Sidebar activePage={activePage} onPageChange={setActivePage} podeEditarMetas={podeEditarMetas} />
       </div>
 
       {/* Conteúdo principal */}
@@ -70,13 +72,19 @@ function Dashboard() {
 
       {/* Bottom nav — só mobile */}
       <div className="lg:hidden">
-        <BottomNav activePage={activePage} onPageChange={setActivePage} />
+        <BottomNav activePage={activePage} onPageChange={setActivePage} podeEditarMetas={podeEditarMetas} />
       </div>
     </div>
   )
 }
 
-export default function FaturamentoClientApp({ allowedLojas = '*' }: { allowedLojas?: string[] | '*' }) {
+export default function FaturamentoClientApp({
+  allowedLojas = '*',
+  podeEditarMetas = false,
+}: {
+  allowedLojas?: string[] | '*'
+  podeEditarMetas?: boolean
+}) {
   return (
     <FilterProvider allowedLojas={allowedLojas as any}>
       <MetasProvider>
@@ -86,7 +94,7 @@ export default function FaturamentoClientApp({ allowedLojas = '*' }: { allowedLo
               <CompradoresProvider allowedLojas={allowedLojas as any}>
                 <AreasProvider>
                   <MixProdutosProvider>
-                    <Dashboard />
+                    <Dashboard podeEditarMetas={podeEditarMetas} />
                   </MixProdutosProvider>
                 </AreasProvider>
               </CompradoresProvider>

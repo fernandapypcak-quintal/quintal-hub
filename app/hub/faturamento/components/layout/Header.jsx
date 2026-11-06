@@ -9,7 +9,7 @@ import MultiSelect from '../ui/MultiSelect';
 
 const PAGE_LABELS = {
   overview: 'Visão Geral', trend: 'Tendência',
-  weekly: 'Semanal', stores: 'Por Loja', history: 'Histórico',
+  weekly: 'Semanal', stores: 'Por Loja', history: 'Histórico', metas: 'Metas de faturamento',
 };
 
 const MESES = [
