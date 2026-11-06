@@ -13,5 +13,8 @@ export default async function ComercialPage() {
   // tabela user_permissions (Supabase), ou marca a pessoa como admin.
   const podeVerVendedores = access.isAdmin || hasDashboardAccess(access, 'comercial-vendedores')
 
-  return <ComercialClientApp allowedLojas={access.lojas} podeVerVendedores={podeVerVendedores} />
+  // Página Metas (3 faixas, grava na planilha): permissão 'comercial-metas' no admin do hub
+  const podeEditarMetas = access.isAdmin || hasDashboardAccess(access, 'comercial-metas')
+
+  return <ComercialClientApp allowedLojas={access.lojas} podeVerVendedores={podeVerVendedores} podeEditarMetas={podeEditarMetas} />
 }

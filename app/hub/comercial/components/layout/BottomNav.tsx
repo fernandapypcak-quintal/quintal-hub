@@ -8,14 +8,16 @@ const PAGES = [
   { id: 'por_loja',   icon: '🏪', label: 'Lojas' },
   { id: 'fechamento_diario', icon: '📆', label: 'Diário' },
   { id: 'vendedores', icon: '🧑‍💼', label: 'Vend.' },
+  { id: 'metas',      icon: '🎯', label: 'Metas' },
 ]
 
-export default function BottomNav({ activePage, onPageChange, podeVerVendedores = false }: {
+export default function BottomNav({ activePage, onPageChange, podeVerVendedores = false, podeEditarMetas = false }: {
   activePage: string
   onPageChange: (p: string) => void
   podeVerVendedores?: boolean
+  podeEditarMetas?: boolean
 }) {
-  const paginas = PAGES.filter(p => p.id !== 'vendedores' || podeVerVendedores)
+  const paginas = PAGES.filter(p => (p.id !== 'vendedores' || podeVerVendedores) && (p.id !== 'metas' || podeEditarMetas))
   return (
     <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '0.5px solid #E8E8E2', display: 'flex', zIndex: 50 }}>
       {paginas.map(p => (

@@ -34,6 +34,7 @@ export const DASHBOARDS: Dashboard[] = [
 export type SubPermission = { id: string; parentId: string; name: string; color: string }
 export const SUB_PERMISSIONS: SubPermission[] = [
   { id: 'comercial-vendedores', parentId: 'comercial', name: 'Vendedores (comissão)', color: '#7d5ac9' },
+  { id: 'comercial-metas', parentId: 'comercial', name: 'Editar metas do Comercial', color: '#7d5ac9' },
   { id: 'reservas-metas', parentId: 'reservas', name: 'Metas por casa', color: '#0F766E' },
   { id: 'faturamento-metas', parentId: 'faturamento', name: 'Editar metas de faturamento', color: '#97A624' },
   { id: 'metas-lancamentos', parentId: 'metas', name: 'Lançamentos manuais (meta/real)', color: '#7C3AED' },

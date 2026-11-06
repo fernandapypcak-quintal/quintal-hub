@@ -8,14 +8,16 @@ const PAGES = [
   { id: 'por_loja',   icon: '🏪', label: 'Por loja' },
   { id: 'fechamento_diario', icon: '📆', label: 'Fechamento diário' },
   { id: 'vendedores', icon: '🧑‍💼', label: 'Vendedores' },
+  { id: 'metas',      icon: '🎯', label: 'Metas' },
 ]
 
-export default function Sidebar({ activePage, onPageChange, podeVerVendedores = false }: {
+export default function Sidebar({ activePage, onPageChange, podeVerVendedores = false, podeEditarMetas = false }: {
   activePage: string
   onPageChange: (p: string) => void
   podeVerVendedores?: boolean
+  podeEditarMetas?: boolean
 }) {
-  const paginas = PAGES.filter(p => p.id !== 'vendedores' || podeVerVendedores)
+  const paginas = PAGES.filter(p => (p.id !== 'vendedores' || podeVerVendedores) && (p.id !== 'metas' || podeEditarMetas))
   return (
     <aside style={{ width: 220, background: '#fff', borderRight: '0.5px solid #E8E8E2', display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ padding: '16px 18px', borderBottom: '0.5px solid #E8E8E2', display: 'flex', alignItems: 'center', gap: 10 }}>

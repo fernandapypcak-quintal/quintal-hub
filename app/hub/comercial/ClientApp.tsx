@@ -11,6 +11,7 @@ import Conversoes from './components/pages/Conversoes'
 import PorLoja from './components/pages/PorLoja'
 import FechamentoDiario from './components/pages/FechamentoDiario'
 import Vendedores from './components/pages/Vendedores'
+import MetasComercial from './components/pages/MetasComercial'
 import { useVendedores } from './useComercial'
 import { allowedNativeLabels } from '@/lib/units'
 
@@ -30,6 +31,7 @@ const PAGES: Record<string, React.ComponentType<any>> = {
   por_loja:   PorLoja,
   fechamento_diario: FechamentoDiario,
   vendedores: Vendedores,
+  metas: MetasComercial,
 }
 
 const currentYear = new Date().getFullYear()
@@ -41,7 +43,7 @@ const selectStyle = {
   color: '#fff', cursor: 'pointer',
 }
 
-export default function ComercialClientApp({ allowedLojas = '*', podeVerVendedores = false }: { allowedLojas?: string[] | '*'; podeVerVendedores?: boolean }) {
+export default function ComercialClientApp({ allowedLojas = '*', podeVerVendedores = false, podeEditarMetas = false }: { allowedLojas?: string[] | '*'; podeVerVendedores?: boolean; podeEditarMetas?: boolean }) {
   const idsPermitidos = allowedNativeLabels(allowedLojas as any, 'comercialId')
   const UNIDADES = idsPermitidos === '*' ? TODAS_UNIDADES : TODAS_UNIDADES.filter(u => idsPermitidos.includes(u.id))
   const podeVerTodas = allowedLojas === '*'
@@ -51,6 +53,7 @@ export default function ComercialClientApp({ allowedLojas = '*', podeVerVendedor
     // Defesa em profundidade: mesmo que alguém force o id pelo estado, a
     // página de Vendedores (comissão) só abre pra quem tem a permissão.
     if (p === 'vendedores' && !podeVerVendedores) return
+    if (p === 'metas' && !podeEditarMetas) return
     setActivePageRaw(p)
   }
   const [filtros, setFiltros] = useState({
@@ -62,7 +65,8 @@ export default function ComercialClientApp({ allowedLojas = '*', podeVerVendedor
   })
 
   const vendedores = useVendedores()
-  const Page = (activePage === 'vendedores' && !podeVerVendedores) ? OnePage : (PAGES[activePage] || OnePage)
+  const bloqueada = (activePage === 'vendedores' && !podeVerVendedores) || (activePage === 'metas' && !podeEditarMetas)
+  const Page = bloqueada ? OnePage : (PAGES[activePage] || OnePage)
 
   function set(key: string, val: string) {
     setFiltros(f => ({ ...f, [key]: val }))
@@ -71,7 +75,7 @@ export default function ComercialClientApp({ allowedLojas = '*', podeVerVendedor
   return (
     <div className="flex h-screen overflow-hidden bg-surface-base">
       <div className="hidden lg:flex">
-        <Sidebar activePage={activePage} onPageChange={setActivePage} podeVerVendedores={podeVerVendedores} />
+        <Sidebar activePage={activePage} onPageChange={setActivePage} podeVerVendedores={podeVerVendedores} podeEditarMetas={podeEditarMetas} />
       </div>
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
@@ -131,7 +135,7 @@ export default function ComercialClientApp({ allowedLojas = '*', podeVerVendedor
       </div>
 
       <div className="lg:hidden">
-        <BottomNav activePage={activePage} onPageChange={setActivePage} podeVerVendedores={podeVerVendedores} />
+        <BottomNav activePage={activePage} onPageChange={setActivePage} podeVerVendedores={podeVerVendedores} podeEditarMetas={podeEditarMetas} />
       </div>
     </div>
   )
