@@ -24,7 +24,7 @@ export default function RankingUnidades({ ranking }) {
         <div className="flex rounded-lg border border-surface-border overflow-hidden">
           {[
             { id: 'todas', label: `Todas (${ranking.length})` },
-            { id: 'criticas', label: `Top 5 críticas` },
+            { id: 'criticas', label: `Críticas (${ranking.filter((u) => u.critica).length})` },
           ].map((op) => (
             <button
               key={op.id}

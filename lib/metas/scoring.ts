@@ -1,173 +1,45 @@
 // lib/metas/scoring.ts
 //
-// Pontuação: passou a ser calculada no nível do GERENTE, sobre o Total
-// (agregado) da carteira dele em cada categoria — não mais por unidade.
-// Cada categoria vale o peso cheio (30/10/10/10/10/30) se o Total bateu
-// a meta, 0 se não bateu. Soma das 6 categorias = pontuação do gerente
-// (0 a 100).
+// Pontuação do regional, calculada sobre o Total (agregado) da carteira
+// em cada indicador. As regras (indicadores, pesos, direção, agregação,
+// críticas) vêm da vigência do mês — ver lib/metas/config.ts.
 //
-// Agregação do Total, igual à planilha original:
-//   % (CMV, Custo Folha, NPS)              -> MÉDIA das unidades
-//   R$ (Custo Freela, Bandas, Faturamento) -> SOMA das unidades
+// Cada indicador vale o peso cheio se o Total bateu a meta, 0 se não.
+//   direcao 'menor' → bate se real ≤ meta  (custos)
+//   direcao 'maior' → bate se real ≥ meta  (faturamento, NPS)
+//   direcao 'saldo' → bate se real − custoArtista > 0  (legado Bandas)
 //
-//   CMV            -> bate se real <= meta   (custo menor é melhor)
-//   Custo Folha     -> bate se real <= meta
-//   Custo Freela    -> bate se real <= meta
-//   NPS             -> bate se real >= meta   (meta fixa 85)
-//   Bandas          -> bate se arrecadação - custo do artista > 0
-//   Faturamento     -> bate se real >= meta
+// Agregação do Total: 'media' das unidades (%) ou 'soma' (R$).
 
-export type IndicadorKey = 'cmv' | 'custo_folha' | 'custo_freela' | 'nps' | 'bandas' | 'faturamento'
-export type TipoAgregacao = 'media' | 'soma'
+import type { IndicadorConfig, IndicadorKey, RegraCriticas, TipoAgregacao, VigenciaMetas } from './config'
+import { totalPontosPossiveis } from './config'
 
-export const PESOS_PTS: Record<IndicadorKey, number> = {
-  cmv: 30,
-  custo_folha: 10,
-  custo_freela: 10,
-  nps: 10,
-  bandas: 10,
-  faturamento: 30,
-}
-
-export const TIPO_AGREGACAO: Record<IndicadorKey, TipoAgregacao> = {
-  cmv: 'media',
-  custo_folha: 'media',
-  custo_freela: 'soma',
-  nps: 'media',
-  bandas: 'soma',
-  faturamento: 'soma',
-}
-
-export const TOTAL_PTS_POSSIVEL = Object.values(PESOS_PTS).reduce((a, b) => a + b, 0) // 100
+export type { IndicadorKey, TipoAgregacao } from './config'
 
 export interface InputIndicador {
   indicador: IndicadorKey
-  meta: number
-  real: number
-  /** só usado em 'bandas': custo do artista, comparado com `real` = arrecadação */
+  meta: number | null
+  real: number | null
+  /** só usado em direcao 'saldo' (Bandas): custo do artista, comparado com `real` = arrecadação */
   custoArtista?: number
 }
 
 export interface LinhaIndicador extends InputIndicador {
-  delta: number
+  delta: number | null
 }
 
 export interface ResultadoIndicadorGerente extends InputIndicador {
   bateuMeta: boolean
-  delta: number
+  semDado: boolean
+  delta: number | null
   pontos: number
 }
 
 export interface ResultadoUnidade {
   unidade: string // UnitId de lib/units.ts
-  mesRef: string // 'YYYY-MM-01'
+  mesRef: string
   indicadores: LinhaIndicador[]
 }
-
-export interface ResultadoGerente {
-  gerenteId: string
-  gerenteNome: string
-  mesRef: string
-  unidades: ResultadoUnidade[]
-  totalIndicadores: ResultadoIndicadorGerente[]
-  pontosTotais: number
-  pontosPossiveis: number
-}
-
-function calcularDelta(input: InputIndicador): number {
-  if (input.indicador === 'bandas') return input.real - (input.custoArtista ?? 0)
-  return input.real - input.meta
-}
-
-export function calcularLinhaIndicador(input: InputIndicador): LinhaIndicador {
-  return { ...input, delta: calcularDelta(input) }
-}
-
-export function calcularResultadoUnidade(unidade: string, mesRef: string, inputs: InputIndicador[]): ResultadoUnidade {
-  return { unidade, mesRef, indicadores: inputs.map(calcularLinhaIndicador) }
-}
-
-function agregar(tipo: TipoAgregacao, valores: number[]): number {
-  if (valores.length === 0) return 0
-  const soma = valores.reduce((a, b) => a + b, 0)
-  return tipo === 'media' ? soma / valores.length : soma
-}
-
-function bateuMetaTotal(indicador: IndicadorKey, meta: number, real: number, custoArtista: number): boolean {
-  switch (indicador) {
-    case 'cmv':
-    case 'custo_folha':
-    case 'custo_freela':
-      return real <= meta
-    case 'nps':
-    case 'faturamento':
-      return real >= meta
-    case 'bandas':
-      return real - custoArtista > 0
-    default:
-      return false
-  }
-}
-
-/** Agrega as unidades da carteira do gerente e pontua cada categoria uma vez (nível Total). */
-export function calcularResultadoGerente(
-  gerenteId: string,
-  gerenteNome: string,
-  mesRef: string,
-  unidades: ResultadoUnidade[]
-): ResultadoGerente {
-  const indicadoresPresentes = new Set<IndicadorKey>()
-  unidades.forEach((u) => u.indicadores.forEach((i) => indicadoresPresentes.add(i.indicador)))
-
-  const totalIndicadores: ResultadoIndicadorGerente[] = []
-
-  indicadoresPresentes.forEach((indicador) => {
-    const linhas = unidades
-      .map((u) => u.indicadores.find((i) => i.indicador === indicador))
-      .filter((l): l is LinhaIndicador => !!l)
-
-    const tipo = TIPO_AGREGACAO[indicador]
-    const meta = agregar(tipo, linhas.map((l) => l.meta))
-    const real = agregar(tipo, linhas.map((l) => l.real))
-    const custoArtista = agregar(tipo, linhas.map((l) => l.custoArtista ?? 0))
-
-    const bateuMeta = bateuMetaTotal(indicador, meta, real, custoArtista)
-    const delta = indicador === 'bandas' ? real - custoArtista : real - meta
-
-    totalIndicadores.push({
-      indicador,
-      meta,
-      real,
-      custoArtista: indicador === 'bandas' ? custoArtista : undefined,
-      bateuMeta,
-      delta,
-      pontos: bateuMeta ? PESOS_PTS[indicador] : 0,
-    })
-  })
-
-  return {
-    gerenteId,
-    gerenteNome,
-    mesRef,
-    unidades,
-    totalIndicadores,
-    pontosTotais: totalIndicadores.reduce((soma, r) => soma + r.pontos, 0),
-    pontosPossiveis: TOTAL_PTS_POSSIVEL,
-  }
-}
-
-// -------------------------------------------------------------------
-// Pontuação POR UNIDADE — usada no Ranking de Unidades (antigo
-// Consolidado + Top 5) e como referência na matriz de cada gerente.
-// Mesma regra binária e mesmos pesos do gerente, aplicada à unidade
-// isolada. NÃO altera a pontuação do gerente (bônus), que continua
-// sendo calculada sobre o Total da carteira em calcularResultadoGerente.
-//
-// Diferença: indicador sem lançamento, ou sem meta (meta <= 0, exceto
-// Bandas), vira 'sem_dado' em vez de contar como batido/não batido.
-// -------------------------------------------------------------------
-
-export const ORDEM_INDICADORES: IndicadorKey[] = ['cmv', 'custo_folha', 'custo_freela', 'nps', 'bandas', 'faturamento']
 
 export type StatusIndicador = 'bateu' | 'nao_bateu' | 'sem_dado'
 
@@ -194,21 +66,95 @@ export interface PontuacaoUnidade {
   qtdComDado: number
 }
 
-export function pontuarUnidade(resultado: ResultadoUnidade): PontuacaoUnidade {
+export interface StatusCritica {
+  unidade: string
+  pontos: number
+  qtdBateu: number
+  qtdComDado: number
+  /** null quando não há regra definida */
+  ok: boolean | null
+}
+
+export interface ResultadoGerente {
+  gerenteId: string
+  gerenteNome: string
+  mesRef: string
+  unidades: ResultadoUnidade[]
+  totalIndicadores: ResultadoIndicadorGerente[]
+  /** pontos dos indicadores, antes da regra das críticas */
+  pontosIndicadores: number
+  /** pontos finais (após regra das críticas, se houver) */
+  pontosTotais: number
+  pontosPossiveis: number
+  criticas: StatusCritica[]
+  /** null = sem regra; true = cumpriu; false = não cumpriu (pontos ajustados) */
+  criticasOk: boolean | null
+}
+
+function indicadorPorKey(v: VigenciaMetas, key: IndicadorKey): IndicadorConfig | undefined {
+  return v.indicadores.find((i) => i.key === key)
+}
+
+function temMeta(cfg: IndicadorConfig, linha: InputIndicador): boolean {
+  if (cfg.direcao === 'saldo') return true
+  return linha.meta != null && linha.meta > 0
+}
+
+function temReal(cfg: IndicadorConfig, linha: InputIndicador): boolean {
+  if (cfg.direcao === 'saldo') return linha.real != null || linha.custoArtista != null
+  return linha.real != null
+}
+
+function bateu(cfg: IndicadorConfig, meta: number, real: number, custoArtista: number): boolean {
+  if (cfg.direcao === 'saldo') return real - custoArtista > 0
+  if (cfg.direcao === 'menor') return real <= meta
+  return real >= meta
+}
+
+function calcularDelta(cfg: IndicadorConfig | undefined, input: InputIndicador): number | null {
+  if (cfg?.direcao === 'saldo') return (input.real ?? 0) - (input.custoArtista ?? 0)
+  if (input.real == null || input.meta == null) return null
+  return input.real - input.meta
+}
+
+export function calcularResultadoUnidade(
+  v: VigenciaMetas,
+  unidade: string,
+  mesRef: string,
+  inputs: InputIndicador[]
+): ResultadoUnidade {
+  return {
+    unidade,
+    mesRef,
+    indicadores: inputs.map((i) => ({ ...i, delta: calcularDelta(indicadorPorKey(v, i.indicador), i) })),
+  }
+}
+
+export function agregar(tipo: TipoAgregacao, valores: (number | null | undefined)[]): number | null {
+  const validos = valores.filter((x): x is number => x != null && !Number.isNaN(x))
+  if (validos.length === 0) return null
+  const soma = validos.reduce((a, b) => a + b, 0)
+  return tipo === 'media' ? soma / validos.length : soma
+}
+
+// -------------------------------------------------------------------
+// Pontuação POR UNIDADE — matriz, ranking e regra das críticas.
+// Indicador sem lançamento ou sem meta vira 'sem_dado'.
+// -------------------------------------------------------------------
+export function pontuarUnidade(v: VigenciaMetas, resultado: ResultadoUnidade): PontuacaoUnidade {
   const indicadores = {} as Record<IndicadorKey, PontuacaoIndicadorUnidade>
   let pontosTotais = 0
   let pontosComDado = 0
   let qtdBateu = 0
   let qtdComDado = 0
 
-  ORDEM_INDICADORES.forEach((indicador) => {
-    const linha = resultado.indicadores.find((i) => i.indicador === indicador)
-    const pesoPts = PESOS_PTS[indicador]
-    const semMeta = !!linha && indicador !== 'bandas' && !(linha.meta > 0)
+  v.indicadores.forEach((cfg) => {
+    const linha = resultado.indicadores.find((i) => i.indicador === cfg.key)
+    const pesoPts = cfg.peso
 
-    if (!linha || semMeta) {
-      indicadores[indicador] = {
-        indicador,
+    if (!linha || !temMeta(cfg, linha) || !temReal(cfg, linha)) {
+      indicadores[cfg.key] = {
+        indicador: cfg.key,
         status: 'sem_dado',
         pontos: 0,
         pesoPts,
@@ -220,16 +166,16 @@ export function pontuarUnidade(resultado: ResultadoUnidade): PontuacaoUnidade {
       return
     }
 
-    const bateu = bateuMetaTotal(indicador, linha.meta, linha.real, linha.custoArtista ?? 0)
-    const pontos = bateu ? pesoPts : 0
+    const ok = bateu(cfg, linha.meta ?? 0, linha.real ?? 0, linha.custoArtista ?? 0)
+    const pontos = ok ? pesoPts : 0
     pontosTotais += pontos
     pontosComDado += pesoPts
     qtdComDado += 1
-    if (bateu) qtdBateu += 1
+    if (ok) qtdBateu += 1
 
-    indicadores[indicador] = {
-      indicador,
-      status: bateu ? 'bateu' : 'nao_bateu',
+    indicadores[cfg.key] = {
+      indicador: cfg.key,
+      status: ok ? 'bateu' : 'nao_bateu',
       pontos,
       pesoPts,
       meta: linha.meta,
@@ -244,35 +190,95 @@ export function pontuarUnidade(resultado: ResultadoUnidade): PontuacaoUnidade {
     indicadores,
     pontosTotais,
     pontosComDado,
-    pontosPossiveis: TOTAL_PTS_POSSIVEL,
+    pontosPossiveis: totalPontosPossiveis(v),
     qtdBateu,
     qtdComDado,
   }
 }
 
-/** Ordenação do ranking: pontos, depois nº de metas batidas, depois desvio de faturamento. */
-export function compararUnidades(a: PontuacaoUnidade, b: PontuacaoUnidade): number {
-  if (b.pontosTotais !== a.pontosTotais) return b.pontosTotais - a.pontosTotais
-  if (b.qtdBateu !== a.qtdBateu) return b.qtdBateu - a.qtdBateu
-  const fat = (p: PontuacaoUnidade) => {
-    const f = p.indicadores.faturamento
-    return f.meta && f.real != null ? f.real / f.meta - 1 : -Infinity
+function avaliarCritica(regra: RegraCriticas, p: PontuacaoUnidade): boolean | null {
+  if (!regra) return null
+  if (regra.tipo === 'todas_criticas') return p.pontosTotais >= regra.minimoPontos
+  return null
+}
+
+/** Agrega as unidades da carteira, pontua cada indicador uma vez (nível Total) e aplica a regra das críticas. */
+export function calcularResultadoGerente(
+  v: VigenciaMetas,
+  gerenteId: string,
+  gerenteNome: string,
+  mesRef: string,
+  unidades: ResultadoUnidade[]
+): ResultadoGerente {
+  const totalIndicadores: ResultadoIndicadorGerente[] = v.indicadores.map((cfg) => {
+    const linhas = unidades
+      .map((u) => u.indicadores.find((i) => i.indicador === cfg.key))
+      .filter((l): l is LinhaIndicador => !!l)
+
+    const meta = agregar(cfg.agregacao, linhas.map((l) => l.meta))
+    const real = agregar(cfg.agregacao, linhas.map((l) => l.real))
+    const custoArtista = cfg.direcao === 'saldo' ? agregar(cfg.agregacao, linhas.map((l) => l.custoArtista)) ?? 0 : undefined
+    const input: InputIndicador = { indicador: cfg.key, meta, real, custoArtista }
+
+    const semDado = linhas.length === 0 || !temMeta(cfg, input) || !temReal(cfg, input)
+    const bateuMeta = !semDado && bateu(cfg, meta ?? 0, real ?? 0, custoArtista ?? 0)
+
+    return {
+      ...input,
+      semDado,
+      bateuMeta,
+      delta: semDado ? null : calcularDelta(cfg, input),
+      pontos: bateuMeta ? cfg.peso : 0,
+    }
+  })
+
+  const pontosIndicadores = totalIndicadores.reduce((s, r) => s + r.pontos, 0)
+
+  const criticas: StatusCritica[] = unidades
+    .filter((u) => (v.unidadesCriticas as string[]).includes(u.unidade))
+    .map((u) => {
+      const p = pontuarUnidade(v, u)
+      return { unidade: u.unidade, pontos: p.pontosTotais, qtdBateu: p.qtdBateu, qtdComDado: p.qtdComDado, ok: avaliarCritica(v.regraCriticas, p) }
+    })
+
+  let criticasOk: boolean | null = null
+  let pontosTotais = pontosIndicadores
+  if (v.regraCriticas && criticas.length > 0) {
+    criticasOk = criticas.every((c) => c.ok)
+    if (!criticasOk) {
+      const ef = v.regraCriticas.efeito
+      pontosTotais = ef.tipo === 'zera' ? 0 : Math.round(pontosIndicadores * ef.fator)
+    }
   }
-  return fat(b) - fat(a)
+
+  return {
+    gerenteId,
+    gerenteNome,
+    mesRef,
+    unidades,
+    totalIndicadores,
+    pontosIndicadores,
+    pontosTotais,
+    pontosPossiveis: totalPontosPossiveis(v),
+    criticas,
+    criticasOk,
+  }
+}
+
+/** Desvio % do primeiro indicador de faturamento com meta — critério de desempate. */
+function desvioFaturamento(p: PontuacaoUnidade): number {
+  const f = p.indicadores.faturamento ?? p.indicadores.fat_salao ?? p.indicadores.fat_delivery
+  return f && f.meta && f.real != null ? f.real / f.meta - 1 : -Infinity
 }
 
 /**
- * Ordenação da visão por unidade (sem pontos): mais metas batidas
- * primeiro; empate → menos metas furadas; depois desvio de faturamento.
+ * Ordenação da visão por unidade: mais metas batidas primeiro;
+ * empate → menos metas furadas; depois desvio de faturamento.
  */
 export function compararPorMetasBatidas(a: PontuacaoUnidade, b: PontuacaoUnidade): number {
   if (b.qtdBateu !== a.qtdBateu) return b.qtdBateu - a.qtdBateu
   const furadasA = a.qtdComDado - a.qtdBateu
   const furadasB = b.qtdComDado - b.qtdBateu
   if (furadasA !== furadasB) return furadasA - furadasB
-  const fat = (p: PontuacaoUnidade) => {
-    const f = p.indicadores.faturamento
-    return f.meta && f.real != null ? f.real / f.meta - 1 : -Infinity
-  }
-  return fat(b) - fat(a)
+  return desvioFaturamento(b) - desvioFaturamento(a)
 }

@@ -1,23 +1,21 @@
 // app/hub/metas/components/pages/Admin.jsx
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { UNITS } from '@/lib/units'
 import { useMetasData } from '../../hooks/useMetasData'
-
-const INDICADORES = [
-  { key: 'cmv', label: 'CMV' },
-  { key: 'custo_folha', label: 'Custo Folha' },
-  { key: 'custo_freela', label: 'Custo Freela' },
-  { key: 'nps', label: 'NPS' },
-  { key: 'bandas_custo_artista', label: 'Bandas — Custo Artista' },
-  { key: 'bandas_arrecadacao', label: 'Bandas — Arrecadação' },
-]
+import { chavesManuais } from '@/lib/metas/config'
 
 export default function Admin() {
-  const { anoMes, salvarIndicador } = useMetasData()
+  const { anoMes, vigencia, salvarIndicador } = useMetasData()
+  const opcoes = useMemo(() => chavesManuais(vigencia), [vigencia])
   const [unidade, setUnidade] = useState(UNITS[0].id)
-  const [indicador, setIndicador] = useState('cmv')
+  const [indicador, setIndicador] = useState(opcoes[0]?.key ?? '')
+  useEffect(() => {
+    if (!opcoes.some((o) => o.key === indicador)) setIndicador(opcoes[0]?.key ?? '')
+  }, [opcoes, indicador])
+  const opcao = opcoes.find((o) => o.key === indicador)
+  const cfg = vigencia.indicadores.find((i) => i.key === indicador)
   const [meta, setMeta] = useState('')
   const [real, setReal] = useState('')
   const [trimestreCongelado, setTrimestreCongelado] = useState('')
@@ -74,10 +72,18 @@ export default function Admin() {
             onChange={(e) => setIndicador(e.target.value)}
             className="w-full rounded-md border border-surface-border px-3 py-2 text-sm"
           >
-            {INDICADORES.map((i) => (
+            {opcoes.map((i) => (
               <option key={i.key} value={i.key}>{i.label}</option>
             ))}
           </select>
+          {cfg && (
+            <p className="text-xs text-zinc-500 mt-1.5 leading-snug">
+              {cfg.descricao}
+              {cfg.formato === 'pct' && ' Lance em fração: 32% = 0.32.'}
+              {opcao && !opcao.lancaReal && ' O real vem automático; aqui só a meta.'}
+              {cfg.meta.tipo === 'reducaoMesAnterior' && ' Se deixar a meta vazia, ela é calculada sozinha.'}
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -85,21 +91,23 @@ export default function Admin() {
             <label className="block text-sm text-zinc-500 mb-1">Meta</label>
             <input
               type="number" step="any" value={meta}
+              disabled={opcao && !opcao.lancaMeta}
               onChange={(e) => setMeta(e.target.value)}
-              className="w-full rounded-md border border-surface-border px-3 py-2 text-sm font-mono"
+              className="w-full rounded-md border border-surface-border px-3 py-2 text-sm font-mono disabled:bg-surface-muted disabled:text-zinc-400"
             />
           </div>
           <div>
             <label className="block text-sm text-zinc-500 mb-1">Real</label>
             <input
               type="number" step="any" value={real}
+              disabled={opcao && !opcao.lancaReal}
               onChange={(e) => setReal(e.target.value)}
-              className="w-full rounded-md border border-surface-border px-3 py-2 text-sm font-mono"
+              className="w-full rounded-md border border-surface-border px-3 py-2 text-sm font-mono disabled:bg-surface-muted disabled:text-zinc-400"
             />
           </div>
         </div>
 
-        {['cmv', 'custo_folha', 'custo_freela'].includes(indicador) && (
+        {cfg?.formato === 'pct' && (
           <div>
             <label className="block text-sm text-zinc-500 mb-1">Trimestre congelado (opcional, ex: 2026-Q3)</label>
             <input

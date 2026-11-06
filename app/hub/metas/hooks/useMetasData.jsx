@@ -1,225 +1,225 @@
 // app/hub/metas/hooks/useMetasData.jsx
 //
-// Junta duas fontes:
-// 1. Indicadores manuais (CMV, Custo Folha, Custo Freela, NPS, Bandas)
-//    via /api/metas (proxy pro Apps Script QuintalMetas.gs).
-// 2. Faturamento (Meta + Real) — reaproveita a mesma fonte que já
-//    alimenta o dashboard de Faturamento.
+// As REGRAS (indicadores, pesos, regionais, críticas) vêm de
+// lib/metas/config.ts, pela vigência do mês selecionado. Este hook só
+// busca os dados e entrega para o cálculo.
 //
-// Suporta visão Mês (1 mês) e Trimestre (agrega 3 meses: % por média,
-// R$ por soma — mesma regra usada pro Total de cada gerente).
+// Fontes:
+// 1. Lançamentos manuais (CMV, Custo c/ pessoas, NPS, metas por canal…)
+//    via /api/metas (Apps Script QuintalMetas.gs) — UMA chamada com a
+//    planilha inteira; filtragem por mês no cliente (chamadas paralelas
+//    no Apps Script travam/estouram timeout).
+// 2. Faturamento real (total e por canal CASA/DELIVERY) e meta de
+//    faturamento — mesma fonte do dashboard Faturamento.
+// 3. Desconto + estorno (+ desperdício) por unidade/mês — /api/metas/perdas,
+//    que resume o Relatório de Descontos. Carrega em segundo plano
+//    (é lento) e só se a vigência usar esse indicador.
 //
-// Agrupa por gerente (lib/metas/gerentes.ts) e filtra pelas unidades
-// permitidas do usuário — quem tem lojas:'*' (admin/diretor) vê os 3
-// grupos + Ranking de Unidades (com filtro Top 5); cada gerente só vê
-// o próprio.
-//
-// IMPORTANTE: os indicadores manuais são buscados do Apps Script UMA
-// ÚNICA VEZ (sheet inteira, sem filtro de mes_ref) e depois filtrados
-// no cliente por mês. Bater no Apps Script em paralelo (uma chamada
-// por mês, como era antes) faz o Google enfileirar/travar execuções
-// concorrentes e estourar timeout — por isso trimestre (3 meses em
-// paralelo) quebrava e mês (1 chamada) não.
+// Visão Mês (1 mês) ou Trimestre (3 meses agregados por média/soma,
+// conforme a `agregacao` de cada indicador).
 
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
 import { isUnitAllowed, unitIdFromString, ALL_UNIT_IDS } from '@/lib/units'
-import { GERENTES } from '@/lib/metas/gerentes'
+import { vigenciaDoMes } from '@/lib/metas/config'
 import {
   calcularResultadoUnidade,
   calcularResultadoGerente,
   pontuarUnidade,
   compararPorMetasBatidas,
-  TIPO_AGREGACAO,
+  agregar,
 } from '@/lib/metas/scoring'
 import { loadData, buscarTipo } from '@/app/hub/faturamento/data/loader'
 
 const MetasDataContext = createContext(null)
 
+const pad2 = (n) => String(n).padStart(2, '0')
+
 function mesAtualStr() {
   const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}`
 }
 
-function primeiroDiaDoMes(anoMes) {
-  return `${anoMes}-01`
+function mesAnterior(anoMes) {
+  const [a, m] = anoMes.split('-').map(Number)
+  return m === 1 ? `${a - 1}-12` : `${a}-${pad2(m - 1)}`
 }
 
 function trimestreDoMes(anoMes) {
   const [ano, mes] = anoMes.split('-').map(Number)
-  const tri = Math.floor((mes - 1) / 3) + 1
-  return `${ano}-Q${tri}`
+  return `${ano}-Q${Math.floor((mes - 1) / 3) + 1}`
 }
 
 function mesesDoTrimestre(anoMes) {
   const [ano, mes] = anoMes.split('-').map(Number)
-  const triInicio = Math.floor((mes - 1) / 3) * 3 + 1 // 1, 4, 7 ou 10
-  return [0, 1, 2].map((i) => `${ano}-${String(triInicio + i).padStart(2, '0')}`)
+  const ini = Math.floor((mes - 1) / 3) * 3 + 1
+  return [0, 1, 2].map((i) => `${ano}-${pad2(ini + i)}`)
+}
+
+/** Fração do mês já decorrida (1 para meses fechados) — usada para proporcionalizar metas "vs mês anterior". */
+function fracaoDoMes(anoMes) {
+  if (anoMes !== mesAtualStr()) return 1
+  const hoje = new Date()
+  const dias = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate()
+  return hoje.getDate() / dias
 }
 
 // -------------------------------------------------------------------
-// Indicadores manuais — busca a planilha INTEIRA de uma vez só (sem
-// mes_ref), cacheada em memória; filtragem por mês acontece no cliente.
-// Isso evita bater no Apps Script mais de uma vez por sessão (exceto
-// quando algo é salvo, que invalida o cache).
+// Caches em memória (por sessão)
 // -------------------------------------------------------------------
-let _cacheManuaisTodos = null
-
+let _cacheManuais = null
 async function getTodosManuais() {
-  if (!_cacheManuaisTodos) {
+  if (!_cacheManuais) {
     const res = await fetch('/api/metas').then((r) => r.json())
     if (res.erro) throw new Error(res.erro)
-    _cacheManuaisTodos = res.metas || []
+    _cacheManuais = res.metas || []
   }
-  return _cacheManuaisTodos
+  return _cacheManuais
 }
-
 function invalidarCacheManuais() {
-  _cacheManuaisTodos = null
+  _cacheManuais = null
 }
 
-// -------------------------------------------------------------------
-// Faturamento Real por loja/mês — total Casa+Delivery. Cache simples
-// pra não rebuscar o histórico completo repetidas vezes.
-// -------------------------------------------------------------------
-let _cacheFaturamentoRows = null
-
-async function getFaturamentoRows() {
-  if (!_cacheFaturamentoRows) {
-    _cacheFaturamentoRows = await loadData(false)
-  }
-  return _cacheFaturamentoRows
-}
-
-async function buscarFaturamentoRealPorMes(anoMes) {
-  try {
-    const rows = await getFaturamentoRows()
-    const porLoja = {}
-    rows.filter((r) => r.Ano_Mes === anoMes).forEach((r) => {
-      const id = unitIdFromString(r.Loja)
-      if (!id) return
-      porLoja[id] = (porLoja[id] || 0) + r.Valor
-    })
-    return porLoja
-  } catch (e) {
-    console.error('[Metas] erro ao buscar faturamento real:', e.message)
-    return {}
-  }
-}
-
-// Meta de faturamento — reaproveita buscarTipo() do loader do Faturamento:
-// CSV publicado → Web App → cópia local salva no navegador, com retry.
-// Mesma fonte que o useMetas.jsx do Faturamento usa, só que lida aqui
-// direto (sem precisar do MetasProvider daquele módulo).
-let _cacheFaturamentoMetas = null
-
-async function buscarFaturamentoMetaPorMes(anoMes) {
-  try {
-    if (!_cacheFaturamentoMetas) {
-      const { json } = await buscarTipo('metas', 'metas')
-      _cacheFaturamentoMetas = json.metas || []
-    }
-    const porLoja = {}
-    _cacheFaturamentoMetas
-      .filter((m) => (m.Ano_Mes || '') === anoMes)
-      .forEach((m) => {
-        const id = unitIdFromString(m.Loja)
-        if (id) porLoja[id] = parseFloat(m.Meta) || 0
+/** { 'YYYY-MM': { unitId: { total, CASA, DELIVERY } } } */
+let _cacheFatReal = null
+async function getFaturamentoReal() {
+  if (!_cacheFatReal) {
+    try {
+      const rows = await loadData(false)
+      const idx = {}
+      rows.forEach((r) => {
+        const id = unitIdFromString(r.Loja)
+        if (!id) return
+        idx[r.Ano_Mes] ??= {}
+        const u = (idx[r.Ano_Mes][id] ??= { total: 0 })
+        u.total += r.Valor
+        u[r.Canal] = (u[r.Canal] || 0) + r.Valor
       })
-    return porLoja
-  } catch (e) {
-    console.error('[Metas] erro ao buscar meta de faturamento:', e.message)
-    return {}
+      _cacheFatReal = idx
+    } catch (e) {
+      console.error('[Metas] erro ao buscar faturamento real:', e.message)
+      return {}
+    }
+  }
+  return _cacheFatReal
+}
+
+/** { 'YYYY-MM': { unitId: meta } } */
+let _cacheFatMeta = null
+async function getFaturamentoMeta() {
+  if (!_cacheFatMeta) {
+    try {
+      const { json } = await buscarTipo('metas', 'metas')
+      const idx = {}
+      ;(json.metas || []).forEach((m) => {
+        const id = unitIdFromString(m.Loja)
+        if (!id || !m.Ano_Mes) return
+        idx[m.Ano_Mes] ??= {}
+        idx[m.Ano_Mes][id] = parseFloat(m.Meta) || 0
+      })
+      _cacheFatMeta = idx
+    } catch (e) {
+      console.error('[Metas] erro ao buscar meta de faturamento:', e.message)
+      return {}
+    }
+  }
+  return _cacheFatMeta
+}
+
+/** { 'YYYY-MM': { unitId: { descontos, estornos, total } } } */
+let _cachePerdas = null
+async function getPerdas() {
+  if (!_cachePerdas) {
+    const res = await fetch('/api/metas/perdas').then((r) => r.json())
+    if (res.erro) throw new Error(res.erro)
+    _cachePerdas = res.porMes || {}
+  }
+  return _cachePerdas
+}
+
+// -------------------------------------------------------------------
+// Leitura de UM indicador, de UMA unidade, em UM mês
+// -------------------------------------------------------------------
+function linhaManual(dados, anoMes, unidade, chave) {
+  const mesRef = `${anoMes}-01`
+  return dados.manuais.find((l) => l.mes_ref === mesRef && l.unidade === unidade && l.indicador === chave)
+}
+
+function realDoMes(cfg, dados, anoMes, unidade) {
+  switch (cfg.real.tipo) {
+    case 'manual':
+      return linhaManual(dados, anoMes, unidade, cfg.real.chaveManual || cfg.key)?.real ?? null
+    case 'faturamento': {
+      const u = dados.fatReal[anoMes]?.[unidade]
+      if (!u) return null
+      return cfg.real.canal ? u[cfg.real.canal] ?? 0 : u.total
+    }
+    case 'perdas':
+      if (!dados.perdas) return null
+      return dados.perdas[anoMes]?.[unidade]?.total ?? null
+    case 'bandas':
+      return linhaManual(dados, anoMes, unidade, 'bandas_arrecadacao')?.real ?? null
+    default:
+      return null
   }
 }
 
-// -------------------------------------------------------------------
-// Monta os inputs de indicador de UMA unidade a partir das linhas
-// manuais (de 1 ou mais meses) + faturamento (de 1 ou mais meses).
-// Quando são vários meses (trimestre), agrega por média (%) ou soma (R$)
-// antes de montar o input.
-// -------------------------------------------------------------------
-function agregarValores(tipo, valores) {
-  const validos = valores.filter((v) => v != null)
-  if (validos.length === 0) return null
-  const soma = validos.reduce((a, b) => a + b, 0)
-  return tipo === 'media' ? soma / validos.length : soma
+function metaDoMes(cfg, dados, anoMes, unidade) {
+  // meta lançada no Admin sempre tem prioridade
+  const manual = linhaManual(dados, anoMes, unidade, cfg.key)?.meta
+  if (manual != null) return manual
+
+  switch (cfg.meta.tipo) {
+    case 'fixa':
+      return cfg.meta.valor
+    case 'faturamento':
+      return dados.fatMeta[anoMes]?.[unidade] ?? null
+    case 'reducaoMesAnterior': {
+      const anterior = realDoMes(cfg, dados, mesAnterior(anoMes), unidade)
+      if (anterior == null) return null
+      return anterior * (1 - cfg.meta.pct) * fracaoDoMes(anoMes)
+    }
+    default:
+      return null
+  }
 }
 
-function montarInputsDaUnidade(unidade, manuaisPorMes, faturamentoRealPorMes, faturamentoMetaPorMes) {
-  const buscarSerie = (ind) =>
-    manuaisPorMes.map((linhasDoMes) => linhasDoMes.find((l) => l.unidade === unidade && l.indicador === ind))
-
-  const cmvSerie = buscarSerie('cmv')
-  const folhaSerie = buscarSerie('custo_folha')
-  const freelaSerie = buscarSerie('custo_freela')
-  const npsSerie = buscarSerie('nps')
-  const bandasCustoSerie = buscarSerie('bandas_custo_artista')
-  const bandasArrecadSerie = buscarSerie('bandas_arrecadacao')
-
+function montarInputsDaUnidade(vigencia, unidade, meses, dados) {
   const inputs = []
-
-  const add = (indicador, serieMeta, serieReal, fallbackMeta) => {
-    const meta = agregarValores(TIPO_AGREGACAO[indicador], serieMeta)
-    const real = agregarValores(TIPO_AGREGACAO[indicador], serieReal)
+  vigencia.indicadores.forEach((cfg) => {
+    if (cfg.real.tipo === 'bandas') {
+      const arrecad = agregar('soma', meses.map((m) => realDoMes(cfg, dados, m, unidade)))
+      const custo = agregar('soma', meses.map((m) => linhaManual(dados, m, unidade, 'bandas_custo_artista')?.real))
+      if (arrecad == null && custo == null) return
+      inputs.push({ indicador: cfg.key, meta: 0, real: arrecad ?? 0, custoArtista: custo ?? 0 })
+      return
+    }
+    const meta = agregar(cfg.agregacao, meses.map((m) => metaDoMes(cfg, dados, m, unidade)))
+    const real = agregar(cfg.agregacao, meses.map((m) => realDoMes(cfg, dados, m, unidade)))
     if (meta == null && real == null) return
-    inputs.push({ indicador, meta: meta ?? fallbackMeta ?? 0, real: real ?? 0 })
-  }
-
-  add('cmv', cmvSerie.map((l) => l?.meta), cmvSerie.map((l) => l?.real))
-  add('custo_folha', folhaSerie.map((l) => l?.meta), folhaSerie.map((l) => l?.real))
-  add('custo_freela', freelaSerie.map((l) => l?.meta), freelaSerie.map((l) => l?.real))
-  add('nps', npsSerie.map((l) => l?.meta), npsSerie.map((l) => l?.real), 85)
-
-  const custoArtistaAgg = agregarValores('soma', bandasCustoSerie.map((l) => l?.real))
-  const arrecadAgg = agregarValores('soma', bandasArrecadSerie.map((l) => l?.real))
-  if (custoArtistaAgg != null || arrecadAgg != null) {
-    inputs.push({
-      indicador: 'bandas',
-      meta: 0,
-      real: arrecadAgg ?? 0,
-      custoArtista: custoArtistaAgg ?? 0,
-    })
-  }
-
-  const fatMeta = agregarValores('soma', faturamentoMetaPorMes.map((m) => m[unidade]))
-  const fatReal = agregarValores('soma', faturamentoRealPorMes.map((m) => m[unidade]))
-  if (fatMeta != null || fatReal != null) {
-    inputs.push({ indicador: 'faturamento', meta: fatMeta ?? 0, real: fatReal ?? 0 })
-  }
-
+    inputs.push({ indicador: cfg.key, meta, real })
+  })
   return inputs
 }
 
 export function MetasDataProvider({ children, allowedLojas = '*', isAdmin = false }) {
   const [visao, setVisao] = useState('mes') // 'mes' | 'trimestre'
   const [anoMes, setAnoMes] = useState(mesAtualStr())
-  const [manuaisPorMes, setManuaisPorMes] = useState([]) // array de arrays (1 ou 3 meses)
-  const [faturamentoRealPorMes, setFaturamentoRealPorMes] = useState([])
-  const [faturamentoMetaPorMes, setFaturamentoMetaPorMes] = useState([])
+  const [dados, setDados] = useState({ manuais: [], fatReal: {}, fatMeta: {}, perdas: null })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [perdasStatus, setPerdasStatus] = useState('ocioso') // ocioso | carregando | ok | erro
 
-  const carregar = useCallback(async (mesRef, visaoAtual) => {
+  const vigencia = useMemo(() => vigenciaDoMes(anoMes), [anoMes])
+  const meses = useMemo(() => (visao === 'trimestre' ? mesesDoTrimestre(anoMes) : [anoMes]), [anoMes, visao])
+  const usaPerdas = vigencia.indicadores.some((i) => i.real.tipo === 'perdas')
+
+  const carregar = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const meses = visaoAtual === 'trimestre' ? mesesDoTrimestre(mesRef) : [mesRef]
-
-      // busca a planilha inteira UMA VEZ (não uma vez por mês)
-      const todosManuais = await getTodosManuais()
-      const [faturamentoReal, faturamentoMeta] = await Promise.all([
-        Promise.all(meses.map((m) => buscarFaturamentoRealPorMes(m))),
-        Promise.all(meses.map((m) => buscarFaturamentoMetaPorMes(m))),
-      ])
-
-      const manuaisFiltrados = meses.map((m) => {
-        const mesFormatado = primeiroDiaDoMes(m)
-        return todosManuais.filter((l) => l.mes_ref === mesFormatado)
-      })
-
-      setManuaisPorMes(manuaisFiltrados)
-      setFaturamentoRealPorMes(faturamentoReal)
-      setFaturamentoMetaPorMes(faturamentoMeta)
+      const manuais = await getTodosManuais()
+      const [fatReal, fatMeta] = await Promise.all([getFaturamentoReal(), getFaturamentoMeta()])
+      setDados((d) => ({ ...d, manuais, fatReal, fatMeta }))
     } catch (e) {
       setError(e.message)
     } finally {
@@ -228,56 +228,63 @@ export function MetasDataProvider({ children, allowedLojas = '*', isAdmin = fals
   }, [])
 
   useEffect(() => {
-    carregar(anoMes, visao)
-  }, [anoMes, visao, carregar])
+    carregar()
+  }, [carregar])
 
-  // Grupos de gerente visíveis pro usuário logado (admin/diretor vê os 3)
+  // Desconto/estorno: lento, carrega em segundo plano só quando a vigência usa
+  useEffect(() => {
+    if (!usaPerdas || dados.perdas || perdasStatus === 'carregando' || perdasStatus === 'erro') return
+    setPerdasStatus('carregando')
+    getPerdas()
+      .then((perdas) => {
+        setDados((d) => ({ ...d, perdas }))
+        setPerdasStatus('ok')
+      })
+      .catch((e) => {
+        console.error('[Metas] erro ao buscar descontos/estornos:', e.message)
+        setPerdasStatus('erro')
+      })
+  }, [usaPerdas, dados.perdas, perdasStatus])
+
+  // Regionais visíveis pro usuário (admin/diretor vê todos)
   const gruposVisiveis = useMemo(() => {
-    return GERENTES.map((g) => ({
-      ...g,
-      unidades: allowedLojas === '*' ? g.unidades : g.unidades.filter((u) => isUnitAllowed(u, allowedLojas)),
-    })).filter((g) => g.unidades.length > 0)
-  }, [allowedLojas])
-
-  // Unidades críticas — viram filtro dentro do Ranking de Unidades.
-  const UNIDADES_TOP5_CRITICAS = useMemo(
-    () => ['santo_andre', 'chacara', 'santana', 'tatuape', 'vila_madalena'],
-    []
-  )
+    return vigencia.regionais
+      .map((g) => ({
+        ...g,
+        unidades: allowedLojas === '*' ? g.unidades : g.unidades.filter((u) => isUnitAllowed(u, allowedLojas)),
+      }))
+      .filter((g) => g.unidades.length > 0)
+  }, [vigencia, allowedLojas])
 
   const resultadosPorGerente = useMemo(() => {
     return gruposVisiveis.map((g) => {
-      const unidadesResultado = g.unidades.map((unidade) => {
-        const inputs = montarInputsDaUnidade(unidade, manuaisPorMes, faturamentoRealPorMes, faturamentoMetaPorMes)
-        return calcularResultadoUnidade(unidade, anoMes, inputs)
-      })
-      return calcularResultadoGerente(g.id, g.nome, anoMes, unidadesResultado)
+      const unidadesResultado = g.unidades.map((unidade) =>
+        calcularResultadoUnidade(vigencia, unidade, anoMes, montarInputsDaUnidade(vigencia, unidade, meses, dados))
+      )
+      return { ...calcularResultadoGerente(vigencia, g.id, g.nome, anoMes, unidadesResultado), cor: g.cor }
     })
-  }, [gruposVisiveis, manuaisPorMes, faturamentoRealPorMes, faturamentoMetaPorMes, anoMes])
+  }, [gruposVisiveis, vigencia, meses, dados, anoMes])
 
-  // Visão por Unidade (substitui Consolidado + Top 5) — todas as 10
-  // unidades (inclui Santo André, que não tem gerente), com bateu/não
-  // bateu por indicador. Unidade NÃO tem pontuação — ordena por nº de
-  // metas batidas. Só pra quem tem acesso total (admin/diretor).
+  // Visão por Unidade — todas as unidades (inclui as sem regional), só admin/diretor
   const rankingUnidades = useMemo(() => {
     if (allowedLojas !== '*') return null
     const gerentePorUnidade = {}
-    GERENTES.forEach((g) => g.unidades.forEach((u) => { gerentePorUnidade[u] = g }))
+    vigencia.regionais.forEach((g) => g.unidades.forEach((u) => { gerentePorUnidade[u] = g }))
 
-    const lista = ALL_UNIT_IDS.filter((u) => u !== 'holding').map((unidade) => {
-      const inputs = montarInputsDaUnidade(unidade, manuaisPorMes, faturamentoRealPorMes, faturamentoMetaPorMes)
-      const pontuacao = pontuarUnidade(calcularResultadoUnidade(unidade, anoMes, inputs))
-      const g = gerentePorUnidade[unidade]
-      return {
-        ...pontuacao,
-        gerenteId: g?.id ?? null,
-        gerenteNome: g?.nome ?? 'Sem regional',
-        critica: UNIDADES_TOP5_CRITICAS.includes(unidade),
-      }
-    })
-
-    return lista.sort(compararPorMetasBatidas)
-  }, [allowedLojas, UNIDADES_TOP5_CRITICAS, manuaisPorMes, faturamentoRealPorMes, faturamentoMetaPorMes, anoMes])
+    return ALL_UNIT_IDS.filter((u) => u !== 'holding')
+      .map((unidade) => {
+        const res = calcularResultadoUnidade(vigencia, unidade, anoMes, montarInputsDaUnidade(vigencia, unidade, meses, dados))
+        const g = gerentePorUnidade[unidade]
+        return {
+          ...pontuarUnidade(vigencia, res),
+          gerenteId: g?.id ?? null,
+          gerenteNome: g?.nome ?? 'Sem regional',
+          gerenteCor: g?.cor ?? null,
+          critica: vigencia.unidadesCriticas.includes(unidade),
+        }
+      })
+      .sort(compararPorMetasBatidas)
+  }, [allowedLojas, vigencia, meses, dados, anoMes])
 
   const salvarIndicador = useCallback(async (row) => {
     const res = await fetch('/api/metas', {
@@ -287,20 +294,22 @@ export function MetasDataProvider({ children, allowedLojas = '*', isAdmin = fals
     })
     const json = await res.json()
     if (json.erro) throw new Error(json.erro)
-    invalidarCacheManuais() // dado mudou — próxima carga busca de novo
-    await carregar(anoMes, visao)
-  }, [anoMes, visao, carregar])
+    invalidarCacheManuais()
+    await carregar()
+  }, [carregar])
 
   return (
     <MetasDataContext.Provider value={{
       anoMes, setAnoMes,
       visao, setVisao,
       trimestreLabel: trimestreDoMes(anoMes),
+      vigencia,
       resultadosPorGerente,
       rankingUnidades,
+      perdasStatus,
       loading, error, isAdmin,
       salvarIndicador,
-      recarregar: () => { invalidarCacheManuais(); carregar(anoMes, visao) },
+      recarregar: () => { invalidarCacheManuais(); carregar() },
     }}>
       {children}
     </MetasDataContext.Provider>
