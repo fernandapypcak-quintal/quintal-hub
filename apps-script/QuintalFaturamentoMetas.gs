@@ -1,8 +1,8 @@
 // ═══════════════════════════════════════════════════════════════════════
 // QuintalFaturamentoMetas.gs — grava METAS na planilha a partir do HUB:
 //   • Faturamento: tela "Metas" do dashboard de Faturamento (aba "meta" da Quintal Dashboard)
-//   • Comercial B2B: tela "Metas" do Comercial (aba "metas_b2b_mensal") — ver bloco COMERCIAL
-// Projeto no Apps Script: "Quintal Hub - Metas de Faturamento" (uma senha só pros dois).
+//   • Comercial B2B e Reservas: metas mensais em faixas — ver bloco METAS MENSAIS EM FAIXAS
+// Projeto no Apps Script: "Quintal Hub - Metas de Faturamento" (uma senha só para todos).
 //
 // A planilha continua sendo a fonte de verdade: o HUB só escreve aqui,
 // e todo o resto (dashboards, Apps Scripts) segue lendo as abas como hoje.
@@ -20,6 +20,8 @@
 //   ABA_METAS             = meta
 //   PLANILHA_COMERCIAL_ID = ID da Comercial & Marketing — Quintal HUB
 //   ABA_METAS_COMERCIAL   = metas_b2b_mensal
+//   PLANILHA_RESERVAS_ID  = ID da Comercial e Marketing - Reservas B2C
+//   ABA_METAS_RESERVAS    = METAS
 // Vercel: FATURAMENTO_METAS_GAS_URL (URL /exec) e FATURAMENTO_METAS_GAS_KEY.
 // Ao mudar o código: Implantar > Gerenciar implantações > editar > Nova versão
 // (mantém a mesma URL).
@@ -85,27 +87,45 @@ function anoMesDaLinha_(l, c) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// COMERCIAL (B2B) — aba "metas_b2b_mensal" da planilha "Comercial & Marketing —
-// Quintal HUB": mes (data, dia 1) | faixa1 | faixa2 | faixa3
-// Propriedades: PLANILHA_COMERCIAL_ID, ABA_METAS_COMERCIAL (padrão metas_b2b_mensal)
-// Chamado com ?alvo=comercial (GET) ou { alvo: 'comercial' } (POST).
+// METAS MENSAIS EM FAIXAS — uma linha por mês, com 3 faixas (e desafio opcional).
+// Cada "alvo" aponta para uma planilha/aba. Chamado com ?alvo=<alvo> (GET)
+// ou { alvo: '<alvo>' } (POST). Upsert por mês.
+//   comercial → "Comercial & Marketing — Quintal HUB", aba metas_b2b_mensal
+//               mes (DATA, dia 1) | faixa1 | faixa2 | faixa3   (R$)
+//   reservas  → "Comercial e Marketing - Reservas B2C", aba METAS
+//               mes (TEXTO AAAA-MM) | faixa_1 | faixa_2 | faixa_3 | desafio ("-" = sem)   (nº de reservas)
 // ═══════════════════════════════════════════════════════════════════════
-var COLS_COM_BASE = ['mes', 'faixa1', 'faixa2', 'faixa3'];
+var ALVOS_FAIXAS = {
+  comercial: {
+    propPlanilha: 'PLANILHA_COMERCIAL_ID', propAba: 'ABA_METAS_COMERCIAL', abaPadrao: 'metas_b2b_mensal',
+    colMes: 'mes', faixas: ['faixa1', 'faixa2', 'faixa3'], desafio: null, mesComoData: true,
+  },
+  reservas: {
+    propPlanilha: 'PLANILHA_RESERVAS_ID', propAba: 'ABA_METAS_RESERVAS', abaPadrao: 'METAS',
+    colMes: 'mes', faixas: ['faixa_1', 'faixa_2', 'faixa_3'], desafio: 'desafio', mesComoData: false,
+  },
+};
 
-function abaComercial_() {
-  var id = prop_('PLANILHA_COMERCIAL_ID');
-  if (!id) throw new Error('Falta a propriedade PLANILHA_COMERCIAL_ID');
-  var nome = prop_('ABA_METAS_COMERCIAL') || 'metas_b2b_mensal';
+function cfgAlvo_(alvo) {
+  var cfg = ALVOS_FAIXAS[alvo];
+  if (!cfg) throw new Error('alvo desconhecido: ' + alvo);
+  return cfg;
+}
+
+function abaAlvo_(cfg) {
+  var id = prop_(cfg.propPlanilha);
+  if (!id) throw new Error('Falta a propriedade ' + cfg.propPlanilha);
+  var nome = prop_(cfg.propAba) || cfg.abaPadrao;
   var sh = SpreadsheetApp.openById(id).getSheetByName(nome);
-  if (!sh) throw new Error('Aba "' + nome + '" não encontrada na planilha do Comercial');
+  if (!sh) throw new Error('Aba "' + nome + '" não encontrada');
   return sh;
 }
 
-function colunasComercial_(sh, criar) {
+function colunasAlvo_(sh, cfg, criar) {
   var ultimaCol = Math.max(sh.getLastColumn(), 1);
   var cab = sh.getRange(1, 1, 1, ultimaCol).getValues()[0].map(function (c) { return String(c).trim(); });
-  COLS_COM_BASE.forEach(function (c) {
-    if (cab.indexOf(c) < 0) throw new Error('Coluna "' + c + '" não encontrada na aba do Comercial');
+  [cfg.colMes].concat(cfg.faixas).forEach(function (c) {
+    if (cab.indexOf(c) < 0) throw new Error('Coluna "' + c + '" não encontrada no cabeçalho');
   });
   if (criar) {
     ['Atualizado_Por', 'Atualizado_Em'].forEach(function (c) {
@@ -117,24 +137,26 @@ function colunasComercial_(sh, criar) {
   return mapa;
 }
 
-function mesComercial_(v) {
+function mesTexto_(v) {
   if (v instanceof Date) return Utilities.formatDate(v, 'America/Sao_Paulo', 'yyyy-MM');
   return String(v || '').trim().slice(0, 7);
 }
 
-function lerComercial_(ano) {
-  var sh = abaComercial_();
-  var c = colunasComercial_(sh, false);
+function lerFaixas_(alvo, ano) {
+  var cfg = cfgAlvo_(alvo);
+  var sh = abaAlvo_(cfg);
+  var c = colunasAlvo_(sh, cfg, false);
   var linhas = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues() : [];
   var out = [];
   linhas.forEach(function (l) {
-    var mes = mesComercial_(l[c.mes]);
+    var mes = mesTexto_(l[c[cfg.colMes]]);
     if (!/^\d{4}-\d{2}$/.test(mes) || (ano && mes.slice(0, 4) !== ano)) return;
+    var faixas = cfg.faixas.map(function (f) { return num_(l[c[f]]); });
     out.push({
       mes: mes,
-      faixa1: num_(l[c.faixa1]),
-      faixa2: num_(l[c.faixa2]),
-      faixa3: num_(l[c.faixa3]),
+      faixas: faixas,
+      faixa1: faixas[0], faixa2: faixas[1], faixa3: faixas[2],
+      desafio: cfg.desafio && c[cfg.desafio] != null ? num_(l[c[cfg.desafio]]) : null,
       Atualizado_Por: c.Atualizado_Por != null ? String(l[c.Atualizado_Por] || '') : '',
       Atualizado_Em: c.Atualizado_Em != null && l[c.Atualizado_Em] ? String(l[c.Atualizado_Em]) : '',
     });
@@ -142,40 +164,44 @@ function lerComercial_(ano) {
   return out;
 }
 
-// body.metas: [{ mes: '2026-12', faixa1, faixa2, faixa3 }] — upsert por mês
-function gravarComercial_(body) {
-  var sh = abaComercial_();
-  var c = colunasComercial_(sh, true);
+// body.metas: [{ mes: '2026-12', faixa1, faixa2, faixa3, desafio? }]
+function gravarFaixas_(alvo, body) {
+  var cfg = cfgAlvo_(alvo);
+  var sh = abaAlvo_(cfg);
+  var c = colunasAlvo_(sh, cfg, true);
+  var cMes = c[cfg.colMes];
   var nCols = sh.getLastColumn();
   var nLinhas = sh.getLastRow();
   var dados = nLinhas > 1 ? sh.getRange(2, 1, nLinhas - 1, nCols).getValues() : [];
-  // formato da coluna "mes" das linhas existentes (pra linha nova ficar igual)
-  var formatoMes = nLinhas > 1 ? sh.getRange(2, c.mes + 1).getNumberFormat() : 'yyyy-mm';
+  // formato da coluna do mês nas linhas existentes (pra linha nova ficar igual)
+  var formatoMes = nLinhas > 1 ? sh.getRange(2, cMes + 1).getNumberFormat() : (cfg.mesComoData ? 'yyyy-mm' : '@');
   var agora = Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'yyyy-MM-dd HH:mm');
   var gravadas = 0;
 
   body.metas.forEach(function (m) {
     var mes = String(m.mes || '');
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mes)) return;
-    var f1 = num_(m.faixa1), f2 = num_(m.faixa2), f3 = num_(m.faixa3);
-    if (f1 == null || f2 == null || f3 == null) return;
+    var vals = [num_(m.faixa1), num_(m.faixa2), num_(m.faixa3)];
+    if (vals.some(function (v) { return v == null; })) return;
     var idx = -1;
     for (var i = 0; i < dados.length; i++) {
-      if (mesComercial_(dados[i][c.mes]) === mes) { idx = i; break; }
+      if (mesTexto_(dados[i][cMes]) === mes) { idx = i; break; }
     }
     var linha = idx >= 0 ? dados[idx] : new Array(nCols).fill('');
-    if (idx < 0) linha[c.mes] = new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)) - 1, 1);
-    linha[c.faixa1] = f1;
-    linha[c.faixa2] = f2;
-    linha[c.faixa3] = f3;
+    if (idx < 0) linha[cMes] = cfg.mesComoData ? new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)) - 1, 1) : mes;
+    cfg.faixas.forEach(function (f, k) { linha[c[f]] = vals[k]; });
+    if (cfg.desafio && c[cfg.desafio] != null) {
+      var d = num_(m.desafio);
+      linha[c[cfg.desafio]] = d == null ? '-' : d;
+    }
     linha[c.Atualizado_Por] = String(body.usuario || '');
     linha[c.Atualizado_Em] = agora;
     if (idx >= 0) {
       sh.getRange(idx + 2, 1, 1, nCols).setValues([linha]);
     } else {
       var nova = sh.getLastRow() + 1;
+      sh.getRange(nova, cMes + 1).setNumberFormat(formatoMes || (cfg.mesComoData ? 'yyyy-mm' : '@'));
       sh.getRange(nova, 1, 1, nCols).setValues([linha]);
-      sh.getRange(nova, c.mes + 1).setNumberFormat(formatoMes || 'yyyy-mm');
       dados.push(linha);
     }
     gravadas++;
@@ -184,11 +210,11 @@ function gravarComercial_(body) {
 }
 
 // GET ?key=...&ano=2026  → { ok, metas: [{ Ano_Mes, Loja, Meta, Meta_Salao, Meta_Delivery, Atualizado_Por, Atualizado_Em }] }
-// GET ?key=...&ano=2026&alvo=comercial → { ok, metas: [{ mes, faixa1, faixa2, faixa3, ... }] }
+// GET ?key=...&ano=2026&alvo=comercial|reservas → { ok, metas: [{ mes, faixas, faixa1..3, desafio, ... }] }
 function doGet(e) {
   try {
     if (!e || !e.parameter || e.parameter.key !== prop_('API_KEY')) return resposta_({ ok: false, erro: 'chave inválida' });
-    if (e.parameter.alvo === 'comercial') return resposta_({ ok: true, metas: lerComercial_(String(e.parameter.ano || '')) });
+    if (e.parameter.alvo) return resposta_({ ok: true, metas: lerFaixas_(String(e.parameter.alvo), String(e.parameter.ano || '')) });
     var ano = String(e.parameter.ano || '');
     var sh = aba_();
     var c = colunas_(sh, false);
@@ -221,9 +247,9 @@ function doPost(e) {
     var body = JSON.parse(e.postData.contents || '{}');
     if (body.key !== prop_('API_KEY')) return resposta_({ ok: false, erro: 'chave inválida' });
     if (!body.metas || !body.metas.length) return resposta_({ ok: false, erro: 'nenhuma meta enviada' });
-    if (body.alvo === 'comercial') {
+    if (body.alvo) {
       lock.waitLock(20000);
-      return resposta_({ ok: true, gravadas: gravarComercial_(body) });
+      return resposta_({ ok: true, gravadas: gravarFaixas_(String(body.alvo), body) });
     }
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(body.anoMes || '')) return resposta_({ ok: false, erro: 'anoMes inválido' });
 

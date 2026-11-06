@@ -10,5 +10,8 @@ export default async function ReservasPage() {
   // Aba "Metas por casa": liberação à parte (sub-permissão 'reservas-metas' na tela de admin)
   const podeVerMetas = access.isAdmin || hasDashboardAccess(access, 'reservas-metas')
 
-  return <ReservasClientApp podeVerMetas={podeVerMetas} />
+  // Aba "Editar metas" (grava na planilha): sub-permissão 'reservas-metas-editar'
+  const podeEditarMetas = access.isAdmin || hasDashboardAccess(access, 'reservas-metas-editar')
+
+  return <ReservasClientApp podeVerMetas={podeVerMetas} podeEditarMetas={podeEditarMetas} />
 }
