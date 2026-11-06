@@ -1,20 +1,19 @@
 // lib/metas/config.ts
 //
-// ÚNICO lugar para mudar as regras do dashboard Metas Regionais.
+// Regras do dashboard Metas Regionais.
+//
+// As regras VIVEM NO BANCO (tabela metas_vigencias) e são editadas pela
+// aba "Regras" do dashboard, por quem tem a permissão 'metas-regras'.
+// Este arquivo guarda:
+//   • os TIPOS das regras
+//   • VIGENCIAS_PADRAO: regras usadas se o banco estiver vazio ou fora
+//     do ar (e para popular o banco na primeira gravação)
+//   • validarVigencia(): checagem usada pela tela e pela API
 //
 // Cada VIGÊNCIA vale a partir de um mês (inclusive) até a próxima
-// vigência começar. Assim, quando as regras mudam, os meses antigos
-// continuam sendo calculados com as regras da época.
-//
-// Para mudar algo:
-//   • indicador / peso / meta fixa   → edite `indicadores` da vigência
-//   • casas prioritárias (críticas)   → edite `unidadesCriticas`
-//   • carteira de cada regional       → edite `regionais`
-//   • regra de bônus x críticas       → edite `regraCriticas`
-// Se a mudança vale só a partir de um mês novo, copie a última vigência,
-// mude `vigenteDesde` e ajuste o que mudou. Não precisa mexer em tela.
+// vigência começar — meses antigos continuam com as regras da época.
 
-import type { UnitId } from '@/lib/units'
+import { ALL_UNIT_IDS, type UnitId } from '@/lib/units'
 
 export type IndicadorKey = string
 export type Direcao = 'menor' | 'maior' | 'saldo'
@@ -108,7 +107,7 @@ const REGIONAIS_2026: RegionalConfig[] = [
   { id: 'keylla', nome: 'Keylla', cor: '#7C3AED', unidades: ['lapa', 'chacara', 'perdizes'] },
 ]
 
-export const VIGENCIAS: VigenciaMetas[] = [
+export const VIGENCIAS_PADRAO: VigenciaMetas[] = [
   // ------------------------------------------------------------------
   // Regras originais (até out/26)
   // ------------------------------------------------------------------
@@ -177,8 +176,9 @@ export const VIGENCIAS: VigenciaMetas[] = [
 ]
 
 /** Vigência que vale para o mês 'YYYY-MM'. */
-export function vigenciaDoMes(anoMes: string): VigenciaMetas {
-  const ordenadas = [...VIGENCIAS].sort((a, b) => a.vigenteDesde.localeCompare(b.vigenteDesde))
+export function vigenciaDoMes(vigencias: VigenciaMetas[], anoMes: string): VigenciaMetas {
+  const lista = vigencias.length ? vigencias : VIGENCIAS_PADRAO
+  const ordenadas = [...lista].sort((a, b) => a.vigenteDesde.localeCompare(b.vigenteDesde))
   let atual = ordenadas[0]
   for (const v of ordenadas) if (v.vigenteDesde <= anoMes) atual = v
   return atual
@@ -203,4 +203,70 @@ export function chavesManuais(v: VigenciaMetas): { key: string; label: string; l
     out.push({ key: i.real.tipo === 'manual' && i.real.chaveManual ? i.real.chaveManual : i.key, label: i.label, lancaMeta, lancaReal })
   })
   return out
+}
+
+// -------------------------------------------------------------------
+// Validação — usada pela tela Regras (avisos) e pela API (bloqueio).
+// -------------------------------------------------------------------
+
+const UNIDADES_VALIDAS: string[] = ALL_UNIT_IDS.filter((u) => u !== 'holding')
+
+/** 'Faturamento salão' → 'faturamento_salao' (chave estável usada nos lançamentos). */
+export function gerarChave(label: string): string {
+  return label
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+    .slice(0, 40) || 'indicador'
+}
+
+export function validarVigencia(v: VigenciaMetas): string[] {
+  const erros: string[] = []
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(v.vigenteDesde || '')) erros.push('Mês de início inválido (use AAAA-MM).')
+  if (!v.nome?.trim()) erros.push('Dê um nome para a vigência.')
+
+  if (!Array.isArray(v.indicadores) || v.indicadores.length === 0) erros.push('Inclua pelo menos um indicador.')
+  const chaves = new Set<string>()
+  ;(v.indicadores || []).forEach((i, n) => {
+    const nome = i.label?.trim() || `Indicador ${n + 1}`
+    if (!i.label?.trim()) erros.push(`${nome}: falta o nome.`)
+    if (!/^[a-z0-9_]{2,40}$/.test(i.key || '')) erros.push(`${nome}: chave inválida.`)
+    if (chaves.has(i.key)) erros.push(`${nome}: chave repetida (${i.key}).`)
+    chaves.add(i.key)
+    if (!(Number.isFinite(i.peso) && i.peso >= 0)) erros.push(`${nome}: peso inválido.`)
+    if (!['pct', 'moeda', 'num'].includes(i.formato)) erros.push(`${nome}: formato inválido.`)
+    if (!['menor', 'maior', 'saldo'].includes(i.direcao)) erros.push(`${nome}: direção inválida.`)
+    if (!['media', 'soma'].includes(i.agregacao)) erros.push(`${nome}: agregação inválida.`)
+    if (!['manual', 'faturamento', 'perdas', 'bandas'].includes(i.real?.tipo)) erros.push(`${nome}: origem do real inválida.`)
+    if (i.real?.tipo === 'faturamento' && i.real.canal && !['CASA', 'DELIVERY'].includes(i.real.canal)) erros.push(`${nome}: canal inválido.`)
+    const m = i.meta
+    if (!['manual', 'fixa', 'faturamento', 'reducaoMesAnterior', 'nenhuma'].includes(m?.tipo)) erros.push(`${nome}: origem da meta inválida.`)
+    if (m?.tipo === 'fixa' && !Number.isFinite(m.valor)) erros.push(`${nome}: informe o valor da meta fixa.`)
+    if (m?.tipo === 'reducaoMesAnterior' && !(Number.isFinite(m.pct) && m.pct >= 0 && m.pct < 1)) erros.push(`${nome}: % de redução deve ser entre 0 e 99.`)
+    if (m?.tipo === 'faturamento' && !(i.real?.tipo === 'faturamento' && !i.real.canal)) erros.push(`${nome}: meta da planilha de faturamento só vale para faturamento total.`)
+  })
+  const soma = (v.indicadores || []).reduce((s, i) => s + (Number(i.peso) || 0), 0)
+  if (soma !== 100) erros.push(`Os pesos somam ${soma} pts: precisam somar 100.`)
+
+  const usadas = new Set<string>()
+  ;(v.regionais || []).forEach((r) => {
+    if (!r.nome?.trim()) erros.push('Tem regional sem nome.')
+    if (!/^[a-z0-9_]{2,40}$/.test(r.id || '')) erros.push(`Regional ${r.nome}: identificador inválido.`)
+    ;(r.unidades || []).forEach((u) => {
+      if (!UNIDADES_VALIDAS.includes(u)) erros.push(`Regional ${r.nome}: unidade desconhecida (${u}).`)
+      if (usadas.has(u)) erros.push(`A unidade ${u} está em mais de um regional.`)
+      usadas.add(u)
+    })
+  })
+  ;(v.unidadesCriticas || []).forEach((u) => {
+    if (!UNIDADES_VALIDAS.includes(u)) erros.push(`Crítica desconhecida (${u}).`)
+  })
+
+  const rc = v.regraCriticas
+  if (rc) {
+    if (rc.tipo !== 'todas_criticas') erros.push('Regra das críticas inválida.')
+    if (!(Number.isFinite(rc.minimoPontos) && rc.minimoPontos >= 0 && rc.minimoPontos <= 100)) erros.push('Mínimo de pontos das críticas deve ser entre 0 e 100.')
+    if (rc.efeito?.tipo === 'fator' && !(Number.isFinite(rc.efeito.fator) && rc.efeito.fator >= 0 && rc.efeito.fator <= 1)) erros.push('Fator da regra das críticas deve ser entre 0 e 100%.')
+    if (!['zera', 'fator'].includes(rc.efeito?.tipo)) erros.push('Efeito da regra das críticas inválido.')
+  }
+  return erros
 }

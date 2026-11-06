@@ -6,6 +6,7 @@ import type { UnitId } from '@/lib/units'
 import { MetasDataProvider, useMetasData } from './hooks/useMetasData'
 import Home from './components/pages/Home'
 import Admin from './components/pages/Admin'
+import Regras from './components/pages/Regras'
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 const anoAtual = new Date().getFullYear()
@@ -76,7 +77,7 @@ function HeaderFiltros() {
   )
 }
 
-function AppInner({ isAdmin }: { isAdmin: boolean }) {
+function AppInner({ podeLancar, podeEditarRegras }: { podeLancar: boolean; podeEditarRegras: boolean }) {
   const [pagina, setPagina] = useState('home')
 
   return (
@@ -89,28 +90,31 @@ function AppInner({ isAdmin }: { isAdmin: boolean }) {
         <span className="text-zinc-700 text-xs">|</span>
         <span className="text-xs text-zinc-500">Metas</span>
 
-        {isAdmin && (
+        {(podeLancar || podeEditarRegras) && (
           <div className="ml-auto flex gap-1">
-            <button
-              onClick={() => setPagina('home')}
-              className={`text-xs px-2.5 py-1 rounded-md ${pagina === 'home' ? 'bg-white/10 text-white' : 'text-zinc-500'}`}
-            >
-              Dashboard
-            </button>
-            <button
-              onClick={() => setPagina('admin')}
-              className={`text-xs px-2.5 py-1 rounded-md ${pagina === 'admin' ? 'bg-white/10 text-white' : 'text-zinc-500'}`}
-            >
-              Input Manual
-            </button>
+            {[
+              { id: 'home', label: 'Dashboard', ok: true },
+              { id: 'admin', label: 'Input Manual', ok: podeLancar },
+              { id: 'regras', label: 'Regras', ok: podeEditarRegras },
+            ]
+              .filter((t) => t.ok)
+              .map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setPagina(t.id)}
+                  className={`text-xs px-2.5 py-1 rounded-md ${pagina === t.id ? 'bg-white/10 text-white' : 'text-zinc-500'}`}
+                >
+                  {t.label}
+                </button>
+              ))}
           </div>
         )}
       </div>
 
-      <HeaderFiltros />
+      {pagina !== 'regras' && <HeaderFiltros />}
 
       <main className="flex-1 min-w-0 overflow-y-auto">
-        {pagina === 'admin' && isAdmin ? <Admin /> : <Home />}
+        {pagina === 'admin' && podeLancar ? <Admin /> : pagina === 'regras' && podeEditarRegras ? <Regras /> : <Home />}
       </main>
     </div>
   )
@@ -119,13 +123,17 @@ function AppInner({ isAdmin }: { isAdmin: boolean }) {
 export default function MetasClientApp({
   allowedLojas = '*',
   isAdmin = false,
+  podeLancar = false,
+  podeEditarRegras = false,
 }: {
   allowedLojas?: UnitId[] | '*'
   isAdmin?: boolean
+  podeLancar?: boolean
+  podeEditarRegras?: boolean
 }) {
   return (
     <MetasDataProvider allowedLojas={allowedLojas as any} isAdmin={isAdmin}>
-      <AppInner isAdmin={isAdmin} />
+      <AppInner podeLancar={podeLancar} podeEditarRegras={podeEditarRegras} />
     </MetasDataProvider>
   )
 }

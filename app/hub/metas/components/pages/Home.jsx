@@ -10,7 +10,7 @@ import PlacarRegionais from '../PlacarRegionais'
 import RankingUnidades from '../RankingUnidades'
 
 export default function Home() {
-  const { resultadosPorGerente, rankingUnidades, vigencia, perdasStatus, loading, error } = useMetasData()
+  const { resultadosPorGerente, rankingUnidades, vigencia, perdasStatus, avisoRegras, loading, error } = useMetasData()
 
   if (loading) {
     return (
@@ -39,6 +39,7 @@ export default function Home() {
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-500">
         <span className="font-medium text-zinc-700">{vigencia.nome}</span>
         <span>{vigencia.indicadores.map((i) => `${i.label} ${i.peso}`).join(' · ')} pts</span>
+        {avisoRegras && <span className="text-amber-700">{avisoRegras}</span>}
         {perdasStatus === 'carregando' && <span className="text-amber-700">Carregando descontos e estornos…</span>}
         {perdasStatus === 'erro' && <span className="text-rose-700">Não consegui carregar descontos/estornos agora. Recarregue a página em alguns minutos.</span>}
       </div>

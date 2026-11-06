@@ -2,7 +2,7 @@
 // Proxy server-side para o Apps Script de Metas — evita CORS
 // GET: qualquer usuário com acesso ao dashboard 'metas' (filtragem por
 //      unidade acontece no client, igual ao padrão do Faturamento/Kids)
-// POST: só admin — grava um indicador manual (upsert)
+// POST: admin ou permissão 'metas-lancamentos' — grava um indicador manual (upsert)
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getUserAccess, hasDashboardAccess } from '@/lib/permissions'
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const access = await getUserAccess()
   if (!access) return NextResponse.json({ erro: 'Não autenticado' }, { status: 401 })
-  if (!access.isAdmin) return NextResponse.json({ erro: 'Só admin pode editar indicadores' }, { status: 403 })
+  if (!access.isAdmin && !hasDashboardAccess(access, 'metas-lancamentos')) return NextResponse.json({ erro: 'Você não tem permissão para lançar indicadores' }, { status: 403 })
 
   try {
     const body = await req.json()

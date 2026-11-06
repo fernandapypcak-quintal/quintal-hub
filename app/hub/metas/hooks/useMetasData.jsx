@@ -1,8 +1,9 @@
 // app/hub/metas/hooks/useMetasData.jsx
 //
-// As REGRAS (indicadores, pesos, regionais, críticas) vêm de
-// lib/metas/config.ts, pela vigência do mês selecionado. Este hook só
-// busca os dados e entrega para o cálculo.
+// As REGRAS (indicadores, pesos, regionais, críticas) vêm do banco via
+// /api/metas/regras (editadas na aba Regras), pela vigência do mês
+// selecionado. Se o banco falhar, valem as regras padrão de
+// lib/metas/config.ts. Este hook busca os dados e entrega para o cálculo.
 //
 // Fontes:
 // 1. Lançamentos manuais (CMV, Custo c/ pessoas, NPS, metas por canal…)
@@ -20,7 +21,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
 import { isUnitAllowed, unitIdFromString, ALL_UNIT_IDS } from '@/lib/units'
-import { vigenciaDoMes } from '@/lib/metas/config'
+import { vigenciaDoMes, VIGENCIAS_PADRAO } from '@/lib/metas/config'
 import {
   calcularResultadoUnidade,
   calcularResultadoGerente,
@@ -66,6 +67,17 @@ function fracaoDoMes(anoMes) {
 // -------------------------------------------------------------------
 // Caches em memória (por sessão)
 // -------------------------------------------------------------------
+async function getRegras() {
+  try {
+    const res = await fetch('/api/metas/regras', { cache: 'no-store' }).then((r) => r.json())
+    if (res.erro || !Array.isArray(res.vigencias)) throw new Error(res.erro || 'resposta inválida')
+    return { vigencias: res.vigencias, aviso: res.aviso || null, mesAtual: res.mesAtual, isAdmin: !!res.isAdmin }
+  } catch (e) {
+    console.error('[Metas] erro ao buscar regras:', e.message)
+    return { vigencias: VIGENCIAS_PADRAO, aviso: 'Não consegui carregar as regras salvas: usando as regras padrão.', mesAtual: mesAtualStr(), isAdmin: false }
+  }
+}
+
 let _cacheManuais = null
 async function getTodosManuais() {
   if (!_cacheManuais) {
@@ -208,8 +220,9 @@ export function MetasDataProvider({ children, allowedLojas = '*', isAdmin = fals
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [perdasStatus, setPerdasStatus] = useState('ocioso') // ocioso | carregando | ok | erro
+  const [regras, setRegras] = useState({ vigencias: VIGENCIAS_PADRAO, aviso: null, mesAtual: mesAtualStr(), isAdmin: false })
 
-  const vigencia = useMemo(() => vigenciaDoMes(anoMes), [anoMes])
+  const vigencia = useMemo(() => vigenciaDoMes(regras.vigencias, anoMes), [regras.vigencias, anoMes])
   const meses = useMemo(() => (visao === 'trimestre' ? mesesDoTrimestre(anoMes) : [anoMes]), [anoMes, visao])
   const usaPerdas = vigencia.indicadores.some((i) => i.real.tipo === 'perdas')
 
@@ -217,7 +230,8 @@ export function MetasDataProvider({ children, allowedLojas = '*', isAdmin = fals
     setLoading(true)
     setError(null)
     try {
-      const manuais = await getTodosManuais()
+      const [regrasCarregadas, manuais] = await Promise.all([getRegras(), getTodosManuais()])
+      setRegras(regrasCarregadas)
       const [fatReal, fatMeta] = await Promise.all([getFaturamentoReal(), getFaturamentoMeta()])
       setDados((d) => ({ ...d, manuais, fatReal, fatMeta }))
     } catch (e) {
@@ -304,6 +318,10 @@ export function MetasDataProvider({ children, allowedLojas = '*', isAdmin = fals
       visao, setVisao,
       trimestreLabel: trimestreDoMes(anoMes),
       vigencia,
+      vigencias: regras.vigencias,
+      avisoRegras: regras.aviso,
+      mesAtualServidor: regras.mesAtual,
+      recarregarRegras: async () => setRegras(await getRegras()),
       resultadosPorGerente,
       rankingUnidades,
       perdasStatus,

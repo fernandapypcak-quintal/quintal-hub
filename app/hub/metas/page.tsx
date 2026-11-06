@@ -7,5 +7,12 @@ export default async function MetasPage() {
   if (!access) redirect('/login')
   if (!hasDashboardAccess(access, 'metas')) redirect('/hub')
 
-  return <MetasClientApp allowedLojas={access.lojas} isAdmin={access.isAdmin} />
+  return (
+    <MetasClientApp
+      allowedLojas={access.lojas}
+      isAdmin={access.isAdmin}
+      podeLancar={access.isAdmin || hasDashboardAccess(access, 'metas-lancamentos')}
+      podeEditarRegras={access.isAdmin || hasDashboardAccess(access, 'metas-regras')}
+    />
+  )
 }
