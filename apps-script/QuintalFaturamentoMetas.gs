@@ -2,6 +2,7 @@
 // QuintalFaturamentoMetas.gs — grava METAS na planilha a partir do HUB:
 //   • Faturamento: tela "Metas" do dashboard de Faturamento (aba "meta" da Quintal Dashboard)
 //   • Comercial B2B e Reservas: metas mensais em faixas — ver bloco METAS MENSAIS EM FAIXAS
+//   • Reservas: operadores, metas semanais e escala — ver bloco TABELAS DE CADASTRO
 // Projeto no Apps Script: "Quintal Hub - Metas de Faturamento" (uma senha só para todos).
 //
 // A planilha continua sendo a fonte de verdade: o HUB só escreve aqui,
@@ -209,11 +210,111 @@ function gravarFaixas_(alvo, body) {
   return gravadas;
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// TABELAS DE CADASTRO — a tela do HUB lê e regrava a tabela inteira de uma aba
+// (só as colunas listadas; outras colunas da aba não são tocadas).
+// Antes de regravar, guarda uma cópia em uma aba oculta "_hub_backup_<ABA>".
+// Chamado com ?tabela=<nome> (GET) ou { tabela: '<nome>', linhas: [[...]] } (POST).
+//   reservas_operadores     → aba OPERADORES:     operador | time | inicio | fim | apelidos
+//   reservas_metas_semanais → aba METAS_SEMANAIS: inicio | operador | meta_base | faixa_1_% | faixa_2_% | faixa_3_%
+//   reservas_escala         → aba ESCALA:         mes | semana | operador | dias
+// Datas e meses são gravados como TEXTO (AAAA-MM-DD / AAAA-MM), que o Reservas.gs entende.
+// ═══════════════════════════════════════════════════════════════════════
+var TABELAS = {
+  reservas_operadores: {
+    propPlanilha: 'PLANILHA_RESERVAS_ID', aba: 'OPERADORES',
+    colunas: ['operador', 'time', 'inicio', 'fim', 'apelidos'],
+    numericas: [],
+  },
+  reservas_metas_semanais: {
+    propPlanilha: 'PLANILHA_RESERVAS_ID', aba: 'METAS_SEMANAIS',
+    colunas: ['inicio', 'operador', 'meta_base', 'faixa_1_%', 'faixa_2_%', 'faixa_3_%'],
+    numericas: ['meta_base', 'faixa_1_%', 'faixa_2_%', 'faixa_3_%'],
+  },
+  reservas_escala: {
+    propPlanilha: 'PLANILHA_RESERVAS_ID', aba: 'ESCALA',
+    colunas: ['mes', 'semana', 'operador', 'dias'],
+    numericas: ['semana'],
+  },
+};
+
+function cfgTabela_(nome) {
+  var cfg = TABELAS[nome];
+  if (!cfg) throw new Error('tabela desconhecida: ' + nome);
+  return cfg;
+}
+
+function abaTabela_(cfg) {
+  var id = prop_(cfg.propPlanilha);
+  if (!id) throw new Error('Falta a propriedade ' + cfg.propPlanilha);
+  var ss = SpreadsheetApp.openById(id);
+  var sh = ss.getSheetByName(cfg.aba);
+  if (!sh) throw new Error('Aba "' + cfg.aba + '" não encontrada');
+  var cab = sh.getRange(1, 1, 1, cfg.colunas.length).getValues()[0].map(function (c) { return String(c).trim(); });
+  cfg.colunas.forEach(function (c, i) {
+    if (cab[i] !== c) throw new Error('Aba ' + cfg.aba + ': esperava a coluna "' + c + '" na posição ' + (i + 1) + ' e achei "' + cab[i] + '"');
+  });
+  return { ss: ss, sh: sh };
+}
+
+function lerTabela_(nome) {
+  var cfg = cfgTabela_(nome);
+  var sh = abaTabela_(cfg).sh;
+  var n = sh.getLastRow() - 1;
+  var linhas = n > 0 ? sh.getRange(2, 1, n, cfg.colunas.length).getDisplayValues() : [];
+  linhas = linhas
+    .map(function (l) { return l.map(function (v) { return String(v).trim(); }); })
+    .filter(function (l) { return l.some(function (v) { return v !== ''; }); });
+  return { colunas: cfg.colunas, linhas: linhas };
+}
+
+function gravarTabela_(nome, body) {
+  var cfg = cfgTabela_(nome);
+  var t = abaTabela_(cfg);
+  var sh = t.sh, ss = t.ss;
+  var nCols = cfg.colunas.length;
+  var linhas = (body.linhas || []).map(function (l) {
+    return cfg.colunas.map(function (c, i) {
+      var v = l[i] == null ? '' : String(l[i]).trim();
+      if (cfg.numericas.indexOf(c) >= 0 && v !== '') {
+        var n = Number(v.replace(',', '.'));
+        if (isNaN(n)) throw new Error('Valor não numérico em ' + c + ': ' + v);
+        return n;
+      }
+      return v;
+    });
+  });
+
+  // cópia de segurança da aba inteira (só as colunas da tabela)
+  var nomeBackup = '_hub_backup_' + cfg.aba;
+  var bk = ss.getSheetByName(nomeBackup) || ss.insertSheet(nomeBackup);
+  bk.clear();
+  var atual = sh.getRange(1, 1, Math.max(sh.getLastRow(), 1), nCols).getDisplayValues();
+  bk.getRange(1, 1, atual.length, nCols).setValues(atual);
+  bk.getRange(1, nCols + 1).setValue('backup de ' + Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'yyyy-MM-dd HH:mm') + ' por ' + String(body.usuario || ''));
+  if (!bk.isSheetHidden()) bk.hideSheet();
+
+  // limpa os dados antigos (só as colunas da tabela) e grava os novos
+  var ultima = sh.getLastRow();
+  if (ultima > 1) sh.getRange(2, 1, ultima - 1, nCols).clearContent();
+  if (linhas.length) {
+    cfg.colunas.forEach(function (c, i) {
+      if (cfg.numericas.indexOf(c) < 0) sh.getRange(2, i + 1, linhas.length, 1).setNumberFormat('@');
+    });
+    sh.getRange(2, 1, linhas.length, nCols).setValues(linhas);
+  }
+  return linhas.length;
+}
+
 // GET ?key=...&ano=2026  → { ok, metas: [{ Ano_Mes, Loja, Meta, Meta_Salao, Meta_Delivery, Atualizado_Por, Atualizado_Em }] }
 // GET ?key=...&ano=2026&alvo=comercial|reservas → { ok, metas: [{ mes, faixas, faixa1..3, desafio, ... }] }
 function doGet(e) {
   try {
     if (!e || !e.parameter || e.parameter.key !== prop_('API_KEY')) return resposta_({ ok: false, erro: 'chave inválida' });
+    if (e.parameter.tabela) {
+      var tab = lerTabela_(String(e.parameter.tabela));
+      return resposta_({ ok: true, colunas: tab.colunas, linhas: tab.linhas });
+    }
     if (e.parameter.alvo) return resposta_({ ok: true, metas: lerFaixas_(String(e.parameter.alvo), String(e.parameter.ano || '')) });
     var ano = String(e.parameter.ano || '');
     var sh = aba_();
@@ -246,6 +347,10 @@ function doPost(e) {
   try {
     var body = JSON.parse(e.postData.contents || '{}');
     if (body.key !== prop_('API_KEY')) return resposta_({ ok: false, erro: 'chave inválida' });
+    if (body.tabela) {
+      lock.waitLock(20000);
+      return resposta_({ ok: true, gravadas: gravarTabela_(String(body.tabela), body) });
+    }
     if (!body.metas || !body.metas.length) return resposta_({ ok: false, erro: 'nenhuma meta enviada' });
     if (body.alvo) {
       lock.waitLock(20000);

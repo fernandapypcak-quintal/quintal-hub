@@ -21,14 +21,16 @@ import Calendario from './abas/Calendario'
 import PorCasa from './abas/PorCasa'
 import MetasPorCasa from './abas/MetasPorCasa'
 import MetasFaixasEditor from '@/app/hub/_componentes/MetasFaixasEditor'
+import EquipeBonus from './abas/EquipeBonus'
 
-type Aba = 'resumo' | 'operadores' | 'metas' | 'editar_metas' | 'ocasioes' | 'calendario' | 'casas'
+type Aba = 'resumo' | 'operadores' | 'metas' | 'editar_metas' | 'equipe' | 'ocasioes' | 'calendario' | 'casas'
 type Base = 'criacao' | 'semana' | 'reserva' | 'meta'
 const ABAS: { id: Aba; icon: string; label: string; curto: string; base: Base }[] = [
   { id: 'resumo', icon: '🏠', label: 'Resumo', curto: 'Resumo', base: 'criacao' },
   { id: 'operadores', icon: '🧑‍💼', label: 'Operadores', curto: 'Operad.', base: 'criacao' },
   { id: 'metas', icon: '🎯', label: 'Metas por casa', curto: 'Metas', base: 'meta' },
   { id: 'editar_metas', icon: '✏️', label: 'Editar metas', curto: 'Editar', base: 'meta' },
+  { id: 'equipe', icon: '👥', label: 'Equipe e bônus', curto: 'Equipe', base: 'meta' },
   { id: 'ocasioes', icon: '🎉', label: 'Ocasiões e status', curto: 'Ocasiões', base: 'criacao' },
   { id: 'calendario', icon: '📅', label: 'Calendário', curto: 'Agenda', base: 'reserva' },
   { id: 'casas', icon: '🏪', label: 'Por casa', curto: 'Casas', base: 'reserva' },
@@ -102,7 +104,7 @@ function BottomNav({ abas, aba, onAba }: { abas: typeof ABAS; aba: Aba; onAba: (
 }
 
 export default function ReservasClientApp({ podeVerMetas = false, podeEditarMetas = false }: { podeVerMetas?: boolean; podeEditarMetas?: boolean }) {
-  const abas = ABAS.filter(a => (a.id !== 'metas' || podeVerMetas) && (a.id !== 'editar_metas' || podeEditarMetas))
+  const abas = ABAS.filter(a => (a.id !== 'metas' || podeVerMetas) && (a.id !== 'editar_metas' || podeEditarMetas) && (a.id !== 'equipe' || podeEditarMetas))
   const [versao, setVersao] = useState(0)
   const { config, erro } = useConfig(versao)
   const [aba, setAba] = useState<Aba>('resumo')
@@ -142,6 +144,7 @@ export default function ReservasClientApp({ podeVerMetas = false, podeEditarMeta
           onSalvo={atualizar}
         />
       )}
+      {aba === 'equipe' && podeEditarMetas && <EquipeBonus hoje={hoje} />}
       {aba === 'ocasioes' && <OcasioesStatus config={config} filtros={filtros} periodo={periodo} />}
       {aba === 'calendario' && <Calendario config={config} filtros={filtros} hoje={hoje} />}
       {aba === 'casas' && <PorCasa config={config} filtros={filtros} hoje={hoje} />}
